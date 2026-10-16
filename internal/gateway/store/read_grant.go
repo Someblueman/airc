@@ -51,7 +51,7 @@ func readable(r *core.Request) error {
 		target := *r.Target
 		r.Target = &target
 	}
-	r.Rooms = slices.Clone(r.Rooms)
+	r.Rooms, r.Threads = slices.Clone(r.Rooms), slices.Clone(r.Threads)
 	if r.Inbox != nil {
 		inbox := *r.Inbox
 		r.Inbox = &inbox

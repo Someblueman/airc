@@ -17,6 +17,14 @@ type checker struct {
 	settings *checkOptions
 	targets  []checkTarget
 	sawLive  bool
+	// shown holds inbox messages already shown over another carrier; a
+	// native check passes them without showing them again.
+	shown map[string]bool
+	// mentionsOnly is set once another carrier served the inbox without
+	// direct messages.
+	mentionsOnly bool
+	// notes are what a check over another carrier warns of this round.
+	notes []string
 }
 
 type targetRead struct {
@@ -35,7 +43,7 @@ type checkBatch struct {
 }
 
 func (c *checker) visible(message *irc.HistoryEvent) bool {
-	return c.settings.includeOwn || !strings.EqualFold(message.From, c.nick)
+	return !c.shown[message.ID] && (c.settings.includeOwn || !strings.EqualFold(message.From, c.nick))
 }
 
 // Fetch at most one output budget plus a lookahead per target. Cursors are

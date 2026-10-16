@@ -94,7 +94,12 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	}
 	if s.accessEnabled && !client.access && command.Name != "QUIT" {
+		// A command without the connection credential counts toward the
+		// connection's three failures, as a wrong credential does, so a
+		// client cannot hold an unauthenticated connection open by talking.
+		// It is not counted against the address: it guesses nothing.
 		s.numericLocked(client, "464", nil, "Connection credential required")
+		s.countFailureLocked(client)
 		return
 	}
 	if command.Name == "CAP" {

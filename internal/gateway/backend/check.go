@@ -35,29 +35,32 @@ const (
 // with the empty snapshot when the wait ends. The wait is cut to the
 // request's own deadline, and skipped when limits.waits is used up.
 //
-// The inbox page is AIRC's "@nick" selector as the author: direct messages
-// AIRC recorded as received by the author's account, and mentions in rooms
-// for which mentionable reports true (the rooms its listener lets it read).
-func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, mentionable func(room string) bool) (core.CheckResult, error) {
+// The inbox page is AIRC's "@nick" selector as the author, and a thread
+// page its "thread:ID" selector, limited by scope.
+func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, scope CheckScope) (core.CheckResult, error) {
 	a, err := grant.Consume(time.Now())
 	if err != nil {
 		return core.CheckResult{}, err
 	}
 	r := a.Request
-	if r.Operation != core.Check || len(r.Rooms) == 0 && r.Inbox == nil || r.Inbox != nil && !a.Author.Registered {
+	if r.Operation != core.Check || len(r.Rooms) == 0 && len(r.Threads) == 0 && r.Inbox == nil {
 		return core.CheckResult{}, store.ErrInvalid
 	}
+	scope.DirectMessages = scope.DirectMessages && a.Author.Registered
 	var result core.CheckResult
 	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
 		if client.Features()["CHECK"] != "1" {
 			return ErrReadUnsupported
 		}
-		p := checkPlan{request: r, mentionable: mentionable}
-		if r.Inbox != nil {
-			// The inbox is proven against the account this session logged
-			// in as, never the nickname alone.
-			p.nick, p.account = client.Nick(), client.AccountID()
-			if !strings.EqualFold(p.nick, a.Author.Nick) || !validHistoryID(p.account) {
+		p := checkPlan{request: r, scope: scope, nick: client.Nick()}
+		if !strings.EqualFold(p.nick, a.Author.Nick) {
+			return auth.ErrForbidden
+		}
+		if scope.DirectMessages {
+			// Direct messages are proven against the account this session
+			// logged in as, never the nickname alone.
+			p.account = client.AccountID()
+			if !validHistoryID(p.account) {
 				return auth.ErrForbidden
 			}
 		}
@@ -108,19 +111,33 @@ func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, mentionable
 	return result, nil
 }
 
-// checkPlan is one check's native selectors: its rooms, then the author's
-// inbox ("@nick") when asked for, with the account that proves a direct
-// message was the author's.
+// CheckScope is what a check may show beyond its named rooms: the rooms
+// (Readable) whose messages may appear as mentions and in threads, and
+// whether the inbox may show direct messages, which AIRC proves only for a
+// registered author's account.
+type CheckScope struct {
+	Readable       func(room string) bool
+	DirectMessages bool
+}
+
+func (s CheckScope) readable(room string) bool { return s.Readable != nil && s.Readable(room) }
+
+// checkPlan is one check's native selectors: its rooms, its threads
+// ("thread:ID"), then the author's inbox ("@nick") when asked for, with the
+// account that proves a direct message was the author's.
 type checkPlan struct {
 	request       core.Request
+	scope         CheckScope
 	nick, account string
-	mentionable   func(room string) bool
 }
 
 func (p checkPlan) selectors() []string {
-	names := make([]string, 0, len(p.request.Rooms)+1)
+	names := make([]string, 0, len(p.request.Rooms)+len(p.request.Threads)+1)
 	for _, room := range p.request.Rooms {
 		names = append(names, room.Name)
+	}
+	for _, thread := range p.request.Threads {
+		names = append(names, "thread:"+thread.ID)
 	}
 	if p.request.Inbox != nil {
 		names = append(names, "@"+p.nick)
@@ -128,15 +145,30 @@ func (p checkPlan) selectors() []string {
 	return names
 }
 
+// positions is each selector's start, in selectors' order.
+func (p checkPlan) positions() []string {
+	after := make([]string, 0, len(p.request.Rooms)+len(p.request.Threads)+1)
+	for _, room := range p.request.Rooms {
+		after = append(after, room.After)
+	}
+	for _, thread := range p.request.Threads {
+		after = append(after, thread.After)
+	}
+	if p.request.Inbox != nil {
+		after = append(after, p.request.Inbox.After)
+	}
+	return after
+}
+
 // wakes reports a live message for the check: in one of its rooms or, when
-// it reads the inbox, any message the session observes, as AIRC delivers
-// only the observed rooms and the author's inbox.
+// it reads threads or the inbox, any message the session observes, as AIRC
+// delivers only what the session observes.
 func (p checkPlan) wakes(event irc.Event) bool {
 	m, ok := event.(*irc.MessageEvent)
 	if !ok || m.Type != "message" {
 		return false
 	}
-	if p.request.Inbox != nil {
+	if p.request.Inbox != nil || len(p.request.Threads) > 0 {
 		return true
 	}
 	for _, room := range p.request.Rooms {
@@ -153,9 +185,9 @@ func (p checkPlan) wakes(event irc.Event) bool {
 // before the account held it; nothing proves those were the author's.
 func (p checkPlan) inboxMessage(m *irc.MessageMetadata) bool {
 	if protocol.IsChannel(m.Target) {
-		return p.mentionable != nil && p.mentionable(m.Target)
+		return p.scope.readable(m.Target)
 	}
-	return strings.EqualFold(m.Target, p.nick) && m.RecipientAccountID == p.account
+	return p.scope.DirectMessages && p.account != "" && strings.EqualFold(m.Target, p.nick) && m.RecipientAccountID == p.account
 }
 
 // observe observes targets and reports whether AIRC confirmed every one.
@@ -182,6 +214,10 @@ func observe(ctx context.Context, client *irc.Client, targets []string) (bool, e
 			}
 			switch {
 			case raw.Command == "765" && len(raw.Params) == 2:
+				confirmed[raw.Params[1]] = true
+			case raw.Command == "430" && len(raw.Params) == 2 && strings.HasPrefix(raw.Params[1], "thread:"):
+				// A thread AIRC no longer retains: nothing live can come
+				// for it, and the snapshot reports it expired.
 				confirmed[raw.Params[1]] = true
 			case raw.Command == "PONG" && raw.Trailing == token:
 				return len(confirmed) == len(targets), nil
@@ -235,13 +271,7 @@ func (p checkPlan) await(ctx context.Context, client *irc.Client, wait time.Dura
 func (p checkPlan) snapshot(ctx context.Context, client *irc.Client, other func(irc.Event) error) (core.CheckResult, error) {
 	r := p.request
 	request := irc.CheckRequest{IncludeOwn: true, MaxMessages: r.Limit}
-	after := make([]string, 0, len(r.Rooms)+1)
-	for _, room := range r.Rooms {
-		after = append(after, room.After)
-	}
-	if r.Inbox != nil {
-		after = append(after, r.Inbox.After)
-	}
+	after := p.positions()
 	for i, selector := range p.selectors() {
 		target := irc.CheckTarget{Target: selector, Limit: r.Limit}
 		switch after[i] {
@@ -265,30 +295,33 @@ func (p checkPlan) snapshot(ctx context.Context, client *irc.Client, other func(
 
 // pages turns CHECK's entries (every message once, oldest first, naming the
 // selectors whose pages hold it, then one page marker per selector in
-// request order) into a page per room and the inbox page. The inbox keeps
-// only the author's own direct messages.
+// request order) into a page per room and thread and the inbox page. The
+// inbox keeps only what the author may read; a thread with news outside
+// the rooms it may read is withheld whole, and one whose root AIRC no
+// longer retains is expired.
 func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckResult, error) {
 	r := p.request
 	selectors := p.selectors()
 	pages := make([]core.CheckPage, len(selectors))
 	last := make([]string, len(selectors)) // each page's last message, kept or not
+	withheld := make([]bool, len(selectors))
 	for i, selector := range selectors {
 		pages[i] = core.CheckPage{Room: selector, Messages: []*irc.MessageMetadata{}}
 	}
+	threads := len(r.Rooms) // first thread page
 	inbox := -1
 	if r.Inbox != nil {
 		inbox = len(selectors) - 1
+		pages[inbox].MentionsOnly = !p.scope.DirectMessages
 	}
+	thread := func(i int) bool { return i >= threads && i < threads+len(r.Threads) }
 	seen := map[string]bool{}
 	messages, marked := 0, 0
 	for _, entry := range entries {
-		if entry.Warning != "" {
-			return core.CheckResult{}, auth.ErrForbidden
-		}
 		switch entry.Kind {
 		case "message":
 			m := entry.Message
-			if marked > 0 || m == nil || len(entry.Targets) == 0 || seen[m.ID] || messages >= r.Limit || !validCheckMessage(m) || entry.Target != m.Target {
+			if marked > 0 || entry.Warning != "" || m == nil || len(entry.Targets) == 0 || seen[m.ID] || messages >= r.Limit || !validCheckMessage(m) || entry.Target != m.Target {
 				return core.CheckResult{}, ErrReadUnavailable
 			}
 			seen[m.ID] = true
@@ -298,22 +331,41 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 					return core.CheckResult{}, ErrReadUnavailable
 				}
 				last[i] = m.ID
-				if i == inbox {
+				switch {
+				case i == inbox:
 					if p.inboxMessage(m) {
 						pages[i].Messages = append(pages[i].Messages, m)
 					}
-					continue
+				case thread(i):
+					root := r.Threads[i-threads].ID
+					if m.ID != root && m.ThreadID != root {
+						return core.CheckResult{}, ErrReadUnavailable
+					}
+					if !protocol.IsChannel(m.Target) || !p.scope.readable(m.Target) {
+						withheld[i] = true
+					}
+					pages[i].Messages = append(pages[i].Messages, m)
+				default:
+					if m.Target != pages[i].Room {
+						return core.CheckResult{}, ErrReadUnavailable
+					}
+					pages[i].Messages = append(pages[i].Messages, m)
 				}
-				if m.Target != pages[i].Room {
-					return core.CheckResult{}, ErrReadUnavailable
-				}
-				pages[i].Messages = append(pages[i].Messages, m)
 			}
 		case "page":
 			if marked >= len(pages) {
 				return core.CheckResult{}, ErrReadUnavailable
 			}
 			page := &pages[marked]
+			if entry.Warning != "" {
+				// AIRC warns only of a followed thread it no longer retains.
+				if !thread(marked) || entry.Target != page.Room || last[marked] != "" {
+					return core.CheckResult{}, auth.ErrForbidden
+				}
+				page.Status = "expired"
+				marked++
+				continue
+			}
 			// A retained page cut short before its first message keeps
 			// AIRC's "oldest" cursor; its next check starts there again.
 			if entry.Cursor == "*" && after[marked] == "retained" && last[marked] == "" && entry.Status == "more" {
@@ -328,6 +380,9 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 				return core.CheckResult{}, ErrReadUnavailable
 			}
 			page.Cursor, page.Status, page.Gap = entry.Cursor, entry.Status, entry.Gap
+			if withheld[marked] {
+				page.Messages, page.Cursor, page.Status, page.Gap = []*irc.MessageMetadata{}, "", "withheld", false
+			}
 			marked++
 		default:
 			return core.CheckResult{}, ErrReadUnavailable
@@ -336,9 +391,12 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 	if marked != len(pages) {
 		return core.CheckResult{}, ErrReadUnavailable
 	}
-	result := core.CheckResult{Rooms: pages}
+	result := core.CheckResult{Rooms: pages[:threads]}
+	if len(r.Threads) > 0 {
+		result.Threads = pages[threads : threads+len(r.Threads)]
+	}
 	if inbox >= 0 {
-		result.Rooms, result.Inbox = pages[:inbox], &pages[inbox]
+		result.Inbox = &pages[inbox]
 	}
 	data, err := json.Marshal(result)
 	if err != nil || len(data) > core.MaxCheckBytes {
@@ -358,9 +416,11 @@ func validCheckMessage(m *irc.MessageMetadata) bool {
 	return (m.ReplyTo == "" || validHistoryID(m.ReplyTo)) && (m.ThreadID == "" || validHistoryID(m.ThreadID))
 }
 
-// emptyCheck reports a snapshot with no news on any page.
+// emptyCheck reports a snapshot with no news on any page. A withheld or
+// expired thread stays so on every check, so it does not end a wait; the
+// answer still reports it.
 func emptyCheck(result core.CheckResult) bool {
-	pages := result.Rooms
+	pages := append(slices.Clip(result.Rooms), result.Threads...)
 	if result.Inbox != nil {
 		pages = append(slices.Clip(pages), *result.Inbox)
 	}

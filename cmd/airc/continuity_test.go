@@ -109,7 +109,7 @@ func TestCheckContinuesInboxOverAnotherCarrier(t *testing.T) {
 	if got := checkBodies(t, out); len(got) != 2 || !slices.Contains(got, "gateway dm") || !slices.Contains(got, "room news") {
 		t.Fatalf("check over a carrier: %v\n%s", got, out)
 	}
-	if footer := checkFooter(t, out); len(footer.Warnings) != 1 || !strings.Contains(footer.Warnings[0], "rooms and the inbox") {
+	if footer := checkFooter(t, out); len(footer.Warnings) != 1 || !strings.Contains(footer.Warnings[0], "followed threads and the inbox") {
 		t.Fatalf("footer %+v", footer)
 	}
 	// A direct message ends a wait.
@@ -124,6 +124,43 @@ func TestCheckContinuesInboxOverAnotherCarrier(t *testing.T) {
 	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "native again")
 	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 1 || got[0] != "native again" {
 		t.Fatalf("native check after recovery: %v", got)
+	}
+}
+
+// A guest's mentions and followed threads continue over another carrier.
+// Its direct messages wait for native IRC, which then shows them, and
+// nothing the carrier showed is shown twice.
+func TestCheckContinuesMentionsAndThreadsOverAnotherCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	addr := f.proxy.addr()
+	root := send(t, addr, "alice", "#elsewhere", "a question")
+	mustCLI(t, addr, "follow", root.ID, "--nick", "bob")
+	mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
+	f.proxy.close()
+	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#elsewhere", "--message", "@bob a mention")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "a direct message")
+	mustCLI(t, addr, "send", "--nick", "carol", "--reply-to", root.ID, "--channel", "#elsewhere", "--message", "a thread reply")
+	out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
+	if err != nil {
+		t.Fatal(err, stderr)
+	}
+	got := checkBodies(t, out)
+	if len(got) != 2 || !slices.Contains(got, "@bob a mention") || !slices.Contains(got, "a thread reply") {
+		t.Fatalf("check over a carrier: %v\n%s", got, out)
+	}
+	if footer := checkFooter(t, out); len(footer.Warnings) != 1 || !strings.Contains(footer.Warnings[0], "direct messages wait") {
+		t.Fatalf("footer %+v", footer)
+	}
+	// Read again over the carrier: nothing new.
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 0 {
+		t.Fatalf("read again: %v", got)
+	}
+	startNativeProxy(t, addr, f.daemon)
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 1 || got[0] != "a direct message" {
+		t.Fatalf("native check after recovery: %v", got)
+	}
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 0 {
+		t.Fatalf("native check again: %v", got)
 	}
 }
 
@@ -159,6 +196,39 @@ func TestCheckWaitSurvivesNativeIRCDying(t *testing.T) {
 
 // A watcher whose native connection dies keeps following its rooms over
 // another carrier, then returns to native IRC, showing every message once.
+// A persistent user's watch follows its own inbox over another carrier too,
+// and shows nothing twice once native IRC is back.
+func TestWatchFollowsOwnInboxOverAnotherCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	fastReconnect(t)
+	addr := f.proxy.addr()
+	mustCLI(t, addr, "user", "create", "--nick", "bob")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-A")
+	out, _ := startWatch(t, "--nick", "bob", "--channel", "#room,@bob", "--color", "never", "--width", "100", "--backlog", "5", "--addr", addr)
+	waitForOutput(t, out, "--- live ---")
+	waitForOutput(t, out, "dm-A")
+
+	f.proxy.close()
+	waitForOutput(t, out, "connection lost")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-B") // over the gateway
+	waitForOutput(t, out, "following rooms over "+f.carrier("http"))
+	waitForOutput(t, out, "dm-B")
+	if strings.Contains(out.String(), "direct messages follow when it returns") {
+		t.Errorf("a persistent user's own inbox was left for native IRC:\n%s", out.String())
+	}
+
+	startNativeProxy(t, addr, f.daemon)
+	waitForOutput(t, out, "reconnected")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-C")
+	waitForOutput(t, out, "dm-C")
+	got := out.String()
+	for _, body := range []string{"dm-A", "dm-B", "dm-C"} {
+		if n := strings.Count(got, body); n != 1 {
+			t.Errorf("%s shown %d times, want exactly once:\n%s", body, n, got)
+		}
+	}
+}
+
 func TestWatchFollowsRoomsOverAnotherCarrierWhileNativeIsDown(t *testing.T) {
 	f := newFallbackFixture(t)
 	fastReconnect(t)

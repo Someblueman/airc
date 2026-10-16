@@ -43,20 +43,30 @@ func TestServeRefusesUnprotectedRemoteBind(t *testing.T) {
 
 func TestAccessGatePrecedesAllRegistrationAndData(t *testing.T) {
 	address, srv := accessServer(t, Config{})
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		t.Fatal(err)
+	dial := func() (net.Conn, *bufio.Scanner) {
+		t.Helper()
+		conn, err := net.Dial("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { conn.Close() })
+		conn.SetDeadline(time.Now().Add(time.Second))
+		return conn, bufio.NewScanner(conn)
 	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(time.Second))
-	scanner := bufio.NewScanner(conn)
-	for _, command := range []string{"NICK attacker", "USER attacker 0 * :attacker", "AUTH victim :" + strings.Repeat("b", 64), "REGISTER victim :" + strings.Repeat("b", 64), "EPHEMERAL", "STATUS", "HISTORY #room", "OBSERVE @*", "PASS :" + strings.Repeat("b", 64)} {
+	expect := func(conn net.Conn, scanner *bufio.Scanner, command, reply string) {
+		t.Helper()
 		if _, err := io.WriteString(conn, command+"\r\n"); err != nil {
 			t.Fatal(err)
 		}
-		if !scanner.Scan() || !strings.Contains(scanner.Text(), " 464 ") {
+		if !scanner.Scan() || !strings.Contains(scanner.Text(), reply) {
 			t.Fatal(command, scanner.Text(), scanner.Err())
 		}
+	}
+	// Each command is refused before the connection credential, on its own
+	// connection since every refusal counts toward the three-failure close.
+	for _, command := range []string{"NICK attacker", "USER attacker 0 * :attacker", "AUTH victim :" + strings.Repeat("b", 64), "REGISTER victim :" + strings.Repeat("b", 64), "EPHEMERAL", "STATUS", "HISTORY #room", "OBSERVE @*", "PASS :" + strings.Repeat("b", 64)} {
+		conn, scanner := dial()
+		expect(conn, scanner, command, " 464 ")
 	}
 	srv.mu.Lock()
 	nicks, accounts := len(srv.nicks), len(srv.accounts)
@@ -64,12 +74,21 @@ func TestAccessGatePrecedesAllRegistrationAndData(t *testing.T) {
 	if nicks != 0 || accounts != 0 {
 		t.Fatal("unauthorized registration changed server state")
 	}
-	io.WriteString(conn, "PASS :"+strings.Repeat("a", 64)+"\r\n")
-	if !scanner.Scan() || !strings.Contains(scanner.Text(), " 782 ") {
-		t.Fatal(scanner.Text())
-	}
+	// Two stray commands still leave room for the credential.
+	conn, scanner := dial()
+	expect(conn, scanner, "NICK early", " 464 ")
+	expect(conn, scanner, "CAP LS 302", " 464 ")
+	expect(conn, scanner, "PASS :"+strings.Repeat("a", 64), " 782 ")
 	if err := srv.EnableAdmin(strings.Repeat("a", 64)); err == nil {
 		t.Fatal("accepted access credential as operator")
+	}
+	// A third command without the credential closes the connection.
+	conn, scanner = dial()
+	expect(conn, scanner, "NICK talker", " 464 ")
+	expect(conn, scanner, "USER talker 0 * :talker", " 464 ")
+	expect(conn, scanner, "STATUS", " 464 ")
+	if !scanner.Scan() || !strings.Contains(scanner.Text(), "too many failed credential attempts") {
+		t.Fatal("third command without the credential", scanner.Text(), scanner.Err())
 	}
 }
 

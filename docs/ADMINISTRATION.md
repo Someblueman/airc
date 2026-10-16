@@ -79,7 +79,8 @@ old account stays connected but loses channel-operator rights. A connection can
 create only one account, and a remote address at most 8 an hour.
 
 On a remote TLS listener, a connection is closed after three wrong credentials
-(access token, account, SASL or admin), and each non-loopback address may hold
+(access token, account, SASL or admin) or commands sent before the access
+credential, and each non-loopback address may hold
 at most a quarter of `--max-connections` (minimum 4) unregistered connections.
 Loopback and Unix-socket clients are not limited.
 

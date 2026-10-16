@@ -13,7 +13,8 @@ When access authentication is enabled, send `PASS :TOKEN` before `AUTH`,
 `REGISTER`, `EPHEMERAL`, `NICK` or `USER`. TOKEN is the 64-character hex value
 from the owner-only access token file. Success returns `782`; incorrect or
 missing credentials return `464`. All other pre-authentication commands except
-`QUIT` are denied, including registration, status and archive reads. `PASS`
+`QUIT` are denied, including registration, status and archive reads, and each
+denial counts as a failed credential for that connection. `PASS`
 after registration returns `462`. Access authentication must be repeated after
 reconnect and does not confer operator privileges. Access and admin tokens must
 differ. Admitted clients retain the trusted chat archive and all-DM visibility.

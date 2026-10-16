@@ -33,7 +33,7 @@ func (b *uiBackend) bridge(ctx context.Context, back <-chan struct{}) error {
 	// Reads stop when native IRC is back; what was read is still shown and
 	// a send in flight still finishes, on the UI's own context.
 	reading, cancel := untilBack(ctx, back)
-	pages, wait := followRooms(reading, fb, starts)
+	pages, wait := followRooms(reading, fb, starts, nil)
 	defer wait()
 	defer cancel()
 	announced := ""

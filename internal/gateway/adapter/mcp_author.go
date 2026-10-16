@@ -27,7 +27,7 @@ func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dis
 		"send":     "Submit a bounded message with a stable durable request ID, as the author.",
 		"read":     "Read a complete bounded room history page as the author and preserve its opaque cursor.",
 		"wait":     "Wait for bounded room message pages; a progress token enables bounded streaming.",
-		"check":    "Read many rooms, and a registered author's inbox, after message IDs in one call; wait_seconds waits for news.",
+		"check":    "Read many rooms, followed threads and the author's inbox after message IDs in one call; wait_seconds waits for news.",
 		"status":   "Look up a durable receipt (a registered author's needs its token), or discover this listener's access.",
 		"identify": "Check an author with AIRC and make it this session's default author.",
 		"register": "Register the author's nickname as an AIRC account with its own token.",

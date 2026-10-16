@@ -26,11 +26,12 @@ type mcpReadArguments struct {
 }
 
 type mcpCheckArguments struct {
-	RequestID   string           `json:"request_id"`
-	Rooms       []core.CheckRoom `json:"rooms,omitempty"`
-	Inbox       *core.CheckInbox `json:"inbox,omitempty"`
-	Limit       int              `json:"limit"`
-	WaitSeconds int              `json:"wait_seconds,omitempty"`
+	RequestID   string             `json:"request_id"`
+	Rooms       []core.CheckRoom   `json:"rooms,omitempty"`
+	Threads     []core.CheckThread `json:"threads,omitempty"`
+	Inbox       *core.CheckInbox   `json:"inbox,omitempty"`
+	Limit       int                `json:"limit"`
+	WaitSeconds int                `json:"wait_seconds,omitempty"`
 }
 
 type mcpStatusArguments struct {
@@ -69,7 +70,7 @@ func decodeMCPRequest(name string, body []byte) (core.Request, error) {
 			return request, err
 		}
 		request.RequestID, request.Operation, request.Limit, request.WaitSeconds = args.RequestID, core.Check, args.Limit, args.WaitSeconds
-		request.Rooms, request.Inbox = args.Rooms, args.Inbox
+		request.Rooms, request.Threads, request.Inbox = args.Rooms, args.Threads, args.Inbox
 	case "status":
 		var args mcpStatusArguments
 		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {

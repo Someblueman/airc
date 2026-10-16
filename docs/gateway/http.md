@@ -129,7 +129,7 @@ takes an optional `author` and `password`; arguments omit `version` and
 | `send` | `send` | `request_id`, `target`, `message`; optional times and `delivery_policy` |
 | `read` | `history.read` | `request_id`, room `target`, `limit`; optional `cursor`, `start`, `parent_id`, `thread_mode` |
 | `wait` | `watch` | as `read`; with an MCP progress token, pages stream as progress |
-| `check` | `check` | `request_id`, `limit`, `rooms` (`{name, after}`), optional `inbox` (`{after}`) and `wait_seconds` |
+| `check` | `check` | `request_id`, `limit`, `rooms` (`{name, after}`), `threads` (`{id, after}`), `inbox` (`{after}`), optional `wait_seconds` |
 | `status` | `receipt.get` with `lookup_id`, else `capabilities.get` | `request_id`, optional `lookup_id` |
 | `identify` | `account.identify` | `request_id`; sets the session's author |
 | `register` | `account.register` | `request_id` |

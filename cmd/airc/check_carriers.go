@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -25,25 +26,19 @@ type overCarriers struct {
 func (*overCarriers) Error() string { return "native IRC is unreachable" }
 
 // carrierCheckable reports a check whose reads can continue over gateway
-// carriers: followed rooms, and the inbox for a registered user, whose
-// account is what proves a direct message was theirs. Gateways serve no
+// carriers: followed rooms and threads, and the inbox. Gateways serve no
 // reply selectors.
-func carrierCheckable(settings *checkOptions, followed []checkTarget, registered bool) bool {
-	return settings.replyTo == "" && !settings.fromNow && (registered || !settings.mentions && len(followed) > 0)
-}
-
-// hasIdentity reports a user with an identity (a registered account).
-func hasIdentity(opt options) bool {
-	cfg, err := dialConfig(opt)
-	return err == nil && cfg.IdentityToken != ""
+func carrierCheckable(settings *checkOptions) bool {
+	return settings.replyTo == "" && !settings.fromNow
 }
 
 // checkOverCarriers runs a check's room reads over the server's other
 // carriers while native IRC is unreachable, starting on conn. Cursors are
 // message IDs, as native IRC keeps them, so the next native check continues
-// from here. A registered user's inbox is read too, under the inbox cursor
-// native IRC keeps; a guest's inbox, and followed threads, wait for native
-// IRC, and a warning says so. A wait reads the rooms again every carrierPoll, over one
+// from here. Followed threads and the inbox are read too: a thread with
+// direct messages, and the direct messages of an inbox the gateway serves
+// without them (a guest's), wait for native IRC, and a warning says so. A
+// wait reads them again every carrierPoll, over one
 // connection that is replaced with backoff when it fails, while native IRC
 // is redialled; once it registers, the wait continues there (back).
 func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions, fb *fallback.Client, conn *fallback.Conn, stdout, stderr io.Writer) (back *irc.Client, err error) {
@@ -61,17 +56,20 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 	if err != nil {
 		return nil, err
 	}
-	c := &checker{nick: opt.nick, settings: settings, targets: followed}
-	if reader.ServesInbox() {
-		inbox := checkTarget{name: "@" + opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick}
-		if settings.mentions {
-			c.targets = []checkTarget{inbox}
-		} else {
-			c.targets = append(slices.Clip(followed), inbox)
+	c := &checker{nick: opt.nick, settings: settings}
+	inbox := checkTarget{name: "@" + opt.nick, key: c.inboxKey(), watch: "@" + opt.nick}
+	if settings.mentions {
+		c.targets = []checkTarget{inbox}
+	} else {
+		c.targets = append(slices.Clip(followed), inbox)
+		store, err := openCursors(opt, opt.nick)
+		if err != nil {
+			return nil, err
 		}
-	}
-	if len(c.targets) == 0 {
-		return nil, errors.New("native IRC is unreachable, and only it serves this check")
+		for _, id := range store.Follows {
+			c.targets = append(c.targets, checkTarget{name: "thread:" + id, key: "thread:" + id, watch: "thread:" + id})
+		}
+		store.close()
 	}
 	waiting := c.carrierNote
 	expired := func(err error, phase string) error {
@@ -164,8 +162,8 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 }
 
 // awaitNews waits on the gateway, up to carrierWait, for news after the
-// followed rooms' cursors, when every room has a cursor, one check covers
-// them all and the gateway has check. What it reads is only a wake-up; a
+// followed rooms', threads' and inbox's cursors, when every one has a
+// cursor and one check covers them all. What it reads is only a wake-up; a
 // failure surfaces in the next round.
 func (c *checker) awaitNews(ctx context.Context, opt options, reader *fallback.RoomReader) {
 	if !reader.Waits() || len(c.targets) > maxCheckRooms {
@@ -177,21 +175,24 @@ func (c *checker) awaitNews(ctx context.Context, opt options, reader *fallback.R
 	}
 	cursors := maps.Clone(store.Cursors)
 	store.close()
+	set := fallback.CheckSet{Limit: 1, Wait: carrierWait}
 	inbox := c.inboxTarget()
-	var reads []fallback.RoomAfter
 	for _, target := range c.targets {
-		if cursors[target.key] == "" {
+		after := cursors[target.key]
+		switch {
+		case target.key == inbox.key:
+			start := c.inboxAfter(cursors)
+			set.Inbox = &start
+			continue
+		case after == "":
 			return
-		}
-		if target.key != inbox.key {
-			reads = append(reads, fallback.RoomAfter{Room: target.name, After: cursors[target.key]})
+		case strings.HasPrefix(target.key, "thread:"):
+			set.Threads = append(set.Threads, fallback.ThreadAfter{ID: strings.TrimPrefix(target.key, "thread:"), After: after})
+		default:
+			set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: target.name, After: after})
 		}
 	}
-	if inbox.key != "" {
-		_, _, _ = reader.CheckInbox(ctx, reads, cursors[inbox.key], 1, carrierWait)
-		return
-	}
-	_, _ = reader.Check(ctx, reads, 1, carrierWait)
+	_, _ = reader.CheckAll(ctx, set)
 }
 
 // redialNative dials native IRC with backoff until a connection registers,
@@ -242,58 +243,93 @@ func (c *checker) checkRoomsOnce(ctx context.Context, opt options, reader *fallb
 	return false, nil
 }
 
-// fetchOverCarriers reads each followed room, and a registered user's
-// inbox, after its cursor, as fetchNew does natively, one page per target.
+// fetchOverCarriers reads each followed room and thread, and the inbox,
+// after its cursor, as fetchNew does natively, one page per target. They
+// are read in checks of up to maxCheckRooms, the first with the inbox; a
+// room without a cursor is read alone, for its initial page, while a thread
+// or inbox without one starts at the oldest retained message.
 func (c *checker) fetchOverCarriers(ctx context.Context, reader *fallback.RoomReader, cursors map[string]string) (checkBatch, error) {
 	var batch checkBatch
-	// Rooms with cursors are read in checks of up to maxCheckRooms targets,
-	// the first with the inbox; a room without one is read alone, for its
-	// initial page. An inbox starts at the oldest retained message.
+	c.notes = nil
 	pages := map[string]*fallback.Page{}
-	var reads []fallback.RoomAfter
+	var rooms []fallback.RoomAfter
+	var threads []fallback.ThreadAfter
 	inbox := c.inboxTarget()
 	for _, target := range c.targets {
-		if after := cursors[target.key]; after != "" && target.key != inbox.key {
-			reads = append(reads, fallback.RoomAfter{Room: target.name, After: after})
+		switch after := cursors[target.key]; {
+		case target.key == inbox.key:
+		case strings.HasPrefix(target.key, "thread:"):
+			if after == "" {
+				after = "retained"
+			}
+			threads = append(threads, fallback.ThreadAfter{ID: strings.TrimPrefix(target.key, "thread:"), After: after})
+		case after != "":
+			rooms = append(rooms, fallback.RoomAfter{Room: target.name, After: after})
 		}
 	}
 	limit := min(c.settings.limit, c.settings.maxMessages+1)
-	if inbox.key != "" {
-		first := reads[:min(len(reads), maxCheckRooms-1)]
-		reads = reads[len(first):]
-		after := cursors[inbox.key]
-		if after == "" {
-			after = "retained"
+	first := true
+	for len(rooms) > 0 || len(threads) > 0 || first && inbox.key != "" {
+		set := fallback.CheckSet{Limit: limit}
+		room := maxCheckRooms
+		if first && inbox.key != "" {
+			start := c.inboxAfter(cursors)
+			set.Inbox, room = &start, maxCheckRooms-1
 		}
-		read, page, err := reader.CheckInbox(ctx, first, after, limit, 0)
+		take := min(len(rooms), room)
+		set.Rooms, rooms = rooms[:take], rooms[take:]
+		take = min(len(threads), room-take)
+		set.Threads, threads = threads[:take], threads[take:]
+		checked, err := reader.CheckAll(ctx, set)
 		if err != nil {
 			return checkBatch{}, err
 		}
-		for i, p := range read {
-			pages[first[i].Room] = p
+		for i, page := range checked.Rooms {
+			pages[set.Rooms[i].Room] = page
 		}
-		if page == nil {
-			c.dropInbox()
-		} else {
-			pages[inbox.name] = page
+		if len(set.Threads) > 0 && checked.Threads == nil {
+			c.notes = append(c.notes, "followed threads wait for native IRC")
 		}
-	}
-	for chunk := range slices.Chunk(reads, maxCheckRooms) {
-		read, err := reader.Check(ctx, chunk, limit, 0)
-		if err != nil {
-			return checkBatch{}, err
+		for i, page := range checked.Threads {
+			id := set.Threads[i].ID
+			switch page.Status {
+			case "withheld":
+				c.notes = append(c.notes, "followed thread "+id+" has direct messages, which wait for native IRC")
+			case "expired":
+				c.notes = append(c.notes, "Followed thread:"+id+" expired; use airc unfollow to remove it")
+			default:
+				pages["thread:"+id] = page
+			}
 		}
-		for i, page := range read {
-			pages[chunk[i].Room] = page
+		if first && inbox.key != "" {
+			switch {
+			case checked.Inbox == nil:
+				c.dropInbox()
+			case checked.Inbox.MentionsOnly:
+				c.mentionsOnly = true
+				pages[inbox.name] = checked.Inbox
+			default:
+				c.mentionsOnly = false
+				pages[inbox.name] = checked.Inbox
+			}
 		}
+		first = false
 	}
 	for _, target := range c.targets {
 		page := pages[target.name]
 		if page == nil {
+			if !protocol.IsChannel(target.name) || cursors[target.key] != "" {
+				continue // a thread or inbox this round did not serve
+			}
 			var err error
 			if page, err = reader.Read(ctx, target.name, "", c.settings.initial); err != nil {
 				return checkBatch{}, err
 			}
+		}
+		if target.key == inbox.key && c.mentionsOnly {
+			// Keep native IRC's inbox cursor for the direct messages this
+			// carrier did not serve; see carrierInboxKey.
+			target.key = carrierInboxKey(inbox.key)
 		}
 		if page.Gap {
 			batch.gaps = append(batch.gaps, target.name)
@@ -313,28 +349,53 @@ func (c *checker) fetchOverCarriers(ctx context.Context, reader *fallback.RoomRe
 	return batch, nil
 }
 
+// inboxAfter is where the inbox continues over another carrier: its own
+// place in a mentions-only inbox, else the native inbox cursor, else the
+// oldest retained message.
+func (c *checker) inboxAfter(cursors map[string]string) string {
+	inbox := c.inboxKey()
+	if after := cursors[carrierInboxKey(inbox)]; after != "" {
+		return after
+	}
+	if after := cursors[inbox]; after != "" {
+		return after
+	}
+	return "retained"
+}
+
+// inboxKey is the cursor key of this nickname's inbox.
+func (c *checker) inboxKey() string { return "@" + strings.ToLower(c.nick) }
+
 // inboxTarget is the check's inbox target, or a zero one without it.
 func (c *checker) inboxTarget() checkTarget {
 	for _, target := range c.targets {
-		if strings.HasPrefix(target.key, "@") {
+		if target.key == c.inboxKey() {
 			return target
 		}
 	}
 	return checkTarget{}
 }
 
-// dropInbox stops reading an inbox the gateway refused; it waits for native
-// IRC, and the carrier note says so.
+// dropInbox stops reading an inbox the gateway does not serve; it waits for
+// native IRC, and the carrier note says so.
 func (c *checker) dropInbox() {
-	c.targets = slices.DeleteFunc(c.targets, func(t checkTarget) bool { return strings.HasPrefix(t.key, "@") })
+	key := c.inboxKey()
+	c.targets = slices.DeleteFunc(c.targets, func(t checkTarget) bool { return t.key == key })
 }
 
 // carrierNote is the warning a check over another carrier carries.
 func (c *checker) carrierNote() string {
-	if c.inboxTarget().key != "" {
-		return "Native IRC is unreachable: followed threads wait for it; rooms and the inbox were read over another carrier"
+	note := "Native IRC is unreachable: rooms, followed threads and the inbox were read over another carrier"
+	switch {
+	case c.inboxTarget().key == "":
+		note = "Native IRC is unreachable: direct messages and mentions wait for it; rooms and followed threads were read over another carrier"
+	case c.mentionsOnly:
+		note = "Native IRC is unreachable: direct messages wait for it; rooms, followed threads and mentions were read over another carrier"
 	}
-	return "Native IRC is unreachable: direct messages, mentions and followed threads wait for it; rooms were read over another carrier"
+	for _, extra := range c.notes {
+		note += "; " + extra
+	}
+	return note
 }
 
 // historyEvent is a gateway message in the shape of a native history entry.

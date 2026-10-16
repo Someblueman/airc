@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -28,19 +29,18 @@ func (d *Dispatcher) readCheck(ctx context.Context, who actor, r core.Request, n
 		}
 	}
 	// Only AIRC's own record proves who received a direct message, and it
-	// records only accounts: a guest has no inbox here. A listener with a
-	// target allowlist must list the author's own nickname.
-	if r.Inbox != nil {
-		author := who.author.Author
-		own := core.Target{Kind: "direct", Name: author.Nick}
-		if !author.Registered || own.Normalize() != nil || !access.allows(own) {
-			return core.CheckResult{}, auth.ErrForbidden
-		}
+	// records only accounts: a guest's inbox, and one on a listener whose
+	// target allowlist leaves out the author's own nickname, has mentions
+	// only. Threads and mentions show only rooms the listener allows.
+	author := who.author.Author
+	own := core.Target{Kind: "direct", Name: author.Nick}
+	scope := backend.CheckScope{
+		Readable:       func(room string) bool { return access.allows(core.Target{Kind: "room", Name: room}) },
+		DirectMessages: author.Registered && own.Normalize() == nil && access.allows(own),
 	}
 	grant, err := d.authorizeRead(ctx, who, r, now)
 	if err != nil {
 		return core.CheckResult{}, err
 	}
-	mentionable := func(room string) bool { return access.allows(core.Target{Kind: "room", Name: room}) }
-	return d.backend.Check(ctx, grant, mentionable)
+	return d.backend.Check(ctx, grant, scope)
 }
