@@ -114,9 +114,11 @@ socket. Four requests may be active per socket; `stream: true` watches send
 `page` frames and an `end` frame, and a `stream: true` check is a
 [follow](contract-v1.md#following): `check` frames for its lease, then
 `end`. The first message must arrive within five
-seconds and later ones within thirty; the server pings every ten seconds
-and needs a pong within three. Binary or malformed messages close the
-socket; a disconnect cancels its reads but never an admitted mutation.
+seconds and later ones within thirty, counted from the end of the last
+active request; the server pings every ten seconds and closes a socket
+whose ping is unanswered when the next is due. Both are the listener's
+[keepalive](configuration.md#keepalive) settings. Binary or malformed
+messages close the socket; a disconnect cancels its reads but never an admitted mutation.
 
 ## MCP
 
@@ -164,7 +166,8 @@ request in the handshake's first flight, which is safe because every
 request is replay-safe (a mutation is one job by author and `request_id`
 however often it arrives, and reads change nothing); `airc` resumes its
 sessions this way. GET routes take the author headers. Handshakes have
-five seconds, idle connections thirty.
+five seconds; idle connections close after thirty unless the listener's
+[keepalive](configuration.md#keepalive) says otherwise.
 
 ## WebTransport
 

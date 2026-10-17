@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/quic-go/quic-go"
@@ -19,7 +20,7 @@ func TestHTTP3RealHandshakeUsesSharedConnectionAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	slots := make(chan struct{}, 1)
-	owner, err := newHTTP3Owner(t.Context(), testDispatcher(t), slots, cap(slots), nil, pair, "127.0.0.1:0")
+	owner, err := newHTTP3Owner(t.Context(), testDispatcher(t), slots, cap(slots), nil, pair, "127.0.0.1:0", adapter.Keepalive{})
 	if err != nil {
 		t.Fatal(err)
 	}

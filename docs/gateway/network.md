@@ -81,7 +81,8 @@ is required, and 0-RTT is accepted as on [HTTP/3](http.md#http3). Bidirectional 
 frames; a client unidirectional stream gets responses on a server
 unidirectional stream; datagrams carry fragments. Correlation IDs are
 unique per stream or per datagram channel; match responses by them, not by
-arrival order.
+arrival order. Idle connections close after thirty seconds; the listener's
+[keepalive](configuration.md#keepalive) settings change that and add PINGs.
 
 ## DTLS
 

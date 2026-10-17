@@ -177,17 +177,23 @@ func quicListener(open func(*startup, config.Listener, *dispatch.Dispatcher, tls
 }
 
 func http3Owner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newHTTP3Owner(o.work, d, o.connections, o.c.Limits.Requests(), l.AllowedOrigins, pair, l.Address)
+	return newHTTP3Owner(o.work, d, o.connections, o.c.Limits.Requests(), l.AllowedOrigins, pair, l.Address, keepalive(l))
 }
 
 func webTransportOwner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newWebTransportOwner(o.work, d, o.connections, o.requests, l.AllowedOrigins, pair, l.Address)
+	return newWebTransportOwner(o.work, d, o.connections, o.requests, l.AllowedOrigins, pair, l.Address, keepalive(l))
 }
 
 func rawQUICOwner(datagrams bool) func(*startup, config.Listener, *dispatch.Dispatcher, tls.Certificate) (*quicOwner, error) {
 	return func(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-		return newRawQUICOwner(o.work, d, o.connections, o.requests, pair, l.Address, datagrams)
+		return newRawQUICOwner(o.work, d, o.connections, o.requests, pair, l.Address, datagrams, keepalive(l))
 	}
+}
+
+// keepalive is the listener's quiet-connection timing.
+func keepalive(l config.Listener) adapter.Keepalive {
+	idle, ping := l.KeepaliveTiming()
+	return adapter.Keepalive{Idle: idle, Ping: ping}
 }
 
 func startSNMP(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
@@ -327,7 +333,7 @@ func plainHTTPServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*ht
 }
 
 func webSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {
-	return adapter.WebSocketServer(d, o.requests, l.AllowedOrigins)
+	return adapter.WebSocketServer(d, o.requests, l.AllowedOrigins, keepalive(l))
 }
 
 // nativeUpstream is the AIRC endpoint a native tunnel relays to, dialled as

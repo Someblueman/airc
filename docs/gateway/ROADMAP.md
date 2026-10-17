@@ -20,13 +20,12 @@ its row in the [carriers table](README.md#carriers) and delete the line.
   carried on removable media.
 
 Staying connected, beyond what is built (session reclaim, native tunnels,
-followed checks, 0-RTT, MQTT 5 sessions and wills, MQTT over WebSocket):
+followed checks, 0-RTT, per-listener keepalive, MQTT 5 sessions and wills,
+MQTT over WebSocket):
 
 - **WebSocket over HTTP/2 and HTTP/3** (RFC 8441, RFC 9220), so one port
   443 serves every HTTP carrier; the WebSocket library has no extended
   CONNECT yet.
-- **Per-listener idle and keepalive settings** for WebSocket pings and QUIC
-  idle timeouts, tuned for NAT; today they are fixed (10 s pings, 30 s idle).
 - **Multipath QUIC** when quic-go ships it.
 - **MQTT 5, further**: sessions and wills that survive a gateway restart,
   and shared subscriptions for a pool of workers.

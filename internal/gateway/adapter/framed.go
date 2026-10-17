@@ -139,26 +139,51 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		}
 		return err
 	}
-	first, active := true, false
-	next := func() ([]byte, error) {
-		idle := ConnectionIdle
-		if first {
-			idle = 5 * time.Second
-		} else if active {
-			idle = streamIdle
+	// waiting is true while the read for a frame's first byte runs; a
+	// change in whether a request is active moves its deadline.
+	var idleMu sync.Mutex
+	first, active, waiting := true, false, false
+	idle := func() time.Duration {
+		switch {
+		case first:
+			return 5 * time.Second
+		case active:
+			return streamIdle
 		}
-		if err := stream.SetReadDeadline(time.Now().Add(idle)); err != nil {
+		return ConnectionIdle
+	}
+	streaming := func(streaming bool) {
+		idleMu.Lock()
+		defer idleMu.Unlock()
+		if active != streaming {
+			active = streaming
+			if waiting {
+				_ = stream.SetReadDeadline(time.Now().Add(idle()))
+			}
+		}
+	}
+	next := func() ([]byte, error) {
+		idleMu.Lock()
+		waiting = true
+		err := stream.SetReadDeadline(time.Now().Add(idle()))
+		idleMu.Unlock()
+		if err != nil {
 			return nil, err
 		}
 		var header [4]byte
 		n, err := io.ReadFull(stream, header[:1])
+		idleMu.Lock()
+		waiting = false
+		if err == nil {
+			first = false
+		}
+		idleMu.Unlock()
 		if err != nil {
 			if n == 0 && errors.Is(err, io.EOF) && gracefulEOF {
 				return nil, errFramedCleanEOF
 			}
 			return nil, err
 		}
-		first = false
 		if err := stream.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
 			return nil, err
 		}
@@ -188,7 +213,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		plain = &dispatch.Ingress{Source: source, Session: dispatch.NewSession()}
 		defer plain.Session.Close()
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain, streaming: func(streaming bool) { active = streaming }}, d, requests)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain, streaming: streaming}, d, requests)
 }
 
 func correlationID(s string) bool {
