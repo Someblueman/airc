@@ -266,7 +266,7 @@ func (s *Server) rotateHistoryLocked() error {
 	s.mu.Unlock()
 	next, err := replaceHistoryFile(path, sealed.path, s.cfg.Sync)
 	s.mu.Lock()
-	if err != nil {
+	if next == nil {
 		return err
 	}
 	s.histFile = next
@@ -275,9 +275,12 @@ func (s *Server) rotateHistoryLocked() error {
 	s.histBytes, s.histRecords, s.histFirstSeq = 0, 0, 0
 	s.histActive = map[string]activeRecord{}
 	s.archive.seal(sealed)
-	return nil
+	return err // a failed directory sync, reported once the swap is done
 }
 
+// replaceHistoryFile seals path under the name sealed and opens a new, empty
+// file at path. With no file returned nothing changed; an error beside a
+// file means the swap happened but its directory entries were not synced.
 func replaceHistoryFile(path, sealed string, mode atomicfile.Sync) (*os.File, error) {
 	if err := os.Link(path, sealed); err != nil {
 		return nil, fmt.Errorf("seal history segment: %w", err)
@@ -298,14 +301,15 @@ func replaceHistoryFile(path, sealed string, mode atomicfile.Sync) (*os.File, er
 		_ = os.Remove(temp.Name())
 		return undo(err)
 	}
-	if err := syncHistoryDir(path, mode); err != nil {
-		return nil, err // both names are in place; the old file is sealed
-	}
 	next, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
+		// Put the full file back at path, over the empty one. If that fails
+		// too, the sealed name keeps what is still appended to it, and a
+		// restart reads it as a segment.
+		_ = os.Rename(sealed, path)
 		return nil, fmt.Errorf("open history segment: %w", err)
 	}
-	return next, nil
+	return next, syncHistoryDir(path, mode)
 }
 
 // historyJanitor indexes sealed segments and applies retention: once at
