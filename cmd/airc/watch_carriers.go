@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"slices"
 	"strings"
@@ -84,11 +85,16 @@ type follow struct {
 }
 
 // poll reads the followed rooms and inbox on reader until it fails or ctx
-// ends: one check covers them all and waits on the gateway for news; a
-// gateway without check is read room by room every carrierPoll, backing
-// off while quiet.
+// ends. A gateway that follows checks streams them: one connection carries
+// news as it arrives and keepalives while quiet, resumed from the last
+// positions when its lease ends. Otherwise one check covers them all and
+// waits on the gateway for news; a gateway without check is read room by
+// room every carrierPoll, backing off while quiet.
 func (f *follow) poll(ctx context.Context, reader *fallback.RoomReader, deliver func(roomPage) bool) {
 	if !deliver(roomPage{page: &fallback.Page{Endpoint: reader.Endpoint()}}) {
+		return
+	}
+	if f.followable(reader) && f.followed(ctx, reader, deliver) {
 		return
 	}
 	pause := carrierPoll
@@ -124,39 +130,11 @@ func (f *follow) poll(ctx context.Context, reader *fallback.RoomReader, deliver 
 			if err != nil {
 				return
 			}
-			for i, page := range checked.Rooms {
-				room := set.Rooms[i].Room
-				if n := len(page.Messages); n > 0 {
-					f.after[room], news = page.Messages[n-1].ID, true
-				} else if page.Gap {
-					f.after[room] = "" // nothing retained after the expired start
-				}
-				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
-					return
-				}
-				more = more || page.Status == "more"
+			n, m, ok := f.consume(set, checked, deliver)
+			if !ok {
+				return
 			}
-			if set.Inbox != nil {
-				page := checked.Inbox
-				if page == nil {
-					f.inbox = nil // the gateway serves no inbox
-					continue
-				}
-				// The carrier's own place in the inbox. A mentions-only
-				// inbox leaves its direct messages for native IRC, whose
-				// session catches them up from the position the watcher
-				// keeps, not from this one.
-				switch n := len(page.Messages); {
-				case n > 0:
-					*f.inbox, news = page.Messages[n-1].ID, true
-				case page.Status == "ok" && page.Cursor != "":
-					*f.inbox = page.Cursor
-				}
-				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{f.inboxName, page}) {
-					return
-				}
-				more = more || page.Status == "more"
-			}
+			news, more = news || n, more || m
 		}
 		if more {
 			continue
@@ -180,6 +158,89 @@ func (f *follow) poll(ctx context.Context, reader *fallback.RoomReader, deliver 
 			pause = min(pause*2, carrierPollIdle)
 		}
 	}
+}
+
+// followable reports whether one followed check can carry everything: the
+// gateway follows on this carrier and the targets fit one check.
+func (f *follow) followable(reader *fallback.RoomReader) bool {
+	targets := len(f.rooms)
+	if f.inbox != nil {
+		targets++
+	}
+	return reader.Follows() && targets <= maxCheckRooms
+}
+
+// followIdle is how long a follow may go without any frame, a keepalive
+// included, before its link is presumed dead; the gateway's keepalive
+// interval is at most two minutes.
+var followIdle = 150 * time.Second
+
+// followed streams the rooms and inbox on reader, resuming each time the
+// gateway's lease ends, until ctx ends or the reader fails (true), or the
+// gateway turns out not to follow (false: poll instead).
+func (f *follow) followed(ctx context.Context, reader *fallback.RoomReader, deliver func(roomPage) bool) bool {
+	stopped := errors.New("delivery stopped")
+	for {
+		set := fallback.CheckSet{Limit: 100, Inbox: f.inbox}
+		for _, room := range f.rooms {
+			set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: f.after[room]})
+		}
+		err := reader.Follow(ctx, set, followIdle, func(checked fallback.Checked) error {
+			if _, _, ok := f.consume(set, checked, deliver); !ok {
+				return stopped
+			}
+			return nil
+		})
+		switch {
+		case errors.Is(err, fallback.ErrNoFollow):
+			return false
+		case err == nil && ctx.Err() == nil:
+			continue // the lease ended: resume from the positions reached
+		}
+		return true
+	}
+}
+
+// consume takes one check's answer for set: it advances each room's and the
+// inbox's position and delivers the pages with news, reporting whether any
+// had news, whether more is waiting, and false once delivery stopped.
+func (f *follow) consume(set fallback.CheckSet, checked fallback.Checked, deliver func(roomPage) bool) (news, more, ok bool) {
+	for i, page := range checked.Rooms {
+		room := set.Rooms[i].Room
+		if n := len(page.Messages); n > 0 {
+			f.after[room], news = page.Messages[n-1].ID, true
+		} else if page.Gap {
+			f.after[room] = "" // nothing retained after the expired start
+		} else if page.Status == "ok" && page.Cursor != "" {
+			f.after[room] = page.Cursor // an idle room's watermark
+		}
+		if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
+			return news, more, false
+		}
+		more = more || page.Status == "more"
+	}
+	if set.Inbox != nil {
+		page := checked.Inbox
+		if page == nil {
+			f.inbox = nil // the gateway serves no inbox
+			return news, more, true
+		}
+		// The carrier's own place in the inbox. A mentions-only
+		// inbox leaves its direct messages for native IRC, whose
+		// session catches them up from the position the watcher
+		// keeps, not from this one.
+		switch n := len(page.Messages); {
+		case n > 0:
+			*f.inbox, news = page.Messages[n-1].ID, true
+		case page.Status == "ok" && page.Cursor != "":
+			*f.inbox = page.Cursor
+		}
+		if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{f.inboxName, page}) {
+			return news, more, false
+		}
+		more = more || page.Status == "more"
+	}
+	return news, more, true
 }
 
 // bridge follows the watched rooms, and the user's own inbox, over the

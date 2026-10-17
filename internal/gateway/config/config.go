@@ -100,12 +100,19 @@ type Limits struct {
 	// Waits caps the checks waiting for news at once; each holds its
 	// author's upstream session while it waits. 0 answers every check at
 	// once.
-	Waits            int   `json:"waits"`
-	Watches          int   `json:"watches"`
-	WatchesPerAuthor int   `json:"watches_per_author"`
-	Pending          int   `json:"pending"`
-	PendingPerAuthor int   `json:"pending_per_author"`
-	JournalBytes     int64 `json:"journal_bytes"`
+	Waits int `json:"waits"`
+	// FollowSeconds is the lease of a followed check (a check with
+	// stream: true on a connection carrier): how long one stream delivers
+	// news before the client resumes it from its positions. 0 refuses
+	// follows. FollowKeepAliveSeconds spaces the empty frames a quiet
+	// follow sends, which hold NAT bindings and prove the stream is live.
+	FollowSeconds          int   `json:"follow_seconds"`
+	FollowKeepAliveSeconds int   `json:"follow_keepalive_seconds"`
+	Watches                int   `json:"watches"`
+	WatchesPerAuthor       int   `json:"watches_per_author"`
+	Pending                int   `json:"pending"`
+	PendingPerAuthor       int   `json:"pending_per_author"`
+	JournalBytes           int64 `json:"journal_bytes"`
 }
 
 type Retry struct {
@@ -119,7 +126,7 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 4096, Sessions: 256, SessionsPerAuthor: 4, IdleSessions: 512, Waits: 1024, Watches: 64, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 4096, Sessions: 256, SessionsPerAuthor: 4, IdleSessions: 512, Waits: 1024, FollowSeconds: 300, FollowKeepAliveSeconds: 20, Watches: 64, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {

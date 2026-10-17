@@ -111,6 +111,49 @@ func (d *Dispatcher) SubmitDecodedWatch(ctx context.Context, in Ingress, sub cor
 	return d.AdmitWatch(ctx, d.listener(), in.Source, author, credential, sub.Request, now, emit)
 }
 
+// StreamSink receives a streamed read's frames: history pages for a watch,
+// check results for a followed check.
+type StreamSink struct {
+	Page  func(backend.HistoryPage) error
+	Check func(core.CheckResult) error
+}
+
+// SubmitDecodedStream runs a decoded submission as a stream: a watch sends
+// its pages to sink.Page, a check its results to sink.Check (a follow) until
+// the lease ends.
+func (d *Dispatcher) SubmitDecodedStream(ctx context.Context, in Ingress, sub core.Submission, now time.Time, sink StreamSink) error {
+	author, credential, err := d.resolve(in, sub)
+	if err != nil {
+		return err
+	}
+	if sub.Request.Operation == core.Check {
+		return d.AdmitFollow(ctx, d.listener(), in.Source, author, credential, sub.Request, now, sink.Check)
+	}
+	return d.AdmitWatch(ctx, d.listener(), in.Source, author, credential, sub.Request, now, sink.Page)
+}
+
+// AdmitFollow is Admit for a followed check: each result goes to emit until
+// the follow lease ends, which the carrier reports as a renewable end.
+func (d *Dispatcher) AdmitFollow(ctx context.Context, listener, source string, author core.Author, credential core.Credential, r core.Request, now time.Time, emit func(core.CheckResult) error) error {
+	who, r, err := d.admit(listener, source, author, credential, r, now)
+	if err != nil {
+		return err
+	}
+	if r.Operation != core.Check || emit == nil {
+		return store.ErrInvalid
+	}
+	return d.followCheck(ctx, who, r, now, emit)
+}
+
+// FollowLease is how long a followed check streams before its client
+// resumes it; zero when follows are refused.
+func (d *Dispatcher) FollowLease() time.Duration {
+	if d == nil || d.backend == nil {
+		return 0
+	}
+	return d.backend.FollowLease()
+}
+
 // resolve applies the listener's access password and picks the author: the
 // request's own, else the connection's identified author.
 func (d *Dispatcher) resolve(in Ingress, sub core.Submission) (core.Author, core.Credential, error) {

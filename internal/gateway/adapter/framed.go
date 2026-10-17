@@ -47,6 +47,7 @@ type FrameResponse struct {
 	Sequence      uint64                   `json:"sequence,omitempty"`
 	Result        *dispatch.DetachedResult `json:"result,omitempty"`
 	Page          *backend.HistoryPage     `json:"page,omitempty"`
+	Check         *core.CheckResult        `json:"check,omitempty"`
 	Reason        string                   `json:"reason,omitempty"`
 	Error         *core.Failure            `json:"error,omitempty"`
 

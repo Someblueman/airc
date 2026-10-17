@@ -73,11 +73,7 @@ func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *
 		case "receipt.get":
 			d.Result = &result{RequestID: req.LookupID, State: "accepted", MessageID: strings.Repeat("a", 32)}
 		case "check":
-			d.Check = &struct {
-				Rooms   []checkPage `json:"rooms"`
-				Threads []checkPage `json:"threads"`
-				Inbox   *checkPage  `json:"inbox"`
-			}{}
+			d.Check = &checkResult{}
 			for _, room := range req.Rooms {
 				p := page{Messages: []*irc.MessageMetadata{}, Status: "ok", Cursor: room.After}
 				if room.Name == "#busy" {

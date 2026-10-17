@@ -27,9 +27,12 @@ detached result:
 `correlation_id` is 1–64 letters, digits, `-` or `_`, fresh per request;
 reusing an active one closes the connection. `profile` is optional and, if
 present, `plain`. Retry a mutation by resending the exact request under a
-new correlation ID. With `"stream": true` the request must be a watch and the
-answers are `event: "page"` frames (an empty page is a keepalive) and a final
-`event: "end"` with a `reason`. Requests are at most 16 KiB and responses
+new correlation ID. With `"stream": true` the request must be a watch or a
+check: a watch answers with `event: "page"` frames (an empty page is a
+keepalive), a check with `event: "check"` frames holding a whole check
+result ([following](contract-v1.md#following); an empty one is a
+keepalive), and both end with `event: "end"` and a `reason`. A follow's
+frames are bounded in bytes, not in number. Requests are at most 16 KiB and responses
 64 KiB; whole objects or `capacity_exceeded`, never truncation.
 
 On byte streams each frame is a four-byte big-endian length followed by

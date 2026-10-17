@@ -111,7 +111,9 @@ prefix:
 
 `account.identify` sets the socket's author; a password is sent once per
 socket. Four requests may be active per socket; `stream: true` watches send
-`page` frames and an `end` frame. The first message must arrive within five
+`page` frames and an `end` frame, and a `stream: true` check is a
+[follow](contract-v1.md#following): `check` frames for its lease, then
+`end`. The first message must arrive within five
 seconds and later ones within thirty; the server pings every ten seconds
 and needs a pong within three. Binary or malformed messages close the
 socket; a disconnect cancels its reads but never an admitted mutation.

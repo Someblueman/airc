@@ -182,6 +182,8 @@ for `cursor_key_file`.
 | `limits.sessions_per_author` | 4 | 1–`sessions` |
 | `limits.waits` | 1024 | 0–4096 `check` requests waiting for news at once; 0 answers every check at once |
 | `limits.idle_sessions` | 512 | 0–4096 upstream sessions kept between requests for reuse; 0 opens one per request |
+| `limits.follow_seconds` | 300 | 0–3600; the lease of a followed check ([following](contract-v1.md#following)); 0 refuses follows |
+| `limits.follow_keepalive_seconds` | 20 | 1–120; how often a quiet follow sends an empty frame |
 | `limits.watches` | 64 | 0 to `sessions` − 1 |
 | `limits.watches_per_author` | 2 | 0 to `sessions_per_author` − 1, at most `watches` |
 | `limits.pending` | 4096 | 1–65536 unfinished jobs |

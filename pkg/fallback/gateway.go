@@ -75,6 +75,13 @@ type checkRoom struct {
 	After string `json:"after,omitempty"`
 }
 
+// checkResult is a check's answer, and each frame of a followed check.
+type checkResult struct {
+	Rooms   []checkPage `json:"rooms"`
+	Threads []checkPage `json:"threads"`
+	Inbox   *checkPage  `json:"inbox"`
+}
+
 type failure struct {
 	Code         string `json:"code"`
 	Transient    bool   `json:"transient"`
@@ -101,14 +108,10 @@ type page struct {
 
 // detached is the DetachedResult every carrier answers with.
 type detached struct {
-	Operation string  `json:"operation"`
-	Result    *result `json:"result"`
-	Page      *page   `json:"page"`
-	Check     *struct {
-		Rooms   []checkPage `json:"rooms"`
-		Threads []checkPage `json:"threads"`
-		Inbox   *checkPage  `json:"inbox"`
-	} `json:"check"`
+	Operation    string       `json:"operation"`
+	Result       *result      `json:"result"`
+	Page         *page        `json:"page"`
+	Check        *checkResult `json:"check"`
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`
 	} `json:"capabilities"`
@@ -439,14 +442,55 @@ type frame struct {
 	Version       int      `json:"version"`
 	CorrelationID string   `json:"correlation_id"`
 	Profile       string   `json:"profile,omitempty"`
+	Stream        bool     `json:"stream,omitempty"`
 	Request       *request `json:"request,omitempty"`
 }
 
 type frameAnswer struct {
-	CorrelationID string    `json:"correlation_id"`
-	Event         string    `json:"event"`
-	Result        *detached `json:"result"`
-	Error         *failure  `json:"error"`
+	CorrelationID string       `json:"correlation_id"`
+	Event         string       `json:"event"`
+	Result        *detached    `json:"result"`
+	Check         *checkResult `json:"check"`
+	Reason        string       `json:"reason"`
+	Error         *failure     `json:"error"`
+}
+
+// streamConn is a connection carrier that can follow a check: one request
+// with stream set, answered by check frames until an end frame. The follow
+// owns the connection until it returns.
+type streamConn interface {
+	follow(ctx context.Context, r request, idle time.Duration, emit func(*checkResult) error) error
+}
+
+// followFrame handles one frame of a follow: a check frame goes to emit,
+// an end frame ends the follow (nil for a renewable end, so the caller
+// resumes from its positions), an error frame is the gateway's refusal.
+// Frames of other correlations are skipped.
+func followFrame(data []byte, id string, emit func(*checkResult) error) (done bool, err error) {
+	var a frameAnswer
+	if err := json.Unmarshal(data, &a); err != nil {
+		return true, fmt.Errorf("decode gateway frame: %w", err)
+	}
+	if a.CorrelationID != id {
+		return false, nil
+	}
+	switch a.Event {
+	case "check":
+		if a.Check == nil {
+			return true, errors.New("gateway sent a check frame without a result")
+		}
+		return false, emit(a.Check)
+	case "end":
+		if a.Reason == "upstream_unavailable" {
+			return true, &gatewayError{failure: failure{Code: "upstream_unavailable", Transient: true}}
+		}
+		return true, nil
+	case "error":
+		if a.Error != nil {
+			return true, &gatewayError{failure: *a.Error}
+		}
+	}
+	return true, fmt.Errorf("gateway sent an unexpected %q frame", a.Event)
 }
 
 var correlation atomic.Uint64
@@ -519,6 +563,31 @@ func (w *webSocketConn) call(ctx context.Context, r request) (detached, error) {
 
 func (w *webSocketConn) Close() error { return w.conn.Close(websocket.StatusNormalClosure, "") }
 
+func (w *webSocketConn) follow(ctx context.Context, r request, idle time.Duration, emit func(*checkResult) error) error {
+	id := nextCorrelation()
+	data, err := json.Marshal(frame{Version: 1, CorrelationID: id, Profile: "plain", Stream: true, Request: &r})
+	if err != nil {
+		return err
+	}
+	if err := w.conn.Write(ctx, websocket.MessageText, data); err != nil {
+		return err
+	}
+	for {
+		readCtx, cancel := context.WithTimeout(ctx, idle)
+		_, reply, err := w.conn.Read(readCtx)
+		cancel()
+		if err != nil {
+			if ctx.Err() == nil && readCtx.Err() != nil {
+				return errFollowSilent
+			}
+			return err
+		}
+		if done, err := followFrame(reply, id, emit); done || err != nil {
+			return err
+		}
+	}
+}
+
 // framedConn speaks length-prefixed JSON frames over TCP, TLS or a Unix socket.
 type framedConn struct{ conn net.Conn }
 
@@ -568,3 +637,48 @@ func (f *framedConn) call(ctx context.Context, r request) (detached, error) {
 }
 
 func (f *framedConn) Close() error { return f.conn.Close() }
+
+func (f *framedConn) follow(ctx context.Context, r request, idle time.Duration, emit func(*checkResult) error) error {
+	id := nextCorrelation()
+	data, err := json.Marshal(frame{Version: 1, CorrelationID: id, Profile: "plain", Stream: true, Request: &r})
+	if err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { _ = f.conn.SetDeadline(time.Now()) })
+	defer stop()
+	header := binary.BigEndian.AppendUint32(nil, uint32(len(data)))
+	if _, err := f.conn.Write(append(header, data...)); err != nil {
+		return err
+	}
+	for {
+		// Every frame, a keepalive included, must arrive within idle.
+		_ = f.conn.SetReadDeadline(time.Now().Add(idle))
+		var size [4]byte
+		if _, err := io.ReadFull(f.conn, size[:]); err != nil {
+			return followReadError(ctx, err)
+		}
+		n := binary.BigEndian.Uint32(size[:])
+		if n == 0 || n > maxResponse {
+			return fmt.Errorf("gateway frame of %d bytes", n)
+		}
+		reply := make([]byte, n)
+		if _, err := io.ReadFull(f.conn, reply); err != nil {
+			return followReadError(ctx, err)
+		}
+		if done, err := followFrame(reply, id, emit); done || err != nil {
+			return err
+		}
+	}
+}
+
+// errFollowSilent is a follow whose gateway sent nothing, not even a
+// keepalive, for the idle bound: the link is presumed dead.
+var errFollowSilent = errors.New("gateway follow went silent")
+
+func followReadError(ctx context.Context, err error) error {
+	var timeout interface{ Timeout() bool }
+	if ctx.Err() == nil && errors.As(err, &timeout) && timeout.Timeout() {
+		return errFollowSilent
+	}
+	return err
+}

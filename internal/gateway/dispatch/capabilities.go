@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -50,13 +51,18 @@ type Capabilities struct {
 	MaxCheckRooms         int           `json:"max_check_rooms,omitempty"`
 	MaxCheckWaitSeconds   int           `json:"max_check_wait_seconds,omitempty"`
 	MaxCheckBytes         int           `json:"max_check_bytes,omitempty"`
-	PollTargets           []core.Target `json:"poll_targets,omitempty"`
-	MaxPollBytes          int           `json:"max_poll_bytes,omitempty"`
-	TopicTargets          []core.Target `json:"topic_targets,omitempty"`
-	MaxTopicBytes         int           `json:"max_topic_bytes,omitempty"`
-	MembersTargets        []core.Target `json:"members_targets,omitempty"`
-	MaxMembers            int           `json:"max_members,omitempty"`
-	MaxMembersBytes       int           `json:"max_members_bytes,omitempty"`
+	// FollowSeconds and FollowKeepAliveSeconds describe a followed check
+	// (check with stream: true on a connection carrier): its lease, and how
+	// often a quiet follow sends an empty result.
+	FollowSeconds          int           `json:"follow_seconds,omitempty"`
+	FollowKeepAliveSeconds int           `json:"follow_keepalive_seconds,omitempty"`
+	PollTargets            []core.Target `json:"poll_targets,omitempty"`
+	MaxPollBytes           int           `json:"max_poll_bytes,omitempty"`
+	TopicTargets           []core.Target `json:"topic_targets,omitempty"`
+	MaxTopicBytes          int           `json:"max_topic_bytes,omitempty"`
+	MembersTargets         []core.Target `json:"members_targets,omitempty"`
+	MaxMembers             int           `json:"max_members,omitempty"`
+	MaxMembersBytes        int           `json:"max_members_bytes,omitempty"`
 	// Listener describes author access on this listener.
 	Listener *ListenerCapabilities `json:"listener,omitempty"`
 	// Carriers lists the ordered ways to reach this AIRC service, the same
@@ -135,6 +141,10 @@ func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities,
 		result.MaxCheckRooms = core.MaxCheckRooms
 		result.MaxCheckWaitSeconds = core.MaxCheckWaitSeconds
 		result.MaxCheckBytes = core.MaxCheckBytes
+		if lease := d.backend.FollowLease(); lease > 0 {
+			result.FollowSeconds = int(lease / time.Second)
+			result.FollowKeepAliveSeconds = int(d.backend.FollowKeepAlive() / time.Second)
+		}
 	}
 	if slices.Contains(access.Operations, core.PollResults) {
 		result.PollTargets = slices.Clone(roomTargets)
