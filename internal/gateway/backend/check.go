@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -267,25 +268,37 @@ func (p checkPlan) await(ctx context.Context, client *irc.Client, wait time.Dura
 	}
 }
 
-// snapshot runs one CHECK for every selector and validates the pages.
+// snapshot runs one CHECK for every selector and validates the pages. An
+// answer too large to carry is asked for again with half as many messages,
+// down to one, so a backlog of large messages reads as pages with more to
+// come rather than a refusal that every retry from the same positions
+// would meet; AIRC cuts its pages at the messages it leaves out.
 func (p checkPlan) snapshot(ctx context.Context, client *irc.Client, other func(irc.Event) error) (core.CheckResult, error) {
 	r := p.request
-	request := irc.CheckRequest{IncludeOwn: true, MaxMessages: r.Limit}
 	after := p.positions()
-	for i, selector := range p.selectors() {
-		target := irc.CheckTarget{Target: selector, Limit: r.Limit}
-		switch after[i] {
-		case "recent":
-		case "retained":
-			target.After = "*"
-		default:
-			target.After = after[i]
+	var entries []irc.CheckEntry
+	for limit := r.Limit; ; limit = max(limit/2, 1) {
+		request := irc.CheckRequest{IncludeOwn: true, MaxMessages: limit}
+		for i, selector := range p.selectors() {
+			target := irc.CheckTarget{Target: selector, Limit: limit}
+			switch after[i] {
+			case "recent":
+			case "retained":
+				target.After = "*"
+			default:
+				target.After = after[i]
+			}
+			request.Targets = append(request.Targets, target)
 		}
-		request.Targets = append(request.Targets, target)
-	}
-	entries, err := boundedCheck(ctx, client, request, r.Limit+len(request.Targets), other)
-	if err != nil {
-		return core.CheckResult{}, err
+		var err error
+		entries, err = boundedCheck(ctx, client, request, limit+len(request.Targets), other)
+		if errors.Is(err, store.ErrCapacity) && limit > 1 {
+			continue
+		}
+		if err != nil {
+			return core.CheckResult{}, err
+		}
+		break
 	}
 	if ctx.Err() != nil {
 		return core.CheckResult{}, ErrReadUnavailable
@@ -316,6 +329,10 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 	}
 	thread := func(i int) bool { return i >= threads && i < threads+len(r.Threads) }
 	seen := map[string]bool{}
+	// order is every message, oldest first; routed[i] the messages AIRC
+	// put on page i, shown or not, so a page can be cut to fit.
+	var order []*irc.MessageMetadata
+	routed := make([][]string, len(selectors))
 	messages, marked := 0, 0
 	for _, entry := range entries {
 		switch entry.Kind {
@@ -325,12 +342,14 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 				return core.CheckResult{}, ErrReadUnavailable
 			}
 			seen[m.ID] = true
+			order = append(order, m)
 			messages++
 			for _, i := range entry.Targets {
 				if i < 0 || i >= len(pages) || last[i] == m.ID {
 					return core.CheckResult{}, ErrReadUnavailable
 				}
 				last[i] = m.ID
+				routed[i] = append(routed[i], m.ID)
 				switch {
 				case i == inbox:
 					if p.inboxMessage(m) {
@@ -391,18 +410,83 @@ func (p checkPlan) pages(entries []irc.CheckEntry, after []string) (core.CheckRe
 	if marked != len(pages) {
 		return core.CheckResult{}, ErrReadUnavailable
 	}
-	result := core.CheckResult{Rooms: pages[:threads]}
-	if len(r.Threads) > 0 {
-		result.Threads = pages[threads : threads+len(r.Threads)]
+	result := func() core.CheckResult {
+		result := core.CheckResult{Rooms: pages[:threads]}
+		if len(r.Threads) > 0 {
+			result.Threads = pages[threads : threads+len(r.Threads)]
+		}
+		if inbox >= 0 {
+			result.Inbox = &pages[inbox]
+		}
+		return result
 	}
-	if inbox >= 0 {
-		result.Inbox = &pages[inbox]
+	data, err := json.Marshal(result())
+	if err != nil {
+		return core.CheckResult{}, ErrReadUnavailable
 	}
-	data, err := json.Marshal(result)
-	if err != nil || len(data) > core.MaxCheckBytes {
-		return core.CheckResult{}, store.ErrCapacity
+	if len(data) > core.MaxCheckBytes {
+		if !fitCheck(pages, order, routed, after, len(data)) {
+			return core.CheckResult{}, store.ErrCapacity
+		}
+		if data, err = json.Marshal(result()); err != nil || len(data) > core.MaxCheckBytes {
+			return core.CheckResult{}, store.ErrCapacity
+		}
 	}
-	return result, nil
+	return result(), nil
+}
+
+// fitCheck cuts a check result of size bytes to MaxCheckBytes by leaving
+// out its newest messages, so a backlog of large messages reads as pages
+// with more to come rather than a refusal the same positions would meet
+// again. Each page keeps a prefix of its messages, as messages are oldest
+// first; one cut short has status "more" and its cursor at the last message
+// AIRC routed to it that it keeps, or its starting position when it keeps
+// none. It reports false when even the oldest message alone does not fit.
+func fitCheck(pages []core.CheckPage, order []*irc.MessageMetadata, routed [][]string, after []string, size int) bool {
+	cost := func(m *irc.MessageMetadata) int {
+		data, _ := json.Marshal(m)
+		return len(data) + 1
+	}
+	// A margin for the statuses and cursors the cut changes.
+	const margin = 4 << 10
+	shown := map[string]int{} // pages each message appears on
+	for _, page := range pages {
+		for _, m := range page.Messages {
+			shown[m.ID]++
+		}
+	}
+	keep := len(order)
+	for keep > 1 && size > core.MaxCheckBytes-margin {
+		keep--
+		size -= shown[order[keep].ID] * cost(order[keep])
+	}
+	if size > core.MaxCheckBytes-margin {
+		return false
+	}
+	kept := make(map[string]bool, keep)
+	for _, m := range order[:keep] {
+		kept[m.ID] = true
+	}
+	for i := range pages {
+		page := &pages[i]
+		cut, cursor := false, ""
+		for _, id := range routed[i] {
+			if !kept[id] {
+				cut = true
+				break
+			}
+			cursor = id
+		}
+		if !cut || page.Status == "withheld" || page.Status == "expired" {
+			continue
+		}
+		page.Messages = slices.DeleteFunc(page.Messages, func(m *irc.MessageMetadata) bool { return !kept[m.ID] })
+		if cursor == "" && validHistoryID(after[i]) {
+			cursor = after[i]
+		}
+		page.Status, page.Cursor = "more", cursor
+	}
+	return true
 }
 
 func validCheckMessage(m *irc.MessageMetadata) bool {

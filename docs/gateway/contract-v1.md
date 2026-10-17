@@ -203,8 +203,12 @@ A history `page` is `{"messages": [...], "cursor", "status", "gap"}`.
 `status` is `ok`, `more` (another page follows) or `expired` (the cursor's
 position aged out); `gap: true` marks a retention gap. `events.watch` pages
 add `events` (`join`, `part`, `quit`, `kick`, `topic`, `mode`, `signal`),
-which are live only and never replayed. Pages and snapshots are whole or
-refused with `capacity_exceeded`; nothing is truncated.
+which are live only and never replayed. A `check` whose answer would pass
+`max_check_bytes` carries fewer messages instead, oldest first: each page
+cut short ends at a whole message with `status: more` and the cursor to
+read on from, so a backlog of large messages is read in several checks.
+Other pages and snapshots are whole or refused with `capacity_exceeded`;
+no message is truncated.
 
 Error codes: `authentication_failed`, `forbidden` (wrong or missing
 password, guests off, target outside the listener's allowlist),

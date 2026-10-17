@@ -2,6 +2,9 @@ package gateway_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -280,5 +283,92 @@ func TestBackendCheckThreads(t *testing.T) {
 	}
 	if err != nil || len(result.Threads) != 2 || len(result.Threads[0].Messages) != 1 || result.Threads[0].Messages[0].Message != "late child" || time.Since(start) > 2*time.Second {
 		t.Fatalf("waiting thread check: %+v %v after %v", result, err, time.Since(start))
+	}
+}
+
+// TestBackendCheckFitsLargeBacklog reads a backlog of large messages with a
+// limit it cannot fit in one answer: each check is cut to MaxCheckBytes,
+// pages cut short say "more" at their last message, and reading on from
+// the cursors returns every message once, in order. A refusal here would
+// meet every retry from the same positions.
+func TestBackendCheckFitsLargeBacklog(t *testing.T) {
+	socket := fixture(t)
+	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	b, err := backend.New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	s, err := store.Open(context.Background(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	reader := store.Submission{Author: core.Author{Nick: "big-reader"}}
+	poster := dial(t, socket, "big-poster", "", false, true)
+	defer poster.Close()
+	post := func(room, text string) string {
+		t.Helper()
+		if err := poster.Send(room, text); err != nil {
+			t.Fatal(err)
+		}
+		return next(t, poster, func(e *irc.SendReceiptEvent) bool { return e.Message == text }).ID
+	}
+	start := post("#big-a", "start")
+	rooms := []string{"#big-a", "#big-b"}
+	want := map[string][]string{}
+	for i := range 60 {
+		room := rooms[i%2]
+		want[room] = append(want[room], post(room, fmt.Sprintf("%03d %s", i, strings.Repeat("x", 3000))))
+	}
+	got := map[string][]string{}
+	after := map[string]string{"#big-a": start, "#big-b": start}
+	for round := 0; ; round++ {
+		if round == 20 {
+			t.Fatalf("still reading after %d checks: %v", round, got)
+		}
+		r := core.Request{Version: 1, RequestID: "check", Operation: core.Check, Limit: 200}
+		for _, room := range rooms {
+			r.Rooms = append(r.Rooms, core.CheckRoom{Name: room, After: after[room]})
+		}
+		grant, err := s.AuthorizeAuthorRead(context.Background(), reader, r, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		result, err := b.Check(ctx, grant, backend.CheckScope{})
+		cancel()
+		if err != nil {
+			t.Fatalf("check %d: %v", round, err)
+		}
+		if data, _ := json.Marshal(result); len(data) > core.MaxCheckBytes {
+			t.Fatalf("check %d is %d bytes", round, len(data))
+		}
+		more := false
+		for i, page := range result.Rooms {
+			for _, m := range page.Messages {
+				got[rooms[i]] = append(got[rooms[i]], m.ID)
+			}
+			if page.Status == "more" {
+				more = true
+				if page.Cursor == "" {
+					t.Fatalf("check %d: %s is cut short without a cursor", round, rooms[i])
+				}
+			}
+			if page.Cursor != "" {
+				after[rooms[i]] = page.Cursor
+			}
+		}
+		if !more {
+			if round == 0 {
+				t.Fatal("the backlog fit in one check; the test needs a larger one")
+			}
+			break
+		}
+	}
+	for _, room := range rooms {
+		if !slices.Equal(got[room], want[room]) {
+			t.Fatalf("%s read %d messages, want %d in order", room, len(got[room]), len(want[room]))
+		}
 	}
 }

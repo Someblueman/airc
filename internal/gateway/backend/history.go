@@ -101,7 +101,9 @@ func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request
 }
 
 // boundedCheck sends one CHECK and collects at most maxEntries entries of at
-// most MaxHistoryBytes in all.
+// most MaxHistoryBytes in all. An answer over either bound is read to its
+// end and discarded, so the session is ready for the next CHECK, and is
+// store.ErrCapacity.
 func boundedCheck(ctx context.Context, client *irc.Client, request irc.CheckRequest, maxEntries int, other func(irc.Event) error) ([]irc.CheckEntry, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -111,7 +113,7 @@ func boundedCheck(ctx context.Context, client *irc.Client, request irc.CheckRequ
 		return nil, ErrReadUnavailable
 	}
 	var entries []irc.CheckEntry
-	bytes := 0
+	bytes, overflow := 0, false
 	for {
 		select {
 		case event, ok := <-client.Events():
@@ -130,8 +132,9 @@ func boundedCheck(ctx context.Context, client *irc.Client, request irc.CheckRequ
 			switch raw.Command {
 			case "784":
 				bytes += len(raw.Trailing)
-				if bytes > MaxHistoryBytes || len(entries) >= maxEntries {
-					return nil, store.ErrCapacity
+				if overflow || bytes > MaxHistoryBytes || len(entries) >= maxEntries {
+					overflow, entries = true, nil
+					continue
 				}
 				var entry irc.CheckEntry
 				if err := json.Unmarshal([]byte(raw.Trailing), &entry); err != nil {
@@ -139,6 +142,9 @@ func boundedCheck(ctx context.Context, client *irc.Client, request irc.CheckRequ
 				}
 				entries = append(entries, entry)
 			case "785":
+				if overflow {
+					return nil, store.ErrCapacity
+				}
 				return entries, nil
 			default:
 				if raw.Command != "422" && len(raw.Command) == 3 && raw.Command[0] >= '4' && raw.Command[0] <= '5' {

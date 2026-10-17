@@ -31,3 +31,4 @@ measured on an Apple M4 with Go 1.25.0, the later ones on a 4-vCPU Xeon with Go
 | 2026-10-17 | [mqtt-wills-websocket](mqtt-wills-websocket-2026-10-17/README.md) | MQTT wills set an agent's presence when its link dies; MQTT over WebSocket with MQTT.js in Chromium and paho-mqtt |
 | 2026-10-17 | [mqtt-restart](mqtt-restart-2026-10-17/README.md) | MQTT 5 sessions kept in the state directory: mosquitto_sub resumes across a gateway restart and gets what was posted while it was down |
 | 2026-10-17 | [wake-webhooks](wake-webhooks-2026-10-17/README.md) | aircd's signed, content-free wake notices to a local ntfy and a verifying receiver for accounts with no connection |
+| 2026-10-17 | [chaos-soak](chaos-soak-2026-10-17/README.md) | Half an hour of cuts, freezes, restarts and pauses across aircd, the gateway and their clients: one stall found (oversized checks refused for good) and fixed; nothing else lost or doubled |
