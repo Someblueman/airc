@@ -189,3 +189,86 @@ func TestFollowOverAFramedStream(t *testing.T) {
 		t.Fatalf("resumed snapshot: %+v", resumed)
 	}
 }
+
+// A follow reads the first news after a quiet spell at once, and batches
+// what arrives within follow_batch_ms of its last snapshot into the next
+// frame, so a burst costs one snapshot instead of one per message.
+func TestBackendFollowBatchesABurst(t *testing.T) {
+	socket := fixture(t)
+	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	c.Limits.FollowSeconds, c.Limits.FollowKeepAliveSeconds, c.Limits.FollowBatchMilliseconds = 5, 2, 600
+	b, err := backend.New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	s, err := store.Open(context.Background(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	poster := dial(t, socket, "burst-poster", "", false, true)
+	defer poster.Close()
+	r := core.Request{Version: 1, RequestID: "burst", Operation: core.Check, Limit: 50, Rooms: []core.CheckRoom{{Name: "#burst", After: "recent"}}}
+	grant, err := s.AuthorizeAuthorRead(context.Background(), store.Submission{Author: core.Author{Nick: "burst-reader"}}, r, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	type frame struct {
+		messages int
+		at       time.Time
+	}
+	frames := make(chan frame, 64)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_ = b.Follow(ctx, grant, backend.CheckScope{}, func(result core.CheckResult) error {
+			frames <- frame{len(result.Rooms[0].Messages), time.Now()}
+			return nil
+		})
+	}()
+	take := func() frame {
+		t.Helper()
+		select {
+		case f := <-frames:
+			return f
+		case <-time.After(5 * time.Second):
+			t.Fatal("no frame")
+		}
+		return frame{}
+	}
+	snapshot := take()
+	// Quiet for longer than the batch: the first post is read at once.
+	time.Sleep(800 * time.Millisecond)
+	sent := time.Now()
+	if err := poster.Send("#burst", "first"); err != nil {
+		t.Fatal(err)
+	}
+	first := take()
+	if first.messages != 1 || first.at.Sub(sent) > 300*time.Millisecond {
+		t.Fatalf("first news: %d messages after %v", first.messages, first.at.Sub(sent))
+	}
+	// A burst right after it waits for the batch, then arrives whole.
+	for i := range 5 {
+		if err := poster.Send("#burst", "burst "+string(rune('a'+i))); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	got := 0
+	var batched frame
+	for got < 5 {
+		batched = take()
+		if batched.messages == 0 {
+			continue // a keepalive
+		}
+		if batched.at.Sub(first.at) < 500*time.Millisecond {
+			t.Fatalf("a frame %v after the last one, inside the batch interval", batched.at.Sub(first.at))
+		}
+		got += batched.messages
+	}
+	if got != 5 || batched.messages != 5 {
+		t.Fatalf("the burst came in %d messages, the last frame holding %d", got, batched.messages)
+	}
+	_ = snapshot
+}

@@ -18,6 +18,12 @@ import (
 func (b *Backend) FollowLease() time.Duration     { return b.followLease }
 func (b *Backend) FollowKeepAlive() time.Duration { return b.followKeepAlive }
 
+// FollowBatch is the shortest time between two snapshots of one follow:
+// news arriving sooner waits for the next one, so a busy room costs a
+// snapshot per interval rather than one per message. The first news after
+// a quiet spell is read at once.
+func (b *Backend) FollowBatch() time.Duration { return b.followBatch }
+
 // Follow is Check as a stream: one session observes the check's rooms,
 // threads and inbox for the follow lease and emits a result whenever news
 // arrives, each page carrying the position the next page continues from,
@@ -73,6 +79,7 @@ func (b *Backend) Follow(ctx context.Context, grant *store.ReadGrant, scope Chec
 			woke = woke || p.wakes(event)
 			return nil
 		}
+		last := time.Now() // when the latest snapshot started
 		result, err := p.snapshot(overall, client, news)
 		if err != nil {
 			return err
@@ -81,10 +88,21 @@ func (b *Backend) Follow(ctx context.Context, grant *store.ReadGrant, scope Chec
 			return err
 		}
 		held := true // the session slot withReadOptions took
+		// ended maps a wait that failed: the read's deferred release
+		// returns a slot, so take it, and a lease that ran out is a
+		// renewable end.
+		ended := func(err error) error {
+			b.reacquire(lane)
+			if overall.Err() != nil && !time.Now().Before(deadline) {
+				return ErrStreamRenew
+			}
+			return err
+		}
 		for {
 			p.advance(result)
 			if morePages(result) {
 				// More was already waiting: read on before waiting.
+				last = time.Now()
 				if result, err = p.snapshot(overall, client, nil); err != nil {
 					return err
 				}
@@ -99,12 +117,14 @@ func (b *Backend) Follow(ctx context.Context, grant *store.ReadGrant, scope Chec
 			}
 			if !woke {
 				if err := p.awaitFollow(overall, client, b.followKeepAlive, func() error { return emit(quiet(result)) }); err != nil {
-					// The read's deferred release returns a slot: take it.
-					b.reacquire(lane)
-					if overall.Err() != nil && !time.Now().Before(deadline) {
-						return ErrStreamRenew
-					}
-					return err
+					return ended(err)
+				}
+			}
+			// Gather what else arrives until the batch interval since the
+			// last snapshot has passed; it is all read in the next one.
+			if wait := b.followBatch - time.Since(last); wait > 0 {
+				if err := drainFor(overall, client, wait); err != nil {
+					return ended(err)
 				}
 			}
 			woke = false
@@ -112,6 +132,7 @@ func (b *Backend) Follow(ctx context.Context, grant *store.ReadGrant, scope Chec
 			if !b.reacquire(lane) {
 				return store.ErrCapacity
 			}
+			last = time.Now()
 			if result, err = p.snapshot(overall, client, nil); err != nil {
 				return err
 			}
@@ -181,6 +202,29 @@ func quiet(result core.CheckResult) core.CheckResult {
 		q.Inbox = &inbox
 	}
 	return q
+}
+
+// drainFor reads and discards the session's events for wait: the news they
+// announce is read by the snapshot that follows. A session that fails or
+// is refused ends it.
+func drainFor(ctx context.Context, client *irc.Client, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		select {
+		case event, ok := <-client.Events():
+			if !ok {
+				return ErrReadUnavailable
+			}
+			if raw, ok := event.(*irc.RawEvent); ok && rejectedRead(raw) {
+				return ErrReadUnavailable
+			}
+		case <-timer.C:
+			return nil
+		case <-ctx.Done():
+			return errors.Join(ErrReadUnavailable, ctx.Err())
+		}
+	}
 }
 
 // awaitFollow waits for a live message for the check, sending keepalive
