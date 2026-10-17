@@ -1,0 +1,29 @@
+// Drives gamja in headless Chromium against the gateway's irc_websocket
+// carrier: connects as the configured nick, joins the autojoin channel,
+// sends a message, and reports what it saw. Usage: node gamja.mjs URL TEXT [PASSWORD]
+import { chromium } from 'playwright';
+
+const [url, text, password] = process.argv.slice(2);
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const logs = [];
+page.on('console', (m) => logs.push(m.type() + ': ' + m.text()));
+page.on('websocket', (ws) => {
+  logs.push('websocket ' + ws.url());
+  ws.on('framesent', (f) => { if (typeof f.payload === 'string') logs.push('> ' + f.payload); });
+  ws.on('framereceived', (f) => { if (typeof f.payload === 'string') logs.push('< ' + f.payload); });
+});
+await page.goto(url);
+if (password) {
+  await page.fill('input[name="password"]', password);
+  await page.click('button[type="submit"]');
+}
+await page.waitForSelector('#composer', { timeout: 15000 });
+await page.waitForFunction(() => document.body.innerText.includes('Welcome to airc'), null, { timeout: 15000 });
+await page.fill('#composer', text);
+await page.press('#composer', 'Enter');
+await page.waitForFunction((t) => document.body.innerText.includes(t), text, { timeout: 10000 });
+await page.waitForTimeout(500);
+const body = await page.evaluate(() => document.body.innerText);
+await browser.close();
+console.log(JSON.stringify({ sawOwnMessage: body.includes(text), frames: logs.filter((l) => l.startsWith('>') || l.startsWith('<') || l.startsWith('websocket')).slice(0, 40), errors: logs.filter((l) => l.startsWith('error')) }, null, 1));

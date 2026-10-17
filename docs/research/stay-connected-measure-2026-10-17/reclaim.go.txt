@@ -1,0 +1,233 @@
+// Command reclaim-measure times how long a persistent client whose link
+// went silent takes to be back in its room under its own nickname. It runs
+// a real aircd, relays the client through a proxy that can go silent
+// without closing either side, and watches the room natively. With
+// -strip-resume the proxy drops the client's RESUME line, which is the
+// behaviour of a client from before session reclaim against the same
+// server: the stale session then holds the nickname until aircd's read
+// timeout.
+package main
+
+import (
+	"bufio"
+	"context"
+	"flag"
+	"fmt"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
+)
+
+type proxy struct {
+	listener    net.Listener
+	upstream    string
+	stripResume bool
+	mu          sync.Mutex
+	cut         int
+	conns       []net.Conn
+}
+
+func (p *proxy) serve() {
+	for {
+		client, err := p.listener.Accept()
+		if err != nil {
+			return
+		}
+		server, err := net.Dial("tcp", p.upstream)
+		if err != nil {
+			_ = client.Close()
+			continue
+		}
+		p.mu.Lock()
+		born := p.cut
+		p.conns = append(p.conns, client, server)
+		p.mu.Unlock()
+		dead := func() bool { p.mu.Lock(); defer p.mu.Unlock(); return p.cut > born }
+		// Client lines to the server, with RESUME dropped when stripping.
+		go func() {
+			scanner := bufio.NewScanner(client)
+			scanner.Buffer(make([]byte, 1024), 16384)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if dead() {
+					continue
+				}
+				if p.stripResume && strings.HasPrefix(line, "RESUME ") {
+					continue
+				}
+				if _, err := server.Write([]byte(line + "\r\n")); err != nil {
+					return
+				}
+			}
+			if !dead() {
+				_ = server.Close()
+			}
+		}()
+		go func() {
+			buffer := make([]byte, 4096)
+			for {
+				n, err := server.Read(buffer)
+				if err != nil {
+					if !dead() {
+						_ = client.Close()
+					}
+					return
+				}
+				if dead() {
+					continue
+				}
+				if _, err := client.Write(buffer[:n]); err != nil {
+					return
+				}
+			}
+		}()
+	}
+}
+
+func (p *proxy) silence() { p.mu.Lock(); p.cut++; p.mu.Unlock() }
+
+func main() {
+	bin := flag.String("bin", "", "directory with aircd")
+	trials := flag.Int("trials", 10, "silent drops to time")
+	strip := flag.Bool("strip-resume", false, "drop the client's RESUME line: the pre-reclaim client")
+	keepAlive := flag.Duration("keepalive", 15*time.Second, "client keepalive, as pkg/bot's")
+	probe := flag.Duration("probe", 5*time.Second, "client probe timeout, as pkg/irc's default")
+	readTimeout := flag.Duration("read-timeout", 2*time.Minute, "aircd's read timeout (fixed in aircd; bounds the wait for a trial)")
+	flag.Parse()
+	if err := run(*bin, *trials, *strip, *keepAlive, *probe, *readTimeout); err != nil {
+		fmt.Fprintln(os.Stderr, "reclaim-measure:", err)
+		os.Exit(1)
+	}
+}
+
+func run(bin string, trials int, strip bool, keepAlive, probe, readTimeout time.Duration) error {
+	dir, err := os.MkdirTemp("", "reclaim")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := l.Addr().String()
+	_ = l.Close()
+	aircd := exec.Command(filepath.Join(bin, "aircd"), "--listen", addr, "--history", "1000", "--log-file", filepath.Join(dir, "aircd.log"))
+	aircd.Stderr = os.Stderr
+	if err := aircd.Start(); err != nil {
+		return err
+	}
+	defer func() { _ = aircd.Process.Kill(); _ = aircd.Wait() }()
+	for range 100 {
+		if c, err := net.Dial("tcp", addr); err == nil {
+			c.Close()
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	pl, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	p := &proxy{listener: pl, upstream: addr, stripResume: strip}
+	go p.serve()
+
+	ctx := context.Background()
+	watcher, err := irc.DialContext(ctx, irc.Config{Nick: "watcher", Addr: addr})
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+	if err := watcher.Join("#room"); err != nil {
+		return err
+	}
+	bot, err := irc.DialContext(ctx, irc.Config{Nick: "bot", Addr: pl.Addr().String(), Reconnect: true, KeepAlive: keepAlive, ProbeTimeout: probe, MinBackoff: 250 * time.Millisecond, MaxBackoff: 10 * time.Second})
+	if err != nil {
+		return err
+	}
+	defer bot.Close()
+	if err := bot.Join("#room"); err != nil {
+		return err
+	}
+	// The bot posts "back N" as soon as it reconnects.
+	reconnects := make(chan int, 64)
+	go func() {
+		n := 0
+		for event := range bot.Events() {
+			if e, ok := event.(*irc.ConnectionEvent); ok && e.Connected {
+				n++
+				_ = bot.Send("#room", "back "+strconv.Itoa(n))
+				reconnects <- n
+			}
+		}
+	}()
+	// The watcher reports the bot's posts, quits and joins.
+	type seen struct {
+		kind string
+		at   time.Time
+	}
+	events := make(chan seen, 256)
+	go func() {
+		for event := range watcher.Events() {
+			switch e := event.(type) {
+			case *irc.MessageEvent:
+				if e.From == "bot" {
+					events <- seen{"message " + e.Message, time.Now()}
+				}
+			case *irc.QuitEvent:
+				if e.Agent == "bot" {
+					events <- seen{"quit", time.Now()}
+				}
+			case *irc.JoinEvent:
+				if e.Agent == "bot" {
+					events <- seen{"join", time.Now()}
+				}
+			}
+		}
+	}()
+	time.Sleep(500 * time.Millisecond)
+	for len(events) > 0 {
+		<-events
+	}
+	var times []float64
+	quits := 0
+	fmt.Printf("mode=%s keepalive=%s probe=%s read_timeout=%s\n", map[bool]string{false: "reclaim", true: "strip-resume"}[strip], keepAlive, probe, readTimeout)
+	for trial := 1; trial <= trials; trial++ {
+		start := time.Now()
+		p.silence()
+		want := "message back " + strconv.Itoa(trial)
+		deadline := time.After(readTimeout + 2*time.Minute)
+		var back time.Time
+		quit := false
+	wait:
+		for {
+			select {
+			case e := <-events:
+				switch {
+				case e.kind == want:
+					back = e.at
+					break wait
+				case e.kind == "quit":
+					quit = true
+				}
+			case <-deadline:
+				return fmt.Errorf("trial %d: the bot never came back", trial)
+			}
+		}
+		elapsed := back.Sub(start)
+		times = append(times, elapsed.Seconds())
+		if quit {
+			quits++
+		}
+		fmt.Printf("trial %d: back in %.2fs (room saw quit: %v)\n", trial, elapsed.Seconds(), quit)
+		time.Sleep(time.Second)
+	}
+	slices.Sort(times)
+	fmt.Printf("summary: trials=%d p50=%.2fs min=%.2fs max=%.2fs quits_seen=%d\n", len(times), times[len(times)/2], times[0], times[len(times)-1], quits)
+	return nil
+}

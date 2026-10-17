@@ -1,0 +1,61 @@
+#!/bin/sh
+# Runs aircd and a gateway with irc_websocket, serves gamja, drives it as a
+# guest and as a registered account, and reads the room natively.
+set -e
+S=/tmp/claude-0/-home-user-airc/0a4aefa4-1663-5a9b-a7a2-dede8ffcec4b/scratchpad
+R=$S/gamja-run
+G=$S/gamja-dl/gamja-1.0.0-beta.11
+rm -rf $R/state; mkdir -p $R/state/gw; chmod 700 $R/state $R/state/gw
+AIRC=127.0.0.1:16690; GW=127.0.0.1:16689; WEB=127.0.0.1:16688
+$S/bin/aircd --listen $AIRC --history 1000 --gateway-token-file $R/state/gateway.token --accounts-file $R/state/accounts.json --log-file $R/state/aircd.log &
+AIRCD=$!
+sleep 1
+python3 - <<PY
+import secrets
+open("$R/state/gateway.token","w").write(secrets.token_hex(32)+"\n")
+PY
+chmod 600 $R/state/gateway.token
+cat > $R/state/gateway.json <<JSON
+{"version":1,"realm":"gamja","state_dir":"$R/state/gw",
+ "upstream":{"network":"tcp","address":"$AIRC","gateway_token_file":"$R/state/gateway.token"},
+ "listeners":[{"id":"wsirc","protocol":"irc_websocket","enabled":true,"address":"$GW","allowed_origins":["http://$WEB"]}]}
+JSON
+# aircd read its gateway token at start: restart it now that the file exists.
+kill $AIRCD; wait $AIRCD 2>/dev/null || true
+$S/bin/aircd --listen $AIRC --history 1000 --gateway-token-file $R/state/gateway.token --accounts-file $R/state/accounts.json --log-file $R/state/aircd.log &
+AIRCD=$!
+sleep 1
+$S/bin/airc-gateway serve --file $R/state/gateway.json > $R/state/gateway.log 2>&1 &
+GATEWAY=$!
+sleep 1
+head -c 300 $R/state/gateway.log; echo
+# Register an account natively for the second run.
+TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+python3 - <<PY
+import socket
+s=socket.create_connection(("127.0.0.1",16690)); s.sendall(b"REGISTER carol :$TOKEN\r\n")
+import time; time.sleep(0.5); print(s.recv(4096).decode().strip()[:120]); s.close()
+PY
+cat > $G/config.json <<JSON
+{"server":{"url":"ws://$GW/","autojoin":"#lobby","nick":"gamja-guest","autoconnect":true,"auth":"disabled"}}
+JSON
+(cd $G && python3 -m http.server --bind 127.0.0.1 16688 > $R/state/http.log 2>&1) &
+HTTPD=$!
+sleep 1
+export NODE_PATH=/opt/node-tools/node_modules
+echo "== guest"
+node $R/gamja.mjs "http://$WEB/" "hello from gamja as a guest" || echo "GUEST RUN FAILED"
+cat > $G/config.json <<JSON
+{"server":{"url":"ws://$GW/","autojoin":"#lobby","nick":"carol","auth":"mandatory"}}
+JSON
+echo "== account"
+node $R/gamja.mjs "http://$WEB/" "hello from gamja as carol" "$TOKEN" || echo "ACCOUNT RUN FAILED"
+echo "== native history"
+python3 - <<PY
+import socket,time
+s=socket.create_connection(("127.0.0.1",16690)); s.sendall(b"EPHEMERAL\r\nNICK auditor\r\nUSER u 0 * :u\r\n"); time.sleep(0.5); s.recv(65536)
+s.sendall(b"HISTORY #lobby 10\r\n"); time.sleep(0.5)
+for line in s.recv(65536).decode().split("\r\n"):
+    if " 760 " in line or " 761 " in line: print(line[:300])
+PY
+kill $HTTPD $GATEWAY $AIRCD 2>/dev/null; wait 2>/dev/null || true
