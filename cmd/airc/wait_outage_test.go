@@ -44,7 +44,9 @@ func TestIdleWaitAllowsConcurrentCheckAndReloadsCursor(t *testing.T) {
 	}
 }
 
-func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
+// The window keeps two messages, so the reader's cursor leaves it during the
+// outage; the history file's archive resumes it without a gap.
+func TestWaitReconnectsAfterDaemonOutageAndResumesFromTheArchive(t *testing.T) {
 	agentEnv(t)
 	first := startServerAt(t, "127.0.0.1:0", server.Config{HistoryLimit: 2}, filepath.Join(t.TempDir(), "history"))
 	tap := tapDaemon(t, first.addr)
@@ -78,8 +80,8 @@ func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 		if result.err != nil {
 			t.Fatal(result.err)
 		}
-		if len(checkMessages(t, result.out)) != 2 || len(checkFooter(t, result.out).Gaps) < 1 {
-			t.Fatal("reconnect missed retained messages or gap", result.out)
+		if len(checkMessages(t, result.out)) != 2 || len(checkFooter(t, result.out).Gaps) != 0 {
+			t.Fatal("reconnect missed messages or reported a gap", result.out)
 		}
 	case <-time.After(6 * time.Second):
 		t.Fatal("wait did not recover")

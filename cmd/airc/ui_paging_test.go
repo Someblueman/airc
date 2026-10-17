@@ -66,24 +66,42 @@ func TestUIThreadAndSearchPagesSurviveReconnect(t *testing.T) {
 	if len(h.model.find(search).seen) != 120 || h.model.find(search).query.Status != "ok" {
 		t.Fatal("search did not drain")
 	}
-	// Evict its cursor, then ask for more: the gap must stay visible.
-	seedCtx, cancelSeed := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancelSeed()
-	seeder, err := dialOneShot(seedCtx, options{nick: "other", addr: address})
-	if err != nil {
-		t.Fatal(err)
+	// Push its cursor out of the window: the archive continues the search,
+	// with no gap and nothing repeated.
+	evict(t, address, 520)
+	h.cmds <- uiCmd{kind: "query-next", target: search}
+	h.until("search continued", func() bool { return h.model.find(search).query.Status == "ok" && !h.model.find(search).query.Gap })
+	if len(h.model.find(search).seen) != 120 {
+		t.Fatal("search repeated or skipped messages after its cursor left the window")
 	}
-	defer seeder.Close()
-	for i := range 520 {
-		body := fmt.Sprint(i)
-		if err := seeder.Send("#other", body); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := awaitSend(seedCtx, seeder, "other", "#other", body, "", "", "", nil); err != nil {
-			t.Fatal(err)
-		}
+}
+
+// Without a history file there is no archive, so an evicted search cursor
+// is a gap, which the UI must keep visible.
+func TestUISearchShowsARetentionGapWithoutAnArchive(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServerWith(t, server.Config{HistoryLimit: 128})
+	matches := make([]seedMessage, 60)
+	for i := range matches {
+		matches[i] = seedMessage{target: "#room", body: fmt.Sprint("match ", i)}
 	}
-	seeder.Close()
+	seedNativeMessages(t, address, "planner", matches)
+	h := startUIBackend(t, address, "#room")
+	h.until("online", func() bool { return h.model.connected })
+	h.cmds <- uiCmd{kind: "search", target: "#room", text: "match"}
+	search := "search:#room"
+	h.until("first search page", func() bool { b := h.model.find(search); return b != nil && len(b.items) == 50 })
+	evict(t, address, 200)
 	h.cmds <- uiCmd{kind: "query-next", target: search}
 	h.until("retention gap", func() bool { return h.model.find(search).query.Gap })
+}
+
+// evict posts n messages to another room, pushing older ones out of a window.
+func evict(t *testing.T, address string, n int) {
+	t.Helper()
+	messages := make([]seedMessage, n)
+	for i := range messages {
+		messages[i] = seedMessage{target: "#other", body: fmt.Sprint(i)}
+	}
+	seedNativeMessages(t, address, "other", messages)
 }

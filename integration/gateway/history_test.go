@@ -14,6 +14,7 @@ import (
 )
 
 func TestHistoryBackendRoomPagesGap(t *testing.T) {
+	withoutHistoryFile(t) // an evicted cursor must be a gap, not an archive read
 	// This test reads live retention pages; native persistence is tested elsewhere.
 	socket := nativeFixture(t, false, "none")
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
