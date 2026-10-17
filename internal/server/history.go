@@ -41,6 +41,9 @@ func (s *Server) recordLocked(message *Message) []string {
 		if err == nil {
 			s.histBytes += int64(len(line) + 1)
 			s.histRecords++
+			if s.histActive != nil {
+				s.histActive[message.ID] = activeRecord{s.histBytes, message.Seq}
+			}
 			if s.histFirstSeq == 0 {
 				s.histFirstSeq = message.Seq
 			}

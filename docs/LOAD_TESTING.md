@@ -68,17 +68,18 @@ drain, not a proof of complete delivery. Late events after an agent reports its
 phase can fall outside its event count. Latency ends at protocol confirmation,
 not merely at socket write completion.
 
-The server uses a 10,000-message retention limit and existing default queue
-limits (2 MiB per connection). Only its connection limit is set to the requested
+The server keeps 10,000 messages in memory by default (`-history N` changes it;
+with persistence, older messages are read from the archive on disk) and the
+existing default queue limits (2 MiB per connection). Only its connection limit is set to the requested
 agent count. Logging is discarded to avoid measuring console output. Persistent
-history uses a temporary file with the normal append/Sync/compaction path; storage
+history uses a temporary file with the normal append/Sync/rotation path; storage
 is deleted after server shutdown. Receipts must report `persisted=true` in disk
 mode and `false` in memory mode. This does not replace crash-recovery testing.
 
 History starts empty and fills during setup/warmup/measurement. Higher agent
 counts therefore increase both concurrency and accumulated traffic. This matrix
 is not a controlled experiment varying connection count alone. Use a fixed
-configuration before/after a change, and record whether retention/compaction
+configuration before/after a change, and record whether the retention limit
 was reached.
 
 ## Scheduling and overload

@@ -46,7 +46,8 @@ func (s *Server) RestoreHistory(path string) error {
 	var lastID string
 	var newest time.Time
 	records := 0
-	err = decodeSegments(all, func(i int, e *entry) {
+	s.histActive = map[string]activeRecord{}
+	err = decodeSegments(all, func(i int, e *entry, next int64) {
 		e.Persisted = true
 		s.history.insert(e)
 		a.noteCorrection(e.Message)
@@ -56,6 +57,7 @@ func (s *Server) RestoreHistory(path string) error {
 				activeFirst = e.Seq
 			}
 			records++
+			s.histActive[e.ID] = activeRecord{next, e.Seq}
 		}
 	})
 	if err != nil {
@@ -75,6 +77,9 @@ func (s *Server) RestoreHistory(path string) error {
 	s.histBytes, s.histRecords, s.histFirstSeq = size, records, activeFirst
 	s.histLastSeq, s.histLastID, s.histNewest = last, lastID, newest
 	if s.histSegment <= 0 {
+		s.histSegment = s.cfg.HistorySegmentBytes
+	}
+	if s.histSegment <= 0 {
 		s.histSegment = defaultSegmentBytes
 	}
 	s.histStop = make(chan struct{})
@@ -83,6 +88,12 @@ func (s *Server) RestoreHistory(path string) error {
 	segments, archived := a.stats()
 	s.logger.Info("history_restored", "path", path, "messages", s.history.size, "archive_segments", segments, "archive_bytes", archived)
 	return nil
+}
+
+// activeRecord is where a message's line in the active file ends.
+type activeRecord struct {
+	next int64
+	seq  uint64
 }
 
 // windowStart picks the oldest segment to load: the newest segments whose
@@ -108,9 +119,10 @@ func windowStart(all []*segment, limit int, maxBytes int64) int {
 
 // decodeSegments reads segments in parallel, a few ahead, and hands their
 // messages to insert in order.
-func decodeSegments(all []*segment, insert func(segment int, e *entry)) error {
+func decodeSegments(all []*segment, insert func(segment int, e *entry, next int64)) error {
 	type batch struct {
 		entries []*entry
+		ends    []int64
 		err     error
 	}
 	workers := max(1, min(runtime.GOMAXPROCS(0), 8))
@@ -124,8 +136,9 @@ func decodeSegments(all []*segment, insert func(segment int, e *entry)) error {
 			slots <- struct{}{} // released once segment i is inserted
 			go func() {
 				var b batch
-				b.err = readSegment(seg.path, 0, seg.size, func(m Message, _, _ int64) bool {
+				b.err = readSegment(seg.path, 0, seg.size, func(m Message, _, next int64) bool {
 					b.entries = append(b.entries, newEntry(m))
+					b.ends = append(b.ends, next)
 					return true
 				})
 				if errors.Is(b.err, os.ErrNotExist) {
@@ -142,8 +155,8 @@ func decodeSegments(all []*segment, insert func(segment int, e *entry)) error {
 			failure = b.err
 		}
 		if failure == nil {
-			for _, e := range b.entries {
-				insert(i, e)
+			for j, e := range b.entries {
+				insert(i, e, b.ends[j])
 			}
 		}
 		<-slots
@@ -260,6 +273,7 @@ func (s *Server) rotateHistoryLocked() error {
 	s.commit.retire(old)
 	s.commit.init(next, s.cfg.Sync)
 	s.histBytes, s.histRecords, s.histFirstSeq = 0, 0, 0
+	s.histActive = map[string]activeRecord{}
 	s.archive.seal(sealed)
 	return nil
 }

@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	maxConnections       = 1024
+	maxConnections       = 16384
+	defaultConnections   = 4096
 	maxOutboundQueue     = 4096
 	defaultOutboundQueue = 2048
 	maxHistoryMessages   = 10_000_000
@@ -41,11 +42,15 @@ type Config struct {
 	// messages from the window.
 	HistoryRetain      time.Duration
 	HistoryRetainBytes int64
-	ReadTimeout        time.Duration
-	PingInterval       time.Duration
+	// HistorySegmentBytes is the size at which the history file is sealed
+	// as an archive segment; default 64 MiB. A request reads at most half a
+	// segment of the archive.
+	HistorySegmentBytes int64
+	ReadTimeout         time.Duration
+	PingInterval        time.Duration
 	// MaxPendingPerAddress caps connections from one non-loopback address that
 	// have not finished registering. Zero means a quarter of MaxConnections,
-	// but at least 4. Loopback and Unix-socket peers are never limited.
+	// between 4 and 128. Loopback and Unix-socket peers are never limited.
 	MaxPendingPerAddress int
 	Logger               *slog.Logger
 	// Now is the clock for message timestamps and every expiry (presence,
@@ -126,6 +131,7 @@ type Server struct {
 	histSegment      int64 // the active file is sealed at this size
 	histRotateAfter  int64 // after a failed rotation, the size at which to retry
 	histStop         chan struct{}
+	histActive       map[string]activeRecord // the active file's lines, by message ID
 	archive          *archive
 	persistenceError string
 	listener         net.Listener

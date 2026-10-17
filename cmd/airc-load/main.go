@@ -27,6 +27,7 @@ type config struct {
 	Rate              float64       `json:"operations_per_agent_second"`
 	BodyBytes         int           `json:"body_bytes"`
 	Persist           bool          `json:"persistent_history"`
+	History           int           `json:"history_limit"`
 	Out               string        `json:"-"`
 }
 
@@ -74,6 +75,7 @@ func mainErr() error {
 	flag.Float64Var(&c.Rate, "rate", 1, "scheduled operations per second per agent")
 	flag.IntVar(&c.BodyBytes, "body-bytes", 256, "post and mention body size")
 	flag.BoolVar(&c.Persist, "persist", true, "sync history to temporary disk storage")
+	flag.IntVar(&c.History, "history", 10000, "messages the server keeps in memory; with -persist, older ones are read from its archive")
 	flag.StringVar(&c.Out, "out", "", "new output directory (default timestamped directory)")
 	serve := flag.Bool("serve", false, "internal isolated server child mode")
 	flag.Parse()

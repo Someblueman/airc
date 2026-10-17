@@ -25,23 +25,30 @@ func (s *Server) readAfterLocked(target, after string, limit int, accept func(*e
 	if s.archive == nil {
 		return nil, historyExpired, "", false
 	}
-	active := s.activeSegmentLocked()
-	s.mu.Unlock()
-	loc, last, ok := s.archive.find(after, active)
-	s.mu.Lock()
+	// The active file's messages are mapped in memory; the sealed segments
+	// are searched without the lock.
+	loc, last, ok := location{}, uint64(0), false
+	if record, found := s.histActive[after]; found {
+		loc, last, ok = location{s.histFirstSeq, record.next}, record.seq, true
+	} else {
+		s.mu.Unlock()
+		loc, last, ok = s.archive.find(after, segment{})
+		s.mu.Lock()
+	}
 	if !ok {
 		return nil, historyExpired, "", false
 	}
-	keys := archiveKeys(target)
+	keys, needle := archiveKeys(target), targetNeedle(target)
 	more := false
 	for {
 		stop, retained := s.history.firstSeq()
 		if !retained {
 			stop = math.MaxUint64
 		}
-		active = s.activeSegmentLocked()
+		active := s.activeSegmentLocked()
 		s.mu.Unlock()
-		result, err := s.archive.scan(loc, active, stop, keys, archiveBudget, func(m Message) bool {
+		budget := min(archiveBudget, max(s.histSegment/2, 1))
+		result, err := s.archive.scan(loc, active, stop, keys, needle, budget, func(m Message) bool {
 			e := archivedEntry(m)
 			if !matchesTarget(e, target) || accept != nil && !accept(e) {
 				return true

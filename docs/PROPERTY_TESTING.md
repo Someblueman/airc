@@ -8,6 +8,7 @@ testing dependency is required.
 | Target | Coverage and oracle |
 | --- | --- |
 | `FuzzHistoryRetentionAndPagination` | Posts, replies, corrections/retractions, quota changes, wraparound and eviction. Compare retained records and filtered history with an independent chronological-list model; verify ID/request indexes and expired cursors. Bounds: 128 operations, 0–16 retained records. |
+| `FuzzArchivePaging` | Room posts, direct messages and mentions through a 1–8 message window, segments of 256 bytes to 4 KiB (some indexed, some scanned) and a read budget of 64 bytes to 4 KiB. Paging each target from a generated cursor must return exactly the later matching messages, in order, as a list of every post says, across the archive and into the window. Bounds: 200 posts. |
 | `FuzzCheckCursorPrefixes` | Overlapping room/inbox/DM selectors, own-message filtering, expired and valid cursors, per-target/global limits. Each target receives a contiguous eligible prefix; cursors never pass deferred messages; repeated pages drain without repeating records within a selector. Output is ordered/deduplicated within each response. Bounds: 48 input records, 1–16 retained records, four selectors. |
 | `FuzzContextWireBudget` | Compare server byte admission with repeated full-wire serialization and record removal; check exact-fit and failed protected-record budgets, including summary, terminator and CRLF. Bounds: 32 records and 128-byte generated text. |
 | `FuzzContextBudget` | Unicode/JSON escaping, protected records, pins/profiles, exact byte boundaries and omission-counter digit changes. Compare the optimized trimmer with the previous repeated-serialization policy and check byte/count/protection invariants. Bounds: 24 records, 128-byte text. |
@@ -34,6 +35,7 @@ go vet ./internal/server ./cmd/airc
 
 # One exact target per fuzz invocation; bounded workers/time.
 go test ./internal/server -run '^$' -fuzz '^FuzzHistoryRetentionAndPagination$' -fuzztime=30s -parallel=2
+go test ./internal/server -run '^$' -fuzz '^FuzzArchivePaging$' -fuzztime=30s -parallel=2
 go test ./internal/server -run '^$' -fuzz '^FuzzCheckCursorPrefixes$' -fuzztime=30s -parallel=2
 go test ./internal/server -run '^$' -fuzz '^FuzzContextWireBudget$' -fuzztime=30s -parallel=2
 go test ./cmd/airc -run '^$' -fuzz '^FuzzContextBudget$' -fuzztime=30s -parallel=2

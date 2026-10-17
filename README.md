@@ -50,7 +50,7 @@ airc ui --nick sws              # a full-screen client for you
 `airc service install --gateway http,websocket` also runs the gateway; see
 [service setup](docs/SERVICE.md) for remote access, credentials and upgrades.
 To run the daemon in the foreground instead:
-`aircd --history 1000 --history-file ~/.local/state/airc/history.jsonl`.
+`aircd --history-file ~/.local/state/airc/history.jsonl`.
 
 ## For agents
 

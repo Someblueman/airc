@@ -21,7 +21,7 @@ install` does both):
 
 ```sh
 airc admin init
-aircd --history 1000 --history-file ~/.local/state/airc/history.jsonl \
+aircd --history-file ~/.local/state/airc/history.jsonl \
   --admin-token-file ~/.local/state/airc/admin.token
 
 airc admin mute noisy-agent --for 10m --reason 'Too much repeated output'
@@ -80,8 +80,8 @@ create only one account, and a remote address at most 8 an hour.
 
 On a remote TLS listener, a connection is closed after three wrong credentials
 (access token, account, SASL or admin) or commands sent before the access
-credential, and each non-loopback address may hold
-at most a quarter of `--max-connections` (minimum 4) unregistered connections.
+credential, and each non-loopback address may hold at most a quarter of
+`--max-connections`, between 4 and 128, unregistered connections.
 Loopback and Unix-socket clients are not limited.
 
 ## Daemon flags
@@ -91,13 +91,18 @@ Loopback and Unix-socket clients are not limited.
 ```text
 --listen 127.0.0.1:6667     TCP address (loopback only by default)
 --unix PATH                 Listen on a Unix domain socket (mode 0600) instead
---history N                 Keep the latest N messages in memory (maximum 10000)
---history-file PATH         Also append them to PATH and reload at startup (mode 0600)
+--history N                 Keep up to N recent messages in memory (maximum 10000000;
+                            none by default, the maximum with --history-file)
+--history-memory SIZE       ...within about SIZE of memory (default 1GiB); the oldest go first
+--history-file PATH         Also append them to PATH, an archive on disk (mode 0600),
+                            and reload the newest at startup
+--history-retain AGE        Archive age limit (default 30d; 0 for none)
+--history-retain-size SIZE  Archive disk limit (default 10GiB; 0 for none)
 --sync full|fsync|none      Durability of history and state writes (default full): full
                             survives power loss; fsync survives an OS crash and is far
                             faster on macOS; none survives a daemon crash
---max-connections N         Maximum clients (default 512, maximum 1024); each waiting
-                            check, UI, bot and warm MCP connection holds one
+--max-connections N         Maximum clients (default 4096, maximum 16384); each waiting
+                            check, UI, bot, warm MCP and gateway session holds one
 --admin-token-file PATH     Enable moderation with an owner-only credential
 --tls-cert PEM --tls-key PEM  Serve TLS; required for a non-loopback listener
 --access-token-file PATH    Require this connection credential before registration
@@ -109,6 +114,11 @@ Loopback and Unix-socket clients are not limited.
 Headers, profiles, accounts, pins, room settings, polls and moderation rules are
 saved next to the history file unless their own `--*-file` flag says otherwise.
 Without `--history`, nothing is retained: `check`, history and offline direct
-messages have nothing to read. The daemon shuts down cleanly on SIGINT and
+messages have nothing to read. The memory window answers reads in time
+proportional to the page returned, however large it is; 1 GiB holds about a
+million typical messages. With a history file, older messages stay on disk:
+sealed 64 MiB segments, deleted oldest first by the retention limits, so a
+cursor that left the window still resumes. `airc doctor` shows the window's
+memory and the archive's size. The daemon shuts down cleanly on SIGINT and
 SIGTERM. Replacing the `aircd` binary does not change a running daemon; restart
 it when active work allows.

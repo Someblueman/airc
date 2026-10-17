@@ -149,13 +149,14 @@ identical retained send retries return their receipt immediately. Delay state is
 bounded and transient; a restart resets timers, retaining the room setting.
 
 A room history quota is 0 through the global `--history` bound (`0` disables).
-Configuring any positive quota also enables fair eviction within that global
-bound: noisy rooms replace their own/above-share messages first. This protects
+Configuring any positive quota also enables fair eviction within the memory
+window: noisy rooms replace their own/above-share messages first. This protects
 quiet room history during sustained noisy traffic, including history restore.
-It is a ceiling and eviction policy, not a guaranteed reservation or extra
-archive. New scopes can still evict old messages at the global bound. Quotas apply
-immediately; shrinking one can expire cursors. Default history keeps its original
-ring behavior when quotas are disabled.
+It is a ceiling and eviction policy, not a guaranteed reservation. New scopes
+can still evict old messages at the window's bound. Quotas apply immediately.
+They decide what stays in memory; with a history file, messages they drop stay
+in the archive on disk until its retention limits, and a cursor older than the
+window resumes from there.
 
 Pins, room settings and polls persist via `--chat-file`, defaulting next to history
 or accounts. Explicitly configure it for persistence without either. New state

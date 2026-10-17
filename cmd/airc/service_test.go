@@ -111,3 +111,40 @@ func TestServiceInstallSyncOption(t *testing.T) {
 		t.Fatal("invalid sync mode wrote a credential")
 	}
 }
+
+func TestServiceInstallHistoryOptions(t *testing.T) {
+	agentEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	binary := filepath.Join(t.TempDir(), "aircd")
+	if err := os.WriteFile(binary, []byte("test"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	install := func(args ...string) ([]string, error) {
+		var o serviceInstallOptions
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		o.flags(fs)
+		if err := fs.Parse(append([]string{"--binary", binary}, args...)); err != nil {
+			t.Fatal(err)
+		}
+		c, err := o.config("test", t.TempDir())
+		return c.Args, err
+	}
+	args, err := install()
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, " ")
+	// Defaults are the daemon's; the service passes none of them.
+	if strings.Contains(joined, "--history-memory") || strings.Contains(joined, "--history-retain") || !strings.Contains(joined, "--max-connections 4096") {
+		t.Fatalf("default args: %v", args)
+	}
+	args, err = install("--history-memory", "4GiB", "--history-retain", "7d", "--history-retain-size", "0")
+	if joined := strings.Join(args, " "); err != nil || !strings.Contains(joined, "--history-memory 4GiB") || !strings.Contains(joined, "--history-retain 7d") || !strings.Contains(joined, "--history-retain-size 0") {
+		t.Fatalf("explicit args: %v %v", args, err)
+	}
+	for _, bad := range [][]string{{"--history-memory", "lots"}, {"--history-retain", "5m"}, {"--history-retain-size", "1MiB"}} {
+		if _, err := install(bad...); err == nil {
+			t.Errorf("accepted %v", bad)
+		}
+	}
+}

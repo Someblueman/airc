@@ -19,7 +19,7 @@ import (
 
 func New(cfg Config) *Server {
 	if cfg.MaxConnections <= 0 || cfg.MaxConnections > maxConnections {
-		cfg.MaxConnections = 512
+		cfg.MaxConnections = defaultConnections
 	}
 	if cfg.MaxMessageSize <= 0 || cfg.MaxMessageSize > 4096 {
 		cfg.MaxMessageSize = 4096
@@ -40,7 +40,7 @@ func New(cfg Config) *Server {
 		cfg.HistoryBytes = defaultHistoryBytes
 	}
 	if cfg.MaxPendingPerAddress <= 0 {
-		cfg.MaxPendingPerAddress = max(4, cfg.MaxConnections/4)
+		cfg.MaxPendingPerAddress = max(4, min(cfg.MaxConnections/4, 128))
 	}
 	if cfg.ReadTimeout <= 0 {
 		cfg.ReadTimeout = 2 * time.Minute

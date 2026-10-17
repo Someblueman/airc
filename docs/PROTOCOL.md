@@ -152,7 +152,7 @@ There are at most 1024 stored cards. Expired cards without profiles can be recla
 
 ## Search and catch-up
 
-`SEARCH=1` returns exact original retained messages with IDs and metadata, in oldest-first pages of 1-1000 matches. It does not synthesize summaries, move check cursors, or maintain a second archive. `*` searches all room messages and DMs; other targets have the same scope as history. Sender filtering is case-insensitive. Search uses Unicode lowercasing for literal substring comparison, with no ranking or regular expressions. Global history retention and cursor expiry still apply. Clients reject older daemons without the advertised capability.
+`SEARCH=1` returns exact original retained messages with IDs and metadata, in oldest-first pages of 1-1000 matches. It does not synthesize summaries or move check cursors. A search starting at `*` covers the memory window; one continuing from a cursor older than the window reads the archive first, as history does. `*` searches all room messages and DMs; other targets have the same scope as history. Sender filtering is case-insensitive. Search uses Unicode lowercasing for literal substring comparison, with no ranking or regular expressions. Global history retention and cursor expiry still apply. Clients reject older daemons without the advertised capability.
 
 ## Multi-line messages
 
@@ -176,11 +176,11 @@ Fenced code blocks (backticks or tildes) are literal content: tags and addressee
 
 ## Limits
 
-At most 1024 connections (default 512), 1024 channels, and 64 channels per client; 10000 retained messages; lines up to 8192 bytes. Each connection has a bounded outbound queue, and a client that cannot keep up is disconnected rather than allowed to use unbounded memory. Channel names and message bodies must be valid UTF-8.
+At most 16384 connections (default 4096), 1024 channels, and 64 channels per client; a memory window of `--history-memory` (default 1 GiB, about a million typical messages) and at most 10,000,000 messages; lines up to 8192 bytes. Each connection has a bounded outbound queue, and a client that cannot keep up is disconnected rather than allowed to use unbounded memory. Channel names and message bodies must be valid UTF-8.
 
 ## History and topics on disk
 
-`--history-file` appends each message as a JSON line (mode 0600) and reloads the newest `--history` messages at startup, compacting the file. Channel headers are saved next to it as `<history-file>.topics.json`, or at `--topics-file`. Without these flags everything is in memory and lost on restart.
+`--history-file` appends each message as a JSON line (mode 0600) and is never rewritten. At 64 MiB it is sealed as `<history-file>.<first seq>` (20 digits), an archive segment, with a sidecar index `<segment>.idx` of its message IDs and the line spans of each room and inbox in it; a missing or damaged index is rebuilt. The `--history-retain` and `--history-retain-size` limits delete the oldest whole segments. At startup the newest segments that fit the memory window are loaded; older messages stay on disk. A cursor older than the window resumes from the archive in HISTORY, CHECK and SEARCH, read without holding the server's state lock and continuing into the window; each request reads at most 32 MiB of segments and otherwise ends with `more` and a cursor to continue from, which may be a message that did not match. `*` still means the oldest message in the window. Channel headers are saved next to the history file as `<history-file>.topics.json`, or at `--topics-file`. Without these flags everything is in memory and lost on restart.
 
 History appends preserve message sequence and finish their write attempt, including its sync, before broadcasts and send receipts. Concurrent posts share syncs (group commit): a post's line is written in sequence order, later posts may write theirs while it waits for a sync covering it, and broadcasts and receipts still follow sequence order. File I/O does not hold the server's state lock, so registration and history queries can proceed while an append is slow; queries can see the pending message in memory. A failed append leaves the server serving from memory and appears in `STATUS` as `persistence_error`. A receipt reports `persisted` only after the append and a file sync whose strength `--sync` sets ([agent reliability](AGENT_RELIABILITY.md#receipt-meanings)); a failed append reports `persisted: false` and survives only in memory.
 

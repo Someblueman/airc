@@ -190,16 +190,16 @@ request still needs exclusive ownership of the connection's event stream.
 
 ## Runtime storage and overload
 
-The history archive now compacts during operation after twice the global history
-limit in records, or when its bytes exceed `max(1 MiB, history_limit * 32768)`.
-The retained snapshot is synced and atomically replaces the archive while posts
-are serialized. Readers remain available during file I/O. The replacement keeps
-message IDs, sequence numbers, correction state and request receipts. A temporary
-file needs additional disk space during compaction. A compaction failure stops
-further persistence, records the storage error and leaves memory service running;
-new receipts then report `persisted: false`. An append synced before a compaction
-failure remains accepted and persisted. This is retained history, not a permanent
-archive of every message.
+The history file is never rewritten. At 64 MiB it is sealed as an archive
+segment and a new file starts; the old one is renamed by a hard link and an
+atomic replace, so the path is never missing. Sealed segments keep every message
+until the retention limits (`--history-retain`, default 30 days, and
+`--history-retain-size`, default 10 GiB) delete the oldest whole segments. A
+failed rotation records the storage error and keeps appending to the current
+file, retrying later, so receipts still report `persisted: true`. A failed
+append or sync stops persistence and leaves memory service running; new
+receipts then report `persisted: false`. Request receipts (`RETRY`) are answered
+from the in-memory window.
 
 Outbound connections retain both a message-count limit and a byte limit including
 in-flight writes. The default byte limit is 2 MiB per connection; `aircd

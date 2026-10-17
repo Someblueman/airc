@@ -34,8 +34,9 @@ const (
 	indexMagic          = "AIRCIDX1"
 )
 
-// archiveBudget bounds the segment bytes one request reads; a read that runs
-// out answers "more" with a cursor to continue from. Tests lower it.
+// archiveBudget bounds the segment bytes one request reads, as does half the
+// segment size; a read that runs out answers "more" with a cursor to continue
+// from. Tests lower it.
 var archiveBudget int64 = 32 << 20
 
 var errArchiveGone = errors.New("the archived position is no longer retained")
@@ -127,6 +128,21 @@ func compareSeq(x, y uint64) int {
 		return 1
 	}
 	return 0
+}
+
+// fieldNeedle is how a message line spells a string field, for readLines.
+func fieldNeedle(field, value string) []byte {
+	encoded, _ := json.Marshal(value)
+	return append([]byte(`"`+field+`":`), encoded...)
+}
+
+// targetNeedle is what every archived line of a channel target contains;
+// other targets match case-insensitively or by mention, so have none.
+func targetNeedle(target string) []byte {
+	if !protocol.IsChannel(target) {
+		return nil
+	}
+	return fieldNeedle("target", target)
 }
 
 // archiveKeys are the index keys a target's messages carry, so a segment
@@ -268,6 +284,12 @@ const maxLineBytes = 256 << 10
 // to, with each line's start and the offset after it. Unreadable lines are
 // skipped, as they are on restore.
 func readSegment(path string, from, to int64, visit func(m Message, start, next int64) bool) error {
+	return readLines(path, from, to, nil, visit)
+}
+
+// readLines is readSegment that decodes only lines containing needle, when
+// it is set: a cheap filter for an ID or a target field.
+func readLines(path string, from, to int64, needle []byte, visit func(m Message, start, next int64) bool) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -292,6 +314,9 @@ func readSegment(path string, from, to int64, visit func(m Message, start, next 
 		}
 		start := offset
 		offset += int64(len(line))
+		if needle != nil && !bytes.Contains(line, needle) {
+			continue
+		}
 		var m Message
 		if json.Unmarshal(line, &m) != nil || m.ID == "" || m.Target == "" {
 			continue
@@ -318,11 +343,15 @@ func (a *archive) find(id string, active segment) (location, uint64, bool) {
 	scanned := func(s *segment) bool { return s.records == 0 }
 	all = append(slices.DeleteFunc(slices.Clone(all), scanned), slices.DeleteFunc(all, func(s *segment) bool { return !scanned(s) })...)
 	hash := idHash(id)
+	needle := fieldNeedle("id", id)
 	for _, seg := range all {
+		if seg.size == 0 {
+			continue
+		}
 		if seg.records == 0 {
 			var found location
 			var seq uint64
-			_ = readSegment(seg.path, 0, seg.size, func(m Message, _, next int64) bool {
+			_ = readLines(seg.path, 0, seg.size, needle, func(m Message, _, next int64) bool {
 				if m.ID == id {
 					found, seq = location{seg.first, next}, m.Seq
 				}
@@ -399,7 +428,8 @@ type scanResult struct {
 // scan reads archived messages after from, oldest first, through later
 // segments, until a message at or past stop, visit returns false, or budget
 // bytes have been read. A segment that holds none of keys is skipped.
-func (a *archive) scan(from location, active segment, stop uint64, keys []string, budget int64, visit func(Message) bool) (scanResult, error) {
+// needle, when set, is a byte string every line of the target contains.
+func (a *archive) scan(from location, active segment, stop uint64, keys []string, needle []byte, budget int64, visit func(Message) bool) (scanResult, error) {
 	all := a.segments(active)
 	i := slices.IndexFunc(all, func(s *segment) bool { return s.first == from.first })
 	if i < 0 {
@@ -412,7 +442,7 @@ func (a *archive) scan(from location, active segment, stop uint64, keys []string
 		if seg.first >= stop && seg.first != from.first {
 			return result, nil
 		}
-		offset, end := int64(0), seg.size
+		offset, spanLast := int64(0), seg.size
 		if seg.first == from.first {
 			offset = from.offset
 		}
@@ -432,12 +462,14 @@ func (a *archive) scan(from location, active segment, stop uint64, keys []string
 				result.next, result.lastID, result.lastSeq = location{seg.first, seg.size}, seg.lastID, seg.last
 				continue
 			}
-			offset = max(offset, first)
-			// The last span line runs to the next newline; read to it.
-			end = min(seg.size, last+maxLineBytes)
+			offset, spanLast = max(offset, first), last
 		}
-		done := false
-		err := readSegment(seg.path, offset, end, func(m Message, _, next int64) bool {
+		done, skipped := false, false
+		err := readLines(seg.path, offset, seg.size, needle, func(m Message, start, next int64) bool {
+			if start > spanLast {
+				skipped = true // past the target's last line in this segment
+				return false
+			}
 			if m.Seq >= stop {
 				done = true
 				return false
@@ -462,7 +494,7 @@ func (a *archive) scan(from location, active segment, stop uint64, keys []string
 		if err != nil || done {
 			return result, err
 		}
-		if end < seg.size {
+		if skipped {
 			// Past the target's last line: the rest of the segment is skipped.
 			if seg.last >= stop {
 				result.lastSeq = max(result.lastSeq, stop-1)

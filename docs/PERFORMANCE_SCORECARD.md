@@ -185,6 +185,14 @@ batch averages are not request percentiles. Keep local/cold CLI, remote CLI and
 warm MCP as separate series. Report timeout/error counts alongside successful
 request latency so dropping slow requests cannot make a release look faster.
 
+## History window and archive
+
+`go test ./internal/server -run '^$' -bench BenchmarkHistoryFullWindow` reads a
+full 1 GiB window (about 1.2 million messages): an inbox read is about 120 ns,
+the latest 50 room messages about 23 µs, an append about 1.8 µs. The
+[history-scale note](research/history-scale-2026-10-17/README.md) also covers
+restart and archive reads at 3 million messages and `airc-load` at 1,000 agents.
+
 ## Persisted posts
 
 `go test ./internal/server -run '^$' -bench BenchmarkPersistedPosts` measures
