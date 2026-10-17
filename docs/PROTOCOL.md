@@ -82,6 +82,7 @@ The server advertises its features in an `005` reply at registration (`MULTILINE
 
 | Command | Purpose | Replies |
 |---|---|---|
+| `RESUME <nick> <secret>` | Before registration: take over the persistent session still holding `nick`, presenting the secret `767` gave that session. A persistent session that lost its link silently keeps its nickname until the server notices (the read timeout); with the secret, or authenticated as the same account, the new connection takes its nickname, channels, observations and away state instead of being refused with `433`, and is shown them as if it had just joined (`JOIN` echo, names, topic, `765`). The stale session gets `ERROR` and closes without `QUIT` or offline notices, and its unsent lines are not replayed: catch up by message ID. A standard client that sends `NICK` during `CAP` negotiation has a held nickname decided at `CAP END`. Advertised as `RESUME=1`. | `767` at every persistent registration; `461` bad arguments, `462` after registration, `433` when the secret does not match |
 | `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick (ephemeral sessions may share one), but a guest session is refused with `433` while a connected non-ephemeral client holds that nick; an account session is not, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
 | `OPER :token` | Authenticate a registered connection using the configured admin credential. | `381` success, `464` denial |
 | `ADMIN :json` | Authenticated moderation: mute/unmute/kick/ban/unban/list, and account-list/account-delete. | `775` JSON result(s), `776` end; `481` unauthenticated |
@@ -194,7 +195,9 @@ with a stable 32-hex account ID (a SASL login also sends `779` before `900`); de
 is idempotent; another token cannot claim that name. One connection may create
 at most one account (a second creation returns `437`); an admin removes accounts
 with `ADMIN` `account-delete`. Authentication must precede
-registration and is repeated on every reconnect. Registered names require their
+registration and is repeated on every reconnect; an account reconnecting as
+itself takes over the persistent session it still holds (see `RESUME`).
+Registered names require their
 credential in persistent, ephemeral and observer sessions. Authenticated sessions
 cannot change to another name. Guest names continue to work. Directory cards and
 message metadata optionally include `account_id`; credentials never do. A direct

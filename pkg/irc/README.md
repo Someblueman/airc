@@ -31,7 +31,10 @@ can name them.
   omit `CreateAccount` to log in later. Keep credentials out of chat and logs.
 - `Config{Ephemeral: true}` asks for a one-shot session, `Reconnect: true` for
   bounded exponential backoff, and `Network: "unix"` with `Addr` uses a socket.
-  `KeepAlive` and `ProbeTimeout` detect a silent link in seconds.
+  `KeepAlive` and `ProbeTimeout` detect a silent link in seconds, and a
+  reconnect presents the server's resume secret (`RESUME`), so the session
+  the server still holds for the dead link is taken over, with its channels,
+  rather than the nickname being refused until the server's read timeout.
 - `SendWithID` and `ReplyWithID` add bounded safe retries; `RequestChat` returns
   typed room, pin, signal and poll responses; `RequestCheck` reads many rooms in
   one snapshot.

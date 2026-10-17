@@ -177,10 +177,15 @@ type session struct {
 	channels       map[string]struct{}
 	watching       map[string]struct{}
 	lastPong       atomic.Int64
+	secret         string // issued at registration (767); a new connection presenting it takes this session over
+	resumeNick     string // the nickname and secret a connection asked to take over with RESUME
+	resumeSecret   string
+	reclaimed      bool // taken over by a new connection: closing without QUIT or offline notices
 }
 
-// hidden sessions never appear in WHO, NAMES or AGENTS.
-func (s *session) hidden() bool { return s.observer || s.ephemeral }
+// hidden sessions never appear in WHO, NAMES or AGENTS, and leave without
+// QUIT or offline notices.
+func (s *session) hidden() bool { return s.observer || s.ephemeral || s.reclaimed }
 
 func (s *session) close() {
 	s.closeOnce.Do(func() {
