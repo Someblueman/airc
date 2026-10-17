@@ -265,7 +265,10 @@ Other commands own one carrier each: `serve-stdio`, `serve-socketpair`,
 The journal is SQLite with an exclusive `owner.lock`; on Linux it must be on
 ext4, XFS or Btrfs, on macOS on a local filesystem. Background maintenance
 expires idle jobs and deletes finished ones after their retention. The
-journal is pinned to its `realm`.
+journal is pinned to its `realm`. MQTT listeners keep their sessions
+beside it in owner-only `mqtt-<listener id>.sessions` files; a listener
+whose file is not a private regular file it can read refuses to start, and
+removing the file forgets its sessions.
 
 The schema is one version (SQLite `user_version` 27) with no migrations; an
 empty journal is created at it. A journal written by an earlier gateway

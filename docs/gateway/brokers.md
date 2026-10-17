@@ -84,9 +84,13 @@ away, from history, within AIRC's retention; the user property `airc-gap`
 marks a retention gap. Only a session with an author is kept: a client
 ID alone proves nothing. Another author's CONNECT with the same client ID
 starts a clean session. A newer connection with the same client ID
-replaces the older, which gets DISCONNECT `0x8E`. Sessions live in the
-gateway's memory, at most 1024: a gateway restart loses them, which
-Session Present `0` reports. QoS 1 deliveries respect the client's Receive
+replaces the older, which gets DISCONNECT `0x8E`. A listener keeps at
+most 1024 sessions and saves them, with their positions and unacknowledged
+messages, to `mqtt-<listener id>.sessions` in the
+[state directory](configuration.md#journal) every minute and when it stops,
+so they survive a gateway restart; a session saved before a crash may
+redeliver what it had already sent, never skip it. A session that is
+lost (expired, or its file removed) gets Session Present `0`. QoS 1 deliveries respect the client's Receive
 Maximum (at most 64, and 256 KiB, outstanding) and Maximum Packet Size; a
 reply that finds no room goes at QoS 0 rather than wait.
 

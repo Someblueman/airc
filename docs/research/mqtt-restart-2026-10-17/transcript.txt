@@ -1,0 +1,10 @@
+:server 779 * <redacted> :Account authenticated
+== first connection: a persistent session gets a live post
+airc/room/lobby before the restart
+== gateway stopped (SIGTERM)
+-rw------- journal.sqlite
+-rw------- mqtt-mqtt.sessions
+-rw------- owner.lock
+== gateway restarted; the session resumes
+airc/room/lobby while the gateway was down 1
+airc/room/lobby while the gateway was down 2
