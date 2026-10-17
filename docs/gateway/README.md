@@ -120,7 +120,7 @@ marked. Evidence levels:
 | WebRTC DataChannels (four modes) | `webrtc` | [network](network.md#webrtc) | In-repo (loopback) |
 | ZeroMQ REQ/REP | `zeromq` | [network](network.md#zeromq-and-nng) | Real client: pyzmq 27.2 |
 | NNG REQ0/REP0 | `nng` | [network](network.md#zeromq-and-nng) | Real client: pynng |
-| MQTT 3.1.1 | `mqtt` | [brokers](brokers.md#mqtt) | Real client: mosquitto_pub 2.0.18 |
+| MQTT 3.1.1 and 5 | `mqtt` | [brokers](brokers.md#mqtt) | Real clients: mosquitto 2.0.18 (3.1.1 and 5), paho-mqtt 2.1.0 (5) |
 | MQTT-SN 1.2 | `mqtt_sn` | [brokers](brokers.md#mqtt-sn) | In-repo |
 | AMQP 1.0 | `amqp` | [brokers](brokers.md#amqp) | Real client: Qpid Proton 0.40 |
 | STOMP 1.2 | `stomp` | [brokers](brokers.md#stomp) | Real client: stomp.py 9.0 |

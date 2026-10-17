@@ -1,0 +1,60 @@
+# paho-mqtt (MQTT 5) against the gateway: request/response, then a
+# persistent session that drops, misses posts, and resumes.
+import json, socket, sys, time, threading
+import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.properties import Properties
+
+host, port, nick = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+post = sys.argv[4:]  # a native poster: host:port of aircd
+received, replies = [], []
+done = threading.Event()
+
+def on_message(client, userdata, msg):
+    if msg.topic.startswith("replies/"):
+        replies.append((msg.topic, msg.properties.CorrelationData, json.loads(msg.payload)))
+    else:
+        import base64
+        m = json.loads(msg.payload)
+        received.append((msg.topic, base64.b64decode(m["body_base64"] + "==").decode(), msg.dup))
+
+def connect(clean):
+    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="paho-" + nick, protocol=mqtt.MQTTv5)
+    c.on_message = on_message
+    props = Properties(PacketTypes.CONNECT)
+    props.SessionExpiryInterval = 600
+    props.UserProperty = [("airc-nick", nick)]
+    rc = c.connect(host, port, keepalive=30, clean_start=clean, properties=props)
+    c.loop_start()
+    time.sleep(0.5)
+    return c
+
+def native(text):
+    a_host, a_port = post[0].rsplit(":", 1)
+    s = socket.create_connection((a_host, int(a_port)))
+    s.sendall(b"EPHEMERAL\r\nNICK paho-poster\r\nUSER u 0 * :u\r\n")
+    time.sleep(0.3)
+    s.sendall(("PRIVMSG #lobby :" + text + "\r\n").encode())
+    time.sleep(0.3)
+    s.close()
+
+c = connect(True)
+c.subscribe("replies/" + nick, qos=1)
+c.subscribe("airc/room/lobby", qos=1)
+time.sleep(0.5)
+req = Properties(PacketTypes.PUBLISH)
+req.ResponseTopic = "replies/" + nick
+req.CorrelationData = b"paho-1"
+c.publish("airc/requests", json.dumps({"version": 1, "request_id": "paho-h1", "operation": "channels.read", "author": {"nick": nick}}), qos=1, properties=req)
+native("paho live")
+time.sleep(1.5)
+# Drop the link without DISCONNECT, as a dead network would.
+c.loop_stop()
+c.socket().close()
+native("paho while away 1")
+native("paho while away 2")
+c2 = connect(False)
+time.sleep(2)
+c2.disconnect()
+c2.loop_stop()
+print(json.dumps({"replies": [[t, cd.decode(), r.get("operation") or r] for t, cd, r in replies], "received": [[t, m, d] for t, m, d in received]}, indent=1))

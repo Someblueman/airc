@@ -10,6 +10,9 @@ type mqttSession struct {
 	conn   net.Conn
 	cancel context.CancelFunc
 	done   chan struct{}
+	// takeover, when set, tells the client a newer connection replaced it
+	// (MQTT 5's DISCONNECT 0x8E) before the connection closes.
+	takeover func()
 }
 
 type mqttSessions struct {
@@ -25,6 +28,9 @@ func (o *mqttSessions) claim(ctx context.Context, owner string, next *mqttSessio
 	o.active[owner] = next
 	o.mu.Unlock()
 	if old != nil {
+		if old.takeover != nil {
+			old.takeover()
+		}
 		old.cancel()
 		closeMQTTConnection(old.conn)
 		select {

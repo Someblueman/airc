@@ -1,0 +1,48 @@
+{"version":1,"state":"ready","listeners":[{"id":"mqtt","address":"127.0.0.1:16695"}]}
+
+:server 779 * <redacted> :Account authenticated
+== mosquitto_rr (guest, request/response)
+{"version":1,"operation":"channels.read","channels":{"channels":[]}}
+== mosquitto_pub (account carol, a send at QoS 1)
+Client airc-<generated> received CONNACK (0)
+Client airc-<generated> received PUBACK (Mid: 1, RC:0)
+== mosquitto_sub (account carol, persistent session)
+first connection:
+airc/room/lobby {"id":"<redacted>","seq":2,"from":"native-poster","target":"#lobby","body_base64":"Zm9yIHRoZSBzdWJzY3JpYmVy","timestamp":"2026-10-17T15:46:24.831250613Z"}
+resumed: airc/room/lobby {"id":"<redacted>","seq":3,"from":"native-poster","target":"#lobby","body_base64":"d2hpbGUgdGhlIHN1YnNjcmliZXIgd2FzIGF3YXkgMQ","timestamp":"2026-10-17T15:46:25.46
+resumed: airc/room/lobby {"id":"<redacted>","seq":4,"from":"native-poster","target":"#lobby","body_base64":"d2hpbGUgdGhlIHN1YnNjcmliZXIgd2FzIGF3YXkgMg","timestamp":"2026-10-17T15:46:26.09
+== paho-mqtt
+{
+ "replies": [
+  [
+   "replies/paho-guest",
+   "paho-1",
+   "channels.read"
+  ]
+ ],
+ "received": [
+  [
+   "airc/room/lobby",
+   "paho live",
+   false
+  ],
+  [
+   "airc/room/lobby",
+   "paho while away 1",
+   false
+  ],
+  [
+   "airc/room/lobby",
+   "paho while away 2",
+   false
+  ]
+ ]
+}
+== native history
+carol 003b7b4f hello from mosquitto_pub as carol
+native-poster - for the subscriber
+native-poster - while the subscriber was away 1
+native-poster - while the subscriber was away 2
+paho-poster - paho live
+paho-poster - paho while away 1
+paho-poster - paho while away 2

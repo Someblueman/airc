@@ -51,7 +51,7 @@ airc service status
 | `irc_websocket` | 6689 | native IRC over WebSocket, the IRCv3 convention ([native](gateway/native.md#irc-over-websocket)) |
 | `irc_connect` | 6690 | native IRC through an HTTP CONNECT tunnel ([native](gateway/native.md#irc-through-http-connect)) |
 | `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([http](gateway/http.md#grpc)) |
-| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([brokers](gateway/brokers.md#mqtt)) |
+| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests`; MQTT 5 adds replies, subscriptions and sessions ([brokers](gateway/brokers.md#mqtt)) |
 | `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#amqp)) |
 | `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#stomp)) |
 | `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([network](gateway/network.md#coap)) |

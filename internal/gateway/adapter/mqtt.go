@@ -19,9 +19,9 @@ const mqttDeadline = 3 * time.Second
 // mqttIdle bounds a connection that disables MQTT keep-alive.
 const mqttIdle = 5 * time.Minute
 
-// ServeMQTT owns and joins MQTT 3.1.1 connections, plain or TLS. The caller
-// limits accepted sockets; requests share the service's global admission
-// capacity. Each PUBLISH payload is a plain contract request naming its
+// ServeMQTT owns and joins MQTT 3.1.1 and MQTT 5 connections, plain or TLS
+// (MQTT 5 in mqtt5.go). The caller limits accepted sockets; requests share
+// the service's global admission capacity. Each PUBLISH payload is a plain contract request naming its
 // author, or none after an account.identify on the same connection. A CONNECT
 // password is the listener access password, never an identity; user names
 // and client IDs carry no authority. A newer connection with the same client
@@ -38,12 +38,16 @@ func ServeMQTT(parent context.Context, listener net.Listener, d *dispatch.Dispat
 		routes[route.Topic] = route
 	}
 	owners := mqttSessions{active: make(map[string]*mqttSession)}
+	sessions := newMQTT5Store()
+	sweepCtx, stopSweep := context.WithCancel(parent)
+	defer stopSweep()
+	go sessions.sweep(sweepCtx)
 	return ServeAccepted(parent, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
-		return func() { serveMQTTConnection(ctx, conn, d, requests, routes, &owners) }, nil
+		return func() { serveMQTTConnection(ctx, conn, d, requests, routes, &owners, sessions) }, nil
 	})
 }
 
-func serveMQTTConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, routes map[string]config.MQTTRoute, owners *mqttSessions) {
+func serveMQTTConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, routes map[string]config.MQTTRoute, owners *mqttSessions, sessions *mqtt5Store) {
 	ctx, cancel := context.WithCancel(parent)
 	session := &mqttSession{conn: conn, cancel: cancel, done: make(chan struct{})}
 	closed := make(chan struct{})
@@ -83,6 +87,10 @@ func serveMQTTConnection(parent context.Context, conn net.Conn, d *dispatch.Disp
 		return
 	}
 	if packet.Kind != mqttwire.Connect {
+		return
+	}
+	if packet.Version == 5 {
+		serveMQTT5(ctx, conn, packet, d, requests, routes, owners, sessions, session, author, &clientID)
 		return
 	}
 	lastControl := time.Now()
