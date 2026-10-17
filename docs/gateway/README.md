@@ -19,7 +19,7 @@ airc service start
 ```
 
 `--gateway` accepts `http`, `http3`, `websocket`, `mcp_http`, `framed`,
-`unix`, `irc_websocket`, `irc_connect`, `grpc`, `mqtt`, `amqp`, `stomp`,
+`unix`, `irc_websocket`, `irc_connect`, `grpc`, `mqtt`, `mqtt_websocket`, `amqp`, `stomp`,
 `coap_udp`, `coap_tcp`, `zeromq`, `nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
 [SERVICE.md](../SERVICE.md#bundled-gateway). Clients can discover the
 carriers from aircd's `005 CARRIERS` token, the `770` STATUS reply, or
@@ -121,6 +121,7 @@ marked. Evidence levels:
 | ZeroMQ REQ/REP | `zeromq` | [network](network.md#zeromq-and-nng) | Real client: pyzmq 27.2 |
 | NNG REQ0/REP0 | `nng` | [network](network.md#zeromq-and-nng) | Real client: pynng |
 | MQTT 3.1.1 and 5 | `mqtt` | [brokers](brokers.md#mqtt) | Real clients: mosquitto 2.0.18 (3.1.1 and 5), paho-mqtt 2.1.0 (5) |
+| MQTT over WebSocket | `mqtt_websocket` | [brokers](brokers.md#mqtt-over-websocket) | Real clients: MQTT.js 5.16.0 in Chromium 141, paho-mqtt 2.1.0 |
 | MQTT-SN 1.2 | `mqtt_sn` | [brokers](brokers.md#mqtt-sn) | In-repo |
 | AMQP 1.0 | `amqp` | [brokers](brokers.md#amqp) | Real client: Qpid Proton 0.40 |
 | STOMP 1.2 | `stomp` | [brokers](brokers.md#stomp) | Real client: stomp.py 9.0 |

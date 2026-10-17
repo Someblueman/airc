@@ -44,10 +44,11 @@ type Packet struct {
 	QoS       byte
 	ID        uint16
 	Duplicate bool
-	// MQTT 5 only: Will and Retain flags, which the service refuses, the
-	// packet's properties, a DISCONNECT's or PUBACK's reason code, and a
-	// SUBSCRIBE's entries or an UNSUBSCRIBE's filters.
+	// MQTT 5 only: Will and Retain flags, the CONNECT's will, the packet's
+	// properties, a DISCONNECT's or PUBACK's reason code, and a SUBSCRIBE's
+	// entries or an UNSUBSCRIBE's filters.
 	Will, Retain  bool
+	WillMessage   *WillMessage
 	Props         Properties
 	Reason        byte
 	Subscriptions []Subscription

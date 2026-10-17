@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MQTT.js against airc-gateway</title>
+<script src="mqtt.min.js"></script>
+<pre id="log"></pre>
+<script>
+// Connects to the gateway's mqtt_websocket listener as MQTT 5, subscribes to
+// a room, and posts with a request; the test page reads window.result.
+const params = new URLSearchParams(location.search);
+const log = (line) => { document.getElementById('log').textContent += line + '\n'; };
+window.result = { received: [], puback: null, error: null };
+const client = mqtt.connect(params.get('url'), {
+  protocolVersion: 5, clientId: 'browser-' + params.get('nick'), clean: true, reconnectPeriod: 0,
+  properties: { userProperties: { 'airc-nick': params.get('nick') } },
+});
+client.on('error', (e) => { window.result.error = String(e); log('error ' + e); });
+client.on('connect', () => {
+  log('connected');
+  client.subscribe('airc/room/lobby', { qos: 1 }, () => {
+    window.result.subscribed = true;
+    const request = { version: 1, request_id: 'browser-1', operation: 'send', target: { kind: 'room', name: '#lobby' }, message: 'hello from MQTT.js in a browser' };
+    client.publish('airc/requests', JSON.stringify(request), { qos: 1 }, (err, packet) => {
+      window.result.puback = err ? String(err) : 'ok';
+      log('published ' + window.result.puback);
+    });
+  });
+});
+client.on('message', (topic, payload) => {
+  const m = JSON.parse(new TextDecoder().decode(payload));
+  const text = atob(m.body_base64.padEnd(Math.ceil(m.body_base64.length / 4) * 4, '='));
+  window.result.received.push([topic, m.from, text]);
+  log(topic + ' ' + m.from + ': ' + text);
+});
+</script>

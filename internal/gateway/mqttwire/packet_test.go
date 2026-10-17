@@ -176,10 +176,15 @@ func FuzzRead(f *testing.F) {
 	f.Add(packetBytes(0x32, publishBytes("topic", "token", 1)))
 	f.Add([]byte{0xc0, 0})
 	f.Add([]byte{})
+	// MQTT 5, Clean Start and a will with a delay.
+	f.Add(packetBytes(0x10, []byte("\x00\x04MQTT\x05\x06\x00\x1e\x00\x00\x01a\x05\x18\x00\x00\x00\x02\x00\x01t\x00\x02{}")))
 	f.Fuzz(func(t *testing.T, wire []byte) {
 		p, err := Read(bytes.NewReader(wire))
-		if err == nil && p.Kind == Publish && (p.ID == 0 || len(p.Payload) > MaxPayloadBytes || !ValidTopic(p.Topic)) {
+		if err == nil && p.Kind == Publish && (p.QoS > 0 && p.ID == 0 || len(p.Payload) > MaxPayloadBytes || !ValidTopic(p.Topic)) {
 			t.Fatal("invalid decoded publication")
+		}
+		if err == nil && (p.WillMessage != nil) != p.Will {
+			t.Fatal("a will flag without its will, or the reverse")
 		}
 	})
 }

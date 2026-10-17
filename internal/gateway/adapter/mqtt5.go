@@ -69,6 +69,7 @@ const (
 // MQTT 5 reason codes used here.
 const (
 	mqttSuccess              = 0x00
+	mqttDisconnectWithWill   = 0x04
 	mqttNoSubscription       = 0x11
 	mqttUnspecified          = 0x80
 	mqttMalformed            = 0x81
@@ -91,10 +92,25 @@ const (
 	mqttWildcardNotSupported = 0xA2
 )
 
-// mqtt5Store is the listener's sessions, by client identifier.
+// mqtt5Store is the listener's sessions, and the wills waiting out their
+// delay, by client identifier.
 type mqtt5Store struct {
+	// ctx is the listener's: a will runs within it after its connection.
+	ctx      context.Context
 	mu       sync.Mutex
 	sessions map[string]*mqtt5State
+	wills    map[string]*mqtt5Will
+	// running counts the wills waiting or running, so the listener joins
+	// them; closed refuses new ones once it is closing.
+	running sync.WaitGroup
+	closed  bool
+}
+
+// mqtt5Will is a will waiting out its delay. run submits it; drop frees
+// what it holds without submitting. Each ends the will.
+type mqtt5Will struct {
+	timer     *time.Timer
+	run, drop func()
 }
 
 // mqtt5State is one session: who owns it, what it subscribes to and where
@@ -136,13 +152,16 @@ type mqtt5Outbound struct {
 	body  []byte
 }
 
-func newMQTT5Store() *mqtt5Store { return &mqtt5Store{sessions: map[string]*mqtt5State{}} }
+func newMQTT5Store(ctx context.Context) *mqtt5Store {
+	return &mqtt5Store{ctx: ctx, sessions: map[string]*mqtt5State{}, wills: map[string]*mqtt5Will{}}
+}
 
 // take hands the session for clientID to a new connection: the existing
 // one when resume asks for it and owner owns it, else a fresh one. present
 // reports a resumed session. A session without an author is never
 // resumed: a client ID alone proves nothing, and its pending replies
-// answer someone's reads.
+// answer someone's reads. A will still waiting out its delay is dropped
+// when its session resumes and submitted now when the session ends.
 func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Duration) (state *mqtt5State, present, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,10 +169,12 @@ func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Durat
 	if old := s.sessions[clientID]; old != nil {
 		if resume && owner != "" && old.owner == owner && (old.expiresAt.IsZero() || now.Before(old.expiresAt)) {
 			old.expiresAt, old.expiry = time.Time{}, expiry
+			s.endWillLocked(clientID, false)
 			return old, true, true
 		}
 		delete(s.sessions, clientID)
 	}
+	s.endWillLocked(clientID, true)
 	if len(s.sessions) >= mqtt5MaxSessions {
 		s.sweepLocked(now)
 		if len(s.sessions) >= mqtt5MaxSessions {
@@ -186,6 +207,67 @@ func (s *mqtt5Store) sweepLocked(now time.Time) {
 			delete(s.sessions, id)
 		}
 	}
+}
+
+// scheduleWill submits a connection's will after delay, unless the
+// session for clientID resumes first.
+func (s *mqtt5Store) scheduleWill(clientID string, delay time.Duration, run, drop func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		drop()
+		return
+	}
+	s.endWillLocked(clientID, false)
+	w := &mqtt5Will{run: run, drop: drop}
+	s.running.Add(1)
+	w.timer = time.AfterFunc(delay, func() {
+		defer s.running.Done()
+		s.mu.Lock()
+		if s.wills[clientID] == w {
+			delete(s.wills, clientID)
+		}
+		s.mu.Unlock()
+		run()
+	})
+	s.wills[clientID] = w
+}
+
+// endWillLocked ends clientID's waiting will, submitting it when submit
+// is set. A will whose timer has already fired is running and ends itself.
+func (s *mqtt5Store) endWillLocked(clientID string, submit bool) {
+	w := s.wills[clientID]
+	if w == nil {
+		return
+	}
+	delete(s.wills, clientID)
+	if !w.timer.Stop() {
+		return
+	}
+	if !submit {
+		w.drop()
+		s.running.Done()
+		return
+	}
+	go func() {
+		defer s.running.Done()
+		w.run()
+	}()
+}
+
+// close drops the wills still waiting and joins those running.
+func (s *mqtt5Store) close() {
+	s.mu.Lock()
+	s.closed = true
+	for id, w := range s.wills {
+		delete(s.wills, id)
+		if w.timer.Stop() {
+			w.drop()
+			s.running.Done()
+		}
+	}
+	s.mu.Unlock()
+	s.running.Wait()
 }
 
 // sweep forgets expired sessions every minute until ctx ends.
@@ -232,6 +314,8 @@ type mqtt5Conn struct {
 		done   chan struct{}
 	}
 	identified bool
+	// willless is set by a DISCONNECT that asks for no will.
+	willless bool
 }
 
 // serveMQTT5 runs an MQTT 5 connection after its CONNECT. It owns the
@@ -246,10 +330,30 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 	if p.RequestProblemInfo != nil && *p.RequestProblemInfo == 0 {
 		c.problems = false
 	}
+	var will *core.Submission
+	if w := connect.WillMessage; w != nil {
+		sub, err := core.DecodeSubmission([]byte(w.Payload))
+		_, routed := routes[w.Topic]
+		switch {
+		case w.Retain:
+			refuse(mqttRetainNotSupported, "")
+			return
+		case w.QoS > 1:
+			refuse(mqttQoSNotSupported, "")
+			return
+		case !routed:
+			refuse(mqttTopicNameInvalid, "a will is published on a request topic")
+			return
+		case err != nil || !sub.Request.Operation.IsMutation():
+			refuse(mqttPayloadFormatInvalid, "a will is a contract mutation")
+			return
+		}
+		// Each connection's will is its own job: the journal would answer
+		// a second will under the same request ID with the first.
+		sub.Request.RequestID = "will-" + rand.Text()
+		will = &sub
+	}
 	switch {
-	case connect.Will:
-		refuse(mqttImplementation, "wills are not supported")
-		return
 	case p.AuthMethod != "":
 		refuse(mqttBadAuthMethod, "enhanced authentication is not supported")
 		return
@@ -302,6 +406,10 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 		}
 		owner, c.identified = a.Scope(), true
 	}
+	if will != nil && owner == "" && will.Author == nil {
+		refuse(mqttNotAuthorized, "a will needs an author")
+		return
+	}
 	assigned := ""
 	*clientID = connect.ClientID
 	if *clientID == "" {
@@ -323,6 +431,9 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 	}
 	c.state = state
 	defer sessions.release(*clientID, state)
+	if will != nil {
+		defer c.scheduleWill(sessions, *clientID, *will, connect.WillMessage.Props.WillDelay, author)
+	}
 	one, zero := byte(1), byte(0)
 	receiveMax := uint16(mqtt5ReceiveMaximum)
 	maxPacket := uint32(mqttwire.MaxBodyBytesV5 + 8)
@@ -352,6 +463,37 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 	c.restartFollow()
 	defer c.stopFollow()
 	c.readLoop(idle, expiry > 0)
+}
+
+// scheduleWill hands the connection's will to the store, unless a
+// DISCONNECT asked for none. It runs as the connection's author after the
+// Will Delay Interval, cut to the session's expiry, as MQTT 5 directs.
+func (c *mqtt5Conn) scheduleWill(sessions *mqtt5Store, clientID string, will core.Submission, willDelay *uint32, author *dispatch.Session) {
+	if c.willless {
+		return
+	}
+	c.stateMu.Lock()
+	delay := c.state.expiry
+	c.stateMu.Unlock()
+	if willDelay == nil {
+		delay = 0
+	} else {
+		delay = min(delay, time.Duration(*willDelay)*time.Second)
+	}
+	in := dispatch.Ingress{Source: c.in.Source, Session: author.Clone()}
+	run := func() {
+		defer in.Session.Close()
+		ctx, cancel := context.WithTimeout(sessions.ctx, mqtt5RequestTimeout)
+		defer cancel()
+		select {
+		case c.requests <- struct{}{}:
+			defer func() { <-c.requests }()
+		case <-ctx.Done():
+			return
+		}
+		_, _ = c.d.SubmitDecoded(ctx, in, will, time.Now())
+	}
+	sessions.scheduleWill(clientID, delay, run, in.Session.Close)
 }
 
 // reasonProps carries a reason string when the client accepts them.
@@ -407,6 +549,7 @@ func (c *mqtt5Conn) readLoop(idle time.Duration, expiring bool) {
 				return
 			}
 		case mqttwire.Disconnect:
+			c.willless = packet.Reason != mqttDisconnectWithWill
 			if e := packet.Props.SessionExpiry; e != nil {
 				if !expiring && *e > 0 {
 					c.disconnect(mqttProtocolError, "a session without expiry cannot gain one at DISCONNECT")

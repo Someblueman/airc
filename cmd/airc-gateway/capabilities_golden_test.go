@@ -20,7 +20,7 @@ var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 // goldenProtocols is every listener protocol name the gateway accepts, plus
 // an unknown one.
 var goldenProtocols = []string{
-	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect",
+	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect", "mqtt_websocket",
 	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited", "fifo", "uart",
 	"system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc",
 	"udp", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6",

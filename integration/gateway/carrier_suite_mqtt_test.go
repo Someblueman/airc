@@ -4,17 +4,23 @@ package gateway_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/coder/websocket"
 )
+
+// MQTT over WebSocket runs the same suite through /mqtt.
+var _ = registerSuiteCarriers(suiteCarrier{name: "mqtt_websocket", listener: config.Listener{Protocol: "mqtt_websocket", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}}, dial: dialMQTTWebSocketSuite, connectPassword: true, tls: true, session: true, wire: mqttSuiteWire(mqttWebSocketConnect)})
 
 const suiteMQTTTopic = "airc/send"
 
@@ -37,6 +43,33 @@ func dialMQTTSuite(t *testing.T, d suiteDial) (suiteClient, error) {
 	return &mqttSuiteClient{conn: conn}, nil
 }
 
+func dialMQTTWebSocketSuite(t *testing.T, d suiteDial) (suiteClient, error) {
+	t.Helper()
+	conn, err := mqttWebSocketConnect(t, d, fmt.Sprint("suite-ws-", mqttClientIDs.Add(1)))
+	if err != nil {
+		return nil, err
+	}
+	return &mqttSuiteClient{conn: conn}, nil
+}
+
+// mqttWebSocketConnect is mqttConnect over a WebSocket to /mqtt.
+func mqttWebSocketConnect(t *testing.T, d suiteDial, clientID string) (net.Conn, error) {
+	t.Helper()
+	scheme := "ws"
+	transport := &http.Transport{}
+	if d.tls != nil {
+		scheme, transport.TLSClientConfig = "wss", d.tls.Clone()
+	}
+	t.Cleanup(transport.CloseIdleConnections)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, scheme+"://"+d.address+"/mqtt", &websocket.DialOptions{HTTPClient: &http.Client{Transport: transport}, Subprotocols: []string{"mqtt"}})
+	if err != nil {
+		return nil, err
+	}
+	return mqttHandshake(websocket.NetConn(context.Background(), ws, websocket.MessageBinary), d, clientID)
+}
+
 // mqttConnect sends CONNECT (clean session, the password if any) and
 // returns the connection once CONNACK accepts it.
 func mqttConnect(t *testing.T, d suiteDial, clientID string) (net.Conn, error) {
@@ -45,6 +78,11 @@ func mqttConnect(t *testing.T, d suiteDial, clientID string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	return mqttHandshake(conn, d, clientID)
+}
+
+// mqttHandshake is mqttConnect on an open connection.
+func mqttHandshake(conn net.Conn, d suiteDial, clientID string) (net.Conn, error) {
 	body := mqttString([]byte{0, 4, 'M', 'Q', 'T', 'T', 4, 0x02, 0, 30}, clientID)
 	if d.password != "" {
 		body[7] = 0xc2
@@ -95,8 +133,13 @@ func peerClosed(err error) bool {
 }
 
 // mqttSuiteWire covers MQTT's own packets: QoS 0, client ID takeover,
-// and closing without a PUBACK for each refused packet.
-func mqttSuiteWire(t *testing.T, e *suiteEnv) {
+// and closing without a PUBACK for each refused packet, connecting with
+// connect.
+func mqttSuiteWire(connect func(*testing.T, suiteDial, string) (net.Conn, error)) func(*testing.T, *suiteEnv) {
+	return func(t *testing.T, e *suiteEnv) { mqttSuiteWireWith(t, e, connect) }
+}
+
+func mqttSuiteWireWith(t *testing.T, e *suiteEnv, connect func(*testing.T, suiteDial, string) (net.Conn, error)) {
 	t.Run("qos0", func(t *testing.T) {
 		// QoS 0 is admitted at most once without an acknowledgement, and
 		// packets are handled in order, so a PINGRESP follows the admission.
@@ -111,7 +154,7 @@ func mqttSuiteWire(t *testing.T, e *suiteEnv) {
 		// A connection with an existing client ID replaces the old one
 		// before CONNACK; its duplicate publication is acknowledged without
 		// a second delivery.
-		first, err := mqttConnect(t, suiteDial{address: e.address}, "wire-client")
+		first, err := connect(t, suiteDial{address: e.address}, "wire-client")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +163,7 @@ func mqttSuiteWire(t *testing.T, e *suiteEnv) {
 		payload := string(sendBody(t, id, "#wire", text, e.guest("wire"), ""))
 		mqttWrite(t, first, mqttPublication(7, suiteMQTTTopic, payload, false))
 		mqttReply(t, first, []byte{0x40, 2, 0, 7})
-		replacement, err := mqttConnect(t, suiteDial{address: e.address}, "wire-client")
+		replacement, err := connect(t, suiteDial{address: e.address}, "wire-client")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -48,7 +48,7 @@ type carrierSpec struct {
 var carrierSpecs = []carrierSpec{
 	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
 	{"irc_websocket", 6689}, {"irc_connect", 6690},
-	{"grpc", 6684}, {"mqtt", 1883}, {"amqp", 5672}, {"stomp", 61613},
+	{"grpc", 6684}, {"mqtt", 1883}, {"mqtt_websocket", 8083}, {"amqp", 5672}, {"stomp", 61613},
 	{"coap_udp", 5683}, {"coap_tcp", 6685}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
 	{"http3", 6680}, // UDP, so it shares http's port number
 }

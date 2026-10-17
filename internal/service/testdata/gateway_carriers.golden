@@ -1,7 +1,7 @@
-supported: http,websocket,mcp_http,framed,unix,irc_websocket,irc_connect,grpc,mqtt,amqp,stomp,coap_udp,coap_tcp,zeromq,nng,udp,http3
+supported: http,websocket,mcp_http,framed,unix,irc_websocket,irc_connect,grpc,mqtt,mqtt_websocket,amqp,stomp,coap_udp,coap_tcp,zeromq,nng,udp,http3
 
 == plain
-CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,irc_websocket:6689,irc_connect:6690,grpc:6684,mqtt:1883,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,irc_websocket:6689,irc_connect:6690,grpc:6684,mqtt:1883,mqtt_websocket:8083,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
 {
   "version": 1,
   "realm": "default",
@@ -23,6 +23,7 @@ CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/l
     "irc_connect:6690",
     "grpc:6684",
     "mqtt:1883",
+    "mqtt_websocket:8083",
     "amqp:5672",
     "stomp:61613",
     "coap_udp:5683",
@@ -96,6 +97,13 @@ CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/l
       "operations": []
     },
     {
+      "id": "mqtt_websocket",
+      "protocol": "mqtt_websocket",
+      "address": "127.0.0.1:8083",
+      "enabled": true,
+      "operations": []
+    },
+    {
       "id": "amqp",
       "protocol": "amqp",
       "address": "127.0.0.1:5672",
@@ -148,7 +156,7 @@ CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/l
 }
 
 == tls_access
-CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+tls:6683,unix:/var/lib/airc/gateway.sock,irc_websocket+tls:6689,irc_connect+tls:6690,grpc+tls:6684,mqtt+tls:1883,amqp+tls:5672,stomp+tls:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688,http3+tls:6680
+CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+tls:6683,unix:/var/lib/airc/gateway.sock,irc_websocket+tls:6689,irc_connect+tls:6690,grpc+tls:6684,mqtt+tls:1883,mqtt_websocket+tls:8083,amqp+tls:5672,stomp+tls:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688,http3+tls:6680
 {
   "version": 1,
   "realm": "default",
@@ -173,6 +181,7 @@ CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+
     "irc_connect+tls:6690",
     "grpc+tls:6684",
     "mqtt+tls:1883",
+    "mqtt_websocket+tls:8083",
     "amqp+tls:5672",
     "stomp+tls:61613",
     "coap_udp:5683",
@@ -272,6 +281,16 @@ CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+
       "password_file": "/etc/airc/access.token"
     },
     {
+      "id": "mqtt_websocket",
+      "protocol": "mqtt_websocket",
+      "address": "127.0.0.1:8083",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
       "id": "amqp",
       "protocol": "amqp",
       "address": "127.0.0.1:5672",
@@ -345,7 +364,7 @@ CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+
 }
 
 == unix
-CARRIERS=irc:/run/airc/irc.sock,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,irc_websocket:6689,irc_connect:6690,grpc:6684,mqtt:1883,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+CARRIERS=irc:/run/airc/irc.sock,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,irc_websocket:6689,irc_connect:6690,grpc:6684,mqtt:1883,mqtt_websocket:8083,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
 {
   "version": 1,
   "realm": "default",
@@ -367,6 +386,7 @@ CARRIERS=irc:/run/airc/irc.sock,http:6680,websocket:6681,mcp_http:6682,framed:66
     "irc_connect:6690",
     "grpc:6684",
     "mqtt:1883",
+    "mqtt_websocket:8083",
     "amqp:5672",
     "stomp:61613",
     "coap_udp:5683",
@@ -436,6 +456,13 @@ CARRIERS=irc:/run/airc/irc.sock,http:6680,websocket:6681,mcp_http:6682,framed:66
       "id": "mqtt",
       "protocol": "mqtt",
       "address": "127.0.0.1:1883",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "mqtt_websocket",
+      "protocol": "mqtt_websocket",
+      "address": "127.0.0.1:8083",
       "enabled": true,
       "operations": []
     },

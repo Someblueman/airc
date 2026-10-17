@@ -75,6 +75,7 @@ var owners = map[string]owner{
 	"coap_tcp":          stream{serve: serveCoAPTCP}.start,
 	"coaps_tcp":         stream{alpn: coapALPN, serve: serveCoAPTCP}.start,
 	"mqtt":              stream{alpn: noALPN, serve: serveMQTT}.start,
+	"mqtt_websocket":    stream{http: mqttWebSocketServer}.start,
 	"amqp":              stream{alpn: noALPN, selfBounded: true, serve: serveAMQP}.start,
 	"stomp":             stream{alpn: noALPN, selfBounded: true, serve: serveSTOMP}.start,
 	"syslog_tls":        stream{selfBounded: true, serve: serveSyslog}.start,
@@ -301,6 +302,10 @@ func serveNNG(ctx context.Context, s served) error {
 
 func serveMQTT(ctx context.Context, s served) error {
 	return adapter.ServeMQTT(ctx, s.listener, s.d, s.requests, *s.l.MQTT)
+}
+
+func mqttWebSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, func(), error) {
+	return adapter.MQTTWebSocketServer(o.work, d, o.requests, *l.MQTT, l.AllowedOrigins)
 }
 
 func serveAMQP(ctx context.Context, s served) error {

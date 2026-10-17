@@ -28,6 +28,19 @@ type Session struct {
 
 func NewSession() *Session { return &Session{} }
 
+// Clone is a new session with s's identified author and admission, for
+// work that outlives s's connection, such as an MQTT will.
+func (s *Session) Clone() *Session {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := &Session{credential: s.credential, admitted: s.admitted}
+	if s.author != nil {
+		author := *s.author
+		c.author = &author
+	}
+	return c
+}
+
 // Close forgets the connection's identified author and admission.
 func (s *Session) Close() {
 	if s == nil {

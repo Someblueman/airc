@@ -195,6 +195,7 @@ var transports = []Transport{
 	{Name: "zeromq", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSForbidden, Authors: RequestAuthors, blocks: []block{localREPBlock}},
 	{Name: "nng", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSForbidden, Authors: RequestAuthors, blocks: []block{localREPBlock}},
 	{Name: "mqtt", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors, blocks: []block{mqttBlock}, defaults: mqttDefaults},
+	{Name: "mqtt_websocket", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Origins: true, Authors: RequestAuthors, blocks: []block{mqttBlock}, defaults: mqttDefaults},
 	{Name: "mqtt_sn", Kind: Packet, Network: "udp", Address: DatagramPort, TLS: TLSForbidden, Authors: RequestAuthors, blocks: []block{mqttSNBlock}},
 	{Name: "amqp", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors, blocks: []block{amqpBlock}, defaults: amqpDefaults},
 	{Name: "stomp", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors, blocks: []block{stompBlock}, defaults: stompDefaults},

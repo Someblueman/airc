@@ -9,8 +9,9 @@ import (
 
 // The MQTT 5 profile: QoS 0 and 1 in both directions, request/response
 // (Response Topic, Correlation Data), subscriptions with no wildcards, and
-// sessions that outlive a connection (Clean Start, Session Expiry Interval).
-// Retained messages, wills, topic aliases, shared subscriptions,
+// sessions that outlive a connection (Clean Start, Session Expiry Interval),
+// and wills, which the service runs as contract requests.
+// Retained messages, topic aliases, shared subscriptions,
 // subscription identifiers and enhanced authentication are refused, and
 // CONNACK says so. As for 3.1.1, parsing authenticates and admits nothing.
 
@@ -280,6 +281,15 @@ func (f *fields) properties(allowed map[byte]bool) (Properties, error) {
 	return p, nil
 }
 
+// WillMessage is a CONNECT's will: what the server publishes when the
+// connection ends without a normal DISCONNECT.
+type WillMessage struct {
+	Topic, Payload string
+	QoS            byte
+	Retain         bool
+	Props          Properties
+}
+
 // decodeConnectV5 reads an MQTT 5 CONNECT body after its protocol level.
 func decodeConnectV5(body []byte) (Packet, error) {
 	p := Packet{Kind: Connect, Version: 5}
@@ -306,12 +316,13 @@ func decodeConnectV5(body []byte) (Packet, error) {
 		return Packet{}, ErrClientID
 	}
 	if p.Will {
-		// Read whole so the framing is checked; the service refuses wills.
-		if _, err := f.properties(willProperties); err != nil {
+		w := &WillMessage{QoS: flags >> 3 & 3, Retain: flags&0x20 != 0}
+		if w.Props, err = f.properties(willProperties); err != nil {
 			return Packet{}, err
 		}
-		_ = f.utf8text(MaxTopicBytes)
-		_ = f.binary(MaxPayloadBytes)
+		w.Topic = f.utf8text(MaxTopicBytes)
+		w.Payload = string(f.binary(MaxPayloadBytes))
+		p.WillMessage = w
 	}
 	if flags&0x80 != 0 {
 		p.Username = f.utf8text(MaxCredentialBytes)

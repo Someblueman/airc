@@ -54,7 +54,7 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	for spec, message := range map[string]string{
-		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, irc_websocket, irc_connect, grpc, mqtt, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp, http3`,
+		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, irc_websocket, irc_connect, grpc, mqtt, mqtt_websocket, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp, http3`,
 		"http,http=81":      "listed twice",
 		"http=0":            "port 1-65535",
 		"http=70000":        "port 1-65535",
@@ -85,7 +85,7 @@ func TestEachListedCarrierParses(t *testing.T) {
 	if got := SupportedCarriers(); len(got) != len(carrierSpecs) {
 		t.Fatalf("supported %v", got)
 	}
-	for _, name := range []string{"mqtt", "amqp", "stomp", "grpc", "coap_udp", "coap_tcp", "zeromq", "nng", "udp"} {
+	for _, name := range []string{"mqtt", "mqtt_websocket", "amqp", "stomp", "grpc", "coap_udp", "coap_tcp", "zeromq", "nng", "udp"} {
 		if !slices.Contains(SupportedCarriers(), name) {
 			t.Errorf("%s is not offered", name)
 		}
@@ -102,7 +102,7 @@ func TestEachListedCarrierParses(t *testing.T) {
 	}
 	for _, l := range loaded.Listeners {
 		switch l.Protocol {
-		case "mqtt":
+		case "mqtt", "mqtt_websocket":
 			if len(l.MQTT.Routes) != 1 || l.MQTT.Routes[0].Topic != gwconfig.DefaultMQTTTopic {
 				t.Errorf("mqtt routes %+v", l.MQTT.Routes)
 			}
