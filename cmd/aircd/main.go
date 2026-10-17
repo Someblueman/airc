@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/atomicfile"
+	"github.com/Someblueman/airc/internal/bytesize"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
@@ -26,7 +27,8 @@ func main() {
 	gatewayFile := flags.String("gateway-token-file", "", "let a gateway presenting this owner-only credential assert its clients' real sources (WEBIRC)")
 	logFile := flags.String("log-file", "", "bounded log file (5 MiB plus one backup)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
-	history := flags.Int("history", 0, "number of recent messages to retain in memory")
+	history := flags.Int("history", 0, "maximum recent messages to retain in memory (0 disables history; at most 10000000)")
+	historyMemory := flags.String("history-memory", "1GiB", "approximate memory the retained messages may use; the oldest are dropped first")
 	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
 	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
@@ -69,8 +71,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "--outbound-bytes must be between 1 and 16777216")
 		os.Exit(2)
 	}
-	if *history < 0 || *history > 10000 {
-		fmt.Fprintln(os.Stderr, "--history must be between 0 and 10000")
+	if *history < 0 || *history > 10_000_000 {
+		fmt.Fprintln(os.Stderr, "--history must be between 0 and 10000000")
+		os.Exit(2)
+	}
+	historyBytes, err := bytesize.Parse(*historyMemory)
+	if err != nil || historyBytes < 1<<20 {
+		fmt.Fprintln(os.Stderr, "--history-memory must be a size of at least 1MiB, such as 512MiB or 2GiB")
 		os.Exit(2)
 	}
 	transport, accessToken, err := serverTransport(*tlsCert, *tlsKey, *accessFile, *unixPath)
@@ -135,7 +142,7 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)

@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -18,30 +19,47 @@ func (s *Server) historyTarget(target string) (string, error) {
 	return "", errors.New("history target must be a channel, nickname, inbox or conversation")
 }
 
-// Search scans the same finite ring as history. No second index retains pruned messages.
-func (h *historyRing) search(target, after, query, from string, limit int) ([]Message, string) {
-	cursor := -1
-	if after != "*" {
-		index, found := h.positions[after]
-		if !found {
-			return nil, historyExpired
-		}
-		cursor = (index - h.start + h.limit) % h.limit
+// search pages through the retained window like since, matching a substring
+// of message bodies and optionally a sender. It reads at most searchChunk
+// messages between calls to yield, which releases the server lock, so a
+// search of the whole window never stalls the server; positions are stable,
+// so the scan continues where it stopped.
+func (h *historyRing) search(target, after, query, from string, limit int, yield func()) ([]Message, string) {
+	start, found := h.start(after)
+	if !found {
+		return nil, historyExpired
 	}
 	matcher := newSearchText(query)
-	messages := make([]Message, 0, min(limit, h.size))
-	for i := cursor + 1; i < h.size; i++ {
-		message := h.at(i)
-		if target != "*" && !h.matchesAt(i, target) || from != "*" && !strings.EqualFold(message.From, from) || !matcher.contains(message.Body) {
-			continue
-		}
-		if len(messages) == limit {
+	messages := make([]Message, 0, min(limit, 64))
+	for {
+		read, done, more := 0, true, false
+		h.forward(h.selectTarget(target), start, func(p uint64, e *entry) bool {
+			if read == searchChunk {
+				start, done = p, false
+				return false
+			}
+			read++
+			if from != "*" && !strings.EqualFold(e.From, from) || !matcher.contains(e.Body) {
+				return true
+			}
+			if len(messages) == limit {
+				more = true
+				return false
+			}
+			messages = append(messages, e.Message)
+			return true
+		})
+		if more {
 			return messages, historyMore
 		}
-		messages = append(messages, message)
+		if done {
+			return messages, historyOK
+		}
+		yield()
 	}
-	return messages, historyOK
 }
+
+const searchChunk = 4096
 
 func (s *Server) searchLocked(client *session, command protocol.Command) {
 	target, _ := command.Param(0)
@@ -61,7 +79,11 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 			return
 		}
 	}
-	messages, status := s.history.search(selected, after, command.Trailing, from, limit)
+	messages, status := s.history.search(selected, after, command.Trailing, from, limit, func() {
+		s.mu.Unlock()
+		runtime.Gosched() // let waiting goroutines take the lock
+		s.mu.Lock()
+	})
 	for _, message := range messages {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}

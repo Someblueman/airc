@@ -185,8 +185,8 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}
 	params := []string{target, status}
-	if s.history.size > 0 {
-		cursor := s.history.at(s.history.size - 1).ID
+	if newest, ok := s.history.last(); ok {
+		cursor := newest.ID
 		if status == historyMore || status == historyExpired {
 			if len(messages) > 0 {
 				cursor = messages[len(messages)-1].ID

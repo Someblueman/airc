@@ -78,7 +78,7 @@ func FuzzHistoryRetentionAndPagination(f *testing.F) {
 						key = "guest:" + strings.ToLower(want.From) + ":" + want.RequestID
 					}
 					at, found := h.requests[key]
-					if !found || h.items[at].ID != want.ID {
+					if !found || h.get(at) == nil || h.get(at).ID != want.ID {
 						t.Fatal("request index diverged")
 					}
 				}

@@ -23,12 +23,12 @@ func (s *Server) retryRequestLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "RETRY requires history and a valid request ID")
 		return
 	}
-	index, found := s.history.requests[requestKey(client.client.Nick, client.accountID, id)]
-	if !found {
+	e := s.history.request(requestKey(client.client.Nick, client.accountID, id))
+	if e == nil {
 		s.numericLocked(client, "488", nil, "request is not retained; delivery is unknown; inspect history before deciding to send again")
 		return
 	}
-	m := s.history.items[index]
+	m := e.Message
 	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
 }
 
@@ -41,11 +41,11 @@ func (s *Server) retryLocked(client *session, command protocol.Command, target, 
 		s.numericLocked(client, "461", nil, "request ID requires 1-64 letters/digits/-/_, history, and one message target")
 		return true
 	}
-	index, found := s.history.requests[requestKey(client.client.Nick, client.accountID, id)]
-	if !found {
+	e := s.history.request(requestKey(client.client.Nick, client.accountID, id))
+	if e == nil {
 		return false
 	}
-	old := s.history.items[index]
+	old := e.Message
 	replyTo, reaction := "", ""
 	if parent != nil {
 		replyTo = parent.ID

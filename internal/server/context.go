@@ -32,11 +32,8 @@ func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 	var all []Message
 	participants := map[string]string{}
 	room := ""
-	for i := 0; i < s.history.size; i++ {
-		m := s.history.at(i)
-		if m.ID != root && m.ThreadID != root {
-			continue
-		}
+	s.history.forward(s.history.selectTarget("thread:"+root), 0, func(_ uint64, e *entry) bool {
+		m := e.Message
 		all = append(all, m)
 		participants[nickKey(m.From)] = m.From
 		if protocol.IsChannel(m.Target) {
@@ -44,7 +41,8 @@ func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 		} else {
 			participants[nickKey(m.Target)] = m.Target
 		}
-	}
+		return true
+	})
 	// Prioritize the triggering message and root, then the newest retained replies.
 	selected := map[string]bool{}
 	for _, id := range []string{r.ID, root} {

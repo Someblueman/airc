@@ -54,14 +54,14 @@ func (s *Server) RestoreProfiles(path string) error {
 		card.State, card.Note, card.ExpiresAt, card.Connected = "unknown", "", time.Time{}, false
 		loaded[key] = card
 	}
-	for i := 0; i < s.history.size; i++ {
-		message := s.history.at(i)
-		key := nickKey(message.From)
-		if card, ok := loaded[key]; ok && message.Timestamp.After(card.LastSeen) {
-			card.LastSeen = message.Timestamp
+	s.history.each(func(e *entry) bool {
+		key := nickKey(e.From)
+		if card, ok := loaded[key]; ok && e.Timestamp.After(card.LastSeen) {
+			card.LastSeen = e.Timestamp
 			loaded[key] = card
 		}
-	}
+		return true
+	})
 	s.directory, s.profilesAt = loaded, path
 	return nil
 }

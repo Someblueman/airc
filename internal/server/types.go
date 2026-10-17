@@ -18,7 +18,8 @@ const (
 	maxConnections       = 1024
 	maxOutboundQueue     = 4096
 	defaultOutboundQueue = 2048
-	maxHistoryMessages   = 10000
+	maxHistoryMessages   = 10_000_000
+	defaultHistoryBytes  = 1 << 30
 	maxChannelsPerClient = 64
 	maxTotalChannels     = 1024
 )
@@ -31,8 +32,11 @@ type Config struct {
 	OutboundQueue       int
 	OutboundBytes       int // per-connection queued and in-flight bytes; default 2 MiB, maximum 16 MiB
 	HistoryLimit        int
-	ReadTimeout         time.Duration
-	PingInterval        time.Duration
+	// HistoryBytes bounds the memory the retained window uses, approximately;
+	// the oldest messages are dropped first. Default 1 GiB.
+	HistoryBytes int64
+	ReadTimeout  time.Duration
+	PingInterval time.Duration
 	// MaxPendingPerAddress caps connections from one non-loopback address that
 	// have not finished registering. Zero means a quarter of MaxConnections,
 	// but at least 4. Loopback and Unix-socket peers are never limited.

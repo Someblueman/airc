@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 )
 
@@ -50,4 +51,46 @@ func BenchmarkHistoryAddWithQuota(b *testing.B) {
 		add(next)
 		next++
 	}
+}
+
+// BenchmarkHistoryFullWindow reads a 1 GiB window (about 1.2 million
+// messages from 500 agents in 20 rooms), the default bound, and shows that
+// reads cost the page they return rather than the window.
+func BenchmarkHistoryFullWindow(b *testing.B) {
+	h := newHistoryWindow(maxHistoryMessages, defaultHistoryBytes)
+	fillWindow(&h, 1_250_000, 300)
+	newest, _ := h.last()
+	middle := h.at(h.size / 2).ID
+	b.Logf("window: %d messages, %d MiB", h.size, h.bytes>>20)
+	runtime.GC() // measure steady state, not the collection after the fill
+	for _, query := range []struct{ name, target, after string }{
+		{"RecentRoom", "#room-3", ""},
+		{"RecentInbox", "@agent-42", ""},
+		{"EmptyInbox", "@absent", ""},
+		{"CaughtUpRoom", "#room-3", newest.ID},
+		{"RoomFromMiddle", "#room-3", middle},
+		{"InboxFromMiddle", "@agent-42", middle},
+	} {
+		b.Run(query.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				h.since(query.target, query.after, 50)
+			}
+		})
+	}
+	b.Run("SearchWholeWindow", func(b *testing.B) {
+		chunks := 0
+		for b.Loop() {
+			h.search("*", "*", "no such text", "*", 50, func() { chunks++ })
+		}
+		b.ReportMetric(float64(chunks)/float64(b.N), "yields/op")
+	})
+	b.Run("Add", func(b *testing.B) {
+		b.ReportAllocs()
+		i := 2_000_000
+		for b.Loop() {
+			h.add(Message{ID: fmt.Sprintf("%032x", i), Seq: uint64(i), From: "agent-1", Target: "#room-1", Body: "@agent-2 status: tests pass"})
+			i++
+		}
+	})
 }

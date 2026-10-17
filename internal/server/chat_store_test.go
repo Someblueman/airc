@@ -54,7 +54,7 @@ func TestQuotaRestorePreservesQuietRoomsAndRetryIndexes(t *testing.T) {
 			t.Fatalf("indexes/quotas: size=%d positions=%d retries=%d", h.size, len(h.positions), len(h.requests))
 		}
 		for key, index := range h.requests {
-			if requestKey(h.items[index].From, h.items[index].AccountID, h.items[index].RequestID) != key {
+			if m := h.get(index); m == nil || requestKey(m.From, m.AccountID, m.RequestID) != key {
 				t.Fatal("stale retry index")
 			}
 		}

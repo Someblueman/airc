@@ -27,7 +27,7 @@ func (s *Server) RestoreHistory(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create history directory: %w", err)
 	}
-	messages, dirty, err := readHistoryFile(path, s.cfg.HistoryLimit, s.chat.Rooms)
+	messages, dirty, err := readHistoryFile(path, s.cfg.HistoryLimit, s.cfg.HistoryBytes, s.chat.Rooms)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (s *Server) RestoreHistory(path string) error {
 
 // readHistoryFile applies the current bounded eviction policy while streaming
 // the archive. dirty reports discarded or unreadable lines to compact away.
-func readHistoryFile(path string, limit int, quotas map[string]roomSettings) (messages []Message, dirty bool, err error) {
+func readHistoryFile(path string, limit int, maxBytes int64, quotas map[string]roomSettings) (messages []Message, dirty bool, err error) {
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, false, nil
@@ -73,7 +73,7 @@ func readHistoryFile(path string, limit int, quotas map[string]roomSettings) (me
 		return nil, false, fmt.Errorf("open history file: %w", err)
 	}
 	defer file.Close()
-	ring := newHistory(limit)
+	ring := newHistoryWindow(limit, maxBytes)
 	ring.quotas = quotas
 	seen := 0
 	scanner := bufio.NewScanner(file)
@@ -93,9 +93,10 @@ func readHistoryFile(path string, limit int, quotas map[string]roomSettings) (me
 	if err := scanner.Err(); err != nil {
 		return nil, false, fmt.Errorf("read history file: %w", err)
 	}
-	for i := 0; i < ring.size; i++ {
-		messages = append(messages, ring.at(i))
-	}
+	ring.each(func(e *entry) bool {
+		messages = append(messages, e.Message)
+		return true
+	})
 	// A crash can leave the last record without its newline; the next append
 	// would then share its line and both would be unreadable after a restart.
 	if info, err := file.Stat(); err == nil && info.Size() > 0 {
@@ -167,10 +168,11 @@ func (s *Server) compactHistoryLocked() error {
 	if err != nil {
 		return err
 	}
-	messages := make([]Message, s.history.size)
-	for i := range messages {
-		messages[i] = s.history.at(i)
-	}
+	messages := make([]Message, 0, s.history.size)
+	s.history.each(func(e *entry) bool {
+		messages = append(messages, e.Message)
+		return true
+	})
 	path, old := s.histPath, s.histFile
 	s.mu.Unlock()
 	err = rewriteHistoryFile(path, messages, s.cfg.Sync)
