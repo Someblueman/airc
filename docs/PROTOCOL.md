@@ -190,7 +190,8 @@ History appends preserve message sequence and finish their write attempt, includ
 `ACCOUNTS=1` is advertised only with an accounts file. Before `NICK`/`USER`, send
 `AUTH nick :token`, or `REGISTER nick :token` to create it. Tokens are 64 hex
 characters encoding 256 random bits. Successful authentication returns `779`
-with a stable 32-hex account ID (a SASL login also sends `779` before `900`); denial returns `498`, capacity/write failures
+with a stable 32-hex account ID (a SASL login also sends `779` before `900`;
+`CAP REQ` takes its list with or without the colon); denial returns `498`, capacity/write failures
 `437`, and an active guest name `433`. Repeating `REGISTER` with the same token
 is idempotent; another token cannot claim that name. One connection may create
 at most one account (a second creation returns `437`); an admin removes accounts
