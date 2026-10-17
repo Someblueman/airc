@@ -119,7 +119,7 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, IdleSessions: 128, Waits: 256, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 4096, Sessions: 256, SessionsPerAuthor: 4, IdleSessions: 512, Waits: 1024, Watches: 64, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {

@@ -18,8 +18,10 @@ import (
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/atomicfile"
+	"github.com/Someblueman/airc/internal/bytesize"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/retention"
 	"github.com/Someblueman/airc/internal/service"
 )
 
@@ -147,6 +149,7 @@ type serviceInstallOptions struct {
 	binary, listen, unix, cert, key, access string
 	sync                                    string
 	history, connections, messageSize       int
+	historyMemory, retain, retainSize       string
 	gateway, gatewayBinary                  string
 }
 
@@ -157,8 +160,11 @@ func (o *serviceInstallOptions) flags(fs *flag.FlagSet) {
 	fs.StringVar(&o.cert, "tls-cert", "", "TLS certificate chain PEM")
 	fs.StringVar(&o.key, "tls-key", "", "owner-only TLS private key PEM")
 	fs.StringVar(&o.access, "access-token-file", "", "owner-only connection credential")
-	fs.IntVar(&o.history, "history", 1000, "retained messages (1-10000), persisted on disk")
-	fs.IntVar(&o.connections, "max-connections", 512, "simultaneous clients (1-1024)")
+	fs.IntVar(&o.history, "history", 10_000_000, "most messages kept in memory (1-10000000); --history-memory usually binds first")
+	fs.StringVar(&o.historyMemory, "history-memory", "1GiB", "approximate memory for recent messages; older ones are read from the archive on disk")
+	fs.StringVar(&o.retain, "history-retain", retention.DefaultAge, "how long the archive keeps messages, such as 30d or 72h; 0 for no age limit")
+	fs.StringVar(&o.retainSize, "history-retain-size", retention.DefaultSize, "disk the history archive may use; 0 for no limit")
+	fs.IntVar(&o.connections, "max-connections", 4096, "simultaneous clients (1-16384)")
 	fs.IntVar(&o.messageSize, "max-message-size", 4096, "message body bytes (1-4096)")
 	fs.StringVar(&o.gateway, "gateway", "", "also run the bundled gateway with these carriers, e.g. http,websocket=8081 ("+strings.Join(service.SupportedCarriers(), ", ")+")")
 	fs.StringVar(&o.gatewayBinary, "gateway-binary", "", "airc-gateway executable (default: beside airc, then PATH)")
@@ -196,8 +202,26 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 	if _, err := atomicfile.ParseSync(o.sync); err != nil {
 		return c, fmt.Errorf("--sync: %w", err)
 	}
-	if o.history < 1 || o.history > 10000 || o.connections < 1 || o.connections > 1024 || o.messageSize < 1 || o.messageSize > 4096 {
+	if o.history < 1 || o.history > 10_000_000 || o.connections < 1 || o.connections > 16384 || o.messageSize < 1 || o.messageSize > 4096 {
 		return c, errors.New("invalid history, connection or message-size limit")
+	}
+	if o.historyMemory == "" {
+		o.historyMemory = "1GiB"
+	}
+	if memory, err := bytesize.Parse(o.historyMemory); err != nil || memory < 1<<20 {
+		return c, errors.New("--history-memory must be a size of at least 1MiB, such as 512MiB or 2GiB")
+	}
+	if o.retain == "" {
+		o.retain = retention.DefaultAge
+	}
+	if _, err := retention.ParseAge(o.retain); err != nil {
+		return c, fmt.Errorf("--history-retain: %w", err)
+	}
+	if o.retainSize == "" {
+		o.retainSize = retention.DefaultSize
+	}
+	if _, err := retention.ParseSize(o.retainSize); err != nil {
+		return c, fmt.Errorf("--history-retain-size: %w", err)
 	}
 	for _, ptr := range []*string{&o.unix, &o.cert, &o.key, &o.access} {
 		*ptr, err = absolutePath(*ptr)
@@ -235,7 +259,15 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 		}
 	}
 	c.Args = []string{"--listen", o.listen, "--history", strconv.Itoa(o.history), "--history-file", filepath.Join(dir, "history.jsonl"), "--admin-token-file", filepath.Join(dir, "admin.token"), "--max-connections", strconv.Itoa(o.connections), "--max-message-size", strconv.Itoa(o.messageSize), "--log-file", filepath.Join(dir, "service.log")}
-	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}, {"--sync", syncArgument(o.sync)}} {
+	// Defaults are left to the daemon, so a managed service follows them.
+	nonDefault := func(value, daemonDefault string) string {
+		if value == daemonDefault {
+			return ""
+		}
+		return value
+	}
+	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}, {"--sync", syncArgument(o.sync)},
+		{"--history-memory", nonDefault(o.historyMemory, "1GiB")}, {"--history-retain", nonDefault(o.retain, retention.DefaultAge)}, {"--history-retain-size", nonDefault(o.retainSize, retention.DefaultSize)}} {
 		if pair[1] != "" {
 			c.Args = append(c.Args, pair[0], pair[1])
 		}

@@ -64,35 +64,16 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 			continue
 		}
 		var messages []Message
-		status := historyOK
+		status, next := historyOK, ""
 		if t.After == "" {
 			messages = s.history.recent(selected[i], t.Limit)
 		} else {
-			start := 0
-			if t.After != "*" {
-				index, found := s.history.positions[t.After]
-				p.end.Gap = !found
-				if found {
-					start = (index-s.history.start+s.history.limit)%s.history.limit + 1
-				}
-			}
-			channel := protocol.IsChannel(selected[i])
-			for j := start; j < s.history.size; j++ {
-				// Most scanned records do not match. Read their selector fields
-				// in place, copying the full message only when retaining a hit.
-				m := &s.history.items[(s.history.start+j)%s.history.limit]
-				matches := m.Target == selected[i]
-				if !channel {
-					matches = s.history.matchesAt(j, selected[i])
-				}
-				if !matches || !r.IncludeOwn && strings.EqualFold(m.From, client.client.Nick) {
-					continue
-				}
-				if len(messages) == t.Limit {
-					status = historyMore
-					break
-				}
-				messages = append(messages, *m)
+			accept := func(e *entry) bool { return r.IncludeOwn || !strings.EqualFold(e.From, client.client.Nick) }
+			var found bool
+			messages, status, next, found = s.readAfterLocked(selected[i], t.After, t.Limit, accept)
+			if !found {
+				p.end.Gap = true
+				messages, status, next = s.windowPageLocked(selected[i], 0, t.Limit, accept, nil)
 			}
 		}
 		for _, m := range messages {
@@ -103,20 +84,18 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 			unique[m.ID] = m
 		}
 		p.end.Status = status
-		if s.history.size > 0 {
-			p.end.Cursor = s.history.at(s.history.size - 1).ID
+		if newest, ok := s.history.last(); ok {
+			p.end.Cursor = newest.ID
 		}
-		if status == historyMore && len(messages) > 0 {
-			p.end.Cursor = messages[len(messages)-1].ID
+		if status == historyMore {
+			p.end.Cursor = next
 		}
 	}
 	ordered := make([]Message, 0, len(unique))
 	for _, m := range unique {
 		ordered = append(ordered, m)
 	}
-	sort.Slice(ordered, func(i, j int) bool {
-		return (s.history.positions[ordered[i].ID]-s.history.start+s.history.limit)%s.history.limit < (s.history.positions[ordered[j].ID]-s.history.start+s.history.limit)%s.history.limit
-	})
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Seq < ordered[j].Seq })
 	if len(ordered) > r.MaxMessages {
 		ordered = ordered[:r.MaxMessages]
 	}

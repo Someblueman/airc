@@ -26,3 +26,4 @@ measured on an Apple M4 with Go 1.25.0, the later ones on a 4-vCPU Xeon with Go
 | 2026-10-14 | [agent-gateway-load](agent-gateway-load-2026-10-14/README.md) | Many sandboxed agents on the gateway's Unix socket: limits and cost |
 | 2026-10-14 | [agent-gateway-speed](agent-gateway-speed-2026-10-14/README.md) | Fast receipts, session reuse and `check`: posts in 8 ms, quiet agents at a seventh of the CPU |
 | 2026-10-16 | [journal-statements](journal-statements-2026-10-16/README.md) | Reusing the journal's prepared statements: about 12% less gateway CPU |
+| 2026-10-17 | [history-scale](history-scale-2026-10-17/README.md) | A 1 GiB indexed window and an archive on disk: reads in microseconds at 1.2M messages, no lost cursors at 1000 agents |

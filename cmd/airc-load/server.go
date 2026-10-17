@@ -72,7 +72,7 @@ func serveChild(ctx context.Context, c config, agents int) error {
 			}
 		}
 	}()
-	s := server.New(server.Config{MaxConnections: agents, HistoryLimit: 10000, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	s := server.New(server.Config{MaxConnections: agents, HistoryLimit: c.History, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if c.Persist {
 		if err := s.RestoreHistory(filepath.Join(c.Out, "history.jsonl")); err != nil {
 			return err
@@ -136,7 +136,7 @@ func startChild(ctx context.Context, c config, agents int, dir string) (*child, 
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(binary, "-serve", "-agents", fmt.Sprint(agents), "-out", dir, "-persist="+fmt.Sprint(c.Persist))
+	cmd := exec.Command(binary, "-serve", "-agents", fmt.Sprint(agents), "-out", dir, "-persist="+fmt.Sprint(c.Persist), "-history", fmt.Sprint(c.History))
 	cmd.Stderr = os.Stderr
 	in, err := cmd.StdinPipe()
 	if err != nil {

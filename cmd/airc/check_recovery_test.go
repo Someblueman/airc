@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -80,5 +81,38 @@ func TestSendCheckUsesBoundedInboxAndDoesNotEchoItsOwnPost(t *testing.T) {
 	}
 	if got := checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--json")); len(got) != 0 {
 		t.Fatalf("combined check did not save cursors: %v", got)
+	}
+}
+
+// A cursor older than the window resumes from the archive, which reads a
+// bounded amount per request. Pages of the agent's own messages show
+// nothing, but each check must still move the cursor on, so the next one
+// reaches the reply instead of reading the same stretch again.
+func TestCheckProgressesThroughArchivedHistoryWithNothingToShow(t *testing.T) {
+	agentEnv(t)
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	address := cliTestServerSetup(t, server.Config{HistoryLimit: 3, HistorySegmentBytes: 2048}, func(s *server.Server) error {
+		return s.RestoreHistory(path)
+	})
+	send(t, address, "writer", "#room", "before")
+	if got := checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--json")); fmt.Sprint(got) != "[before]" {
+		t.Fatalf("first check: %v", got)
+	}
+	own := make([]seedMessage, 200)
+	for i := range own {
+		own[i] = seedMessage{target: "#room", body: fmt.Sprint("own ", i)}
+	}
+	seedNativeMessages(t, address, "me", own)
+	send(t, address, "writer", "#room", "after")
+	var got []string
+	for range 100 {
+		out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--json")
+		got = append(got, checkBodies(t, out)...)
+		if !checkFooter(t, out).More {
+			break
+		}
+	}
+	if fmt.Sprint(got) != "[after]" {
+		t.Fatalf("checks through the archive showed %v", got)
 	}
 }

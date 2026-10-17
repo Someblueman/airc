@@ -146,7 +146,7 @@ func TestLoopbackAndUnixPeersAreNotAddressLimited(t *testing.T) {
 }
 
 func TestPendingAddressCapDefaults(t *testing.T) {
-	for max, want := range map[int]int{4: 4, 8: 4, 16: 4, 100: 25, 512: 128} {
+	for max, want := range map[int]int{4: 4, 8: 4, 16: 4, 100: 25, 512: 128, 4096: 128} {
 		if got := New(Config{MaxConnections: max}).cfg.MaxPendingPerAddress; got != want {
 			t.Errorf("MaxConnections %d: cap %d, want %d", max, got, want)
 		}

@@ -1,0 +1,98 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/atomicfile"
+)
+
+func TestZZScale(t *testing.T) {
+	dir := os.Getenv("ZZ_DIR")
+	if dir == "" {
+		t.Skip()
+	}
+	path := filepath.Join(dir, "history.jsonl")
+	cfg := Config{HistoryLimit: maxHistoryMessages, Sync: atomicfile.SyncNone}
+	s := New(cfg)
+	if err := s.RestoreHistory(path); err != nil {
+		t.Fatal(err)
+	}
+	if os.Getenv("ZZ_REUSE") != "" {
+		goto restart
+	}
+	{
+		body := strings.Repeat("status: tests pass, continuing with the next task ", 6)
+		start := time.Now()
+		_ = start
+		var first, inboxFirst Message
+		_, _ = first, inboxFirst
+		for i := range 3_000_000 {
+			target := fmt.Sprintf("#room-%d", i%20)
+			b := body
+			if i%10 == 0 {
+				target = fmt.Sprintf("agent-%d", (i+7)%500)
+			}
+			if i == 1_000_017 {
+				target, b = "#rare", "the only rare message"
+			}
+			m := post(s, fmt.Sprintf("agent-%d", i%500), target, b)
+			if i == 0 {
+				first = m
+			}
+			if i == 5 {
+				inboxFirst = m
+			}
+		}
+		t.Logf("wrote 3M in %v", time.Since(start))
+		for len(s.archive.unindexed()) > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		s.Shutdown(context.Background())
+	}
+restart:
+	runtime.GC()
+	files, _ := filepath.Glob(path + "*")
+	var total int64
+	for _, f := range files {
+		info, _ := os.Stat(f)
+		total += info.Size()
+	}
+	t.Logf("files %d, %d MiB on disk", len(files), total>>20)
+
+	before := heapInUse()
+	var start time.Time
+	start = time.Now()
+	s = New(cfg)
+	if err := s.RestoreHistory(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("restore: %v, window %d messages, %d MiB estimate, heap %d MiB", time.Since(start), s.history.size, s.history.bytes>>20, (heapInUse()-before)>>20)
+	t.Logf("unindexed after restore: %d of %d", len(s.archive.unindexed()), len(s.archive.sealed))
+	for len(s.archive.unindexed()) > 0 {
+		time.Sleep(50 * time.Millisecond)
+	}
+	for _, seg := range s.archive.sealed[:2] {
+		t.Logf("segment %d: last %d, keys %d, records %d", seg.first, seg.last, len(seg.keys), seg.records)
+	}
+	var firstID string
+	_ = readSegment(s.archive.sealed[0].path, 0, 1<<20, func(m Message, _, _ int64) bool { firstID = m.ID; return false })
+	for name, q := range map[string]struct{ target, after string }{
+		"dense room from the oldest cursor": {"#room-3", firstID},
+		"inbox from the oldest cursor":      {"@agent-12", firstID},
+		"rare room from the oldest cursor":  {"#rare", firstID},
+	} {
+		start = time.Now()
+		s.mu.Lock()
+		page, status, _, found := s.readAfterLocked(q.target, q.after, 50, nil)
+		s.mu.Unlock()
+		t.Logf("%s: %v, %d messages, %s, found %v", name, time.Since(start), len(page), status, found)
+	}
+	s.Shutdown(context.Background())
+}

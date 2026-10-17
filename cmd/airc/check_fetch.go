@@ -108,10 +108,15 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 				break
 			}
 			read.more = true
-			if len(page.messages) == 0 {
-				return checkBatch{}, errors.New("server returned more history without a message cursor")
+			// Continue from the server's cursor: reading the archive, it can
+			// pass messages that did not match, and may return none.
+			after = page.cursor
+			if after == "" && len(page.messages) > 0 {
+				after = page.messages[len(page.messages)-1].ID
 			}
-			after = page.messages[len(page.messages)-1].ID
+			if after == "" {
+				return checkBatch{}, errors.New("server returned more history without a cursor")
+			}
 			limit = min(c.settings.limit, c.settings.maxMessages+1-visible)
 			if pageNumber+1 < maxCheckPages {
 				read.more = false

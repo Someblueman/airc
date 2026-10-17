@@ -258,11 +258,14 @@ func (s *Server) conversationChannelLocked(target string) string {
 	if message, found := s.history.message(id); found {
 		return message.Target
 	}
-	for i := 0; i < s.history.size; i++ {
-		message := s.history.at(i)
-		if !replies && message.ThreadID == id || replies && message.ReplyTo == id {
-			return message.Target
-		}
+	key := "thread:" + id
+	if replies {
+		key = "child:" + id
 	}
-	return ""
+	channel := ""
+	s.history.forward(selection{lists: s.history.lists(key)}, 0, func(_ uint64, e *entry) bool {
+		channel = e.Target
+		return false
+	})
+	return channel
 }

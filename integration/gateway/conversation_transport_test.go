@@ -221,9 +221,14 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 	resume := r
 	resume.RequestID = "conversation-root-evicted-resume"
 	resume.Cursor = beforeResult.Page.Cursor
+	// The history file's archive still holds the cursor, so the thread
+	// resumes from it without a gap.
 	status, result = reactionHTTPCall(t, f, f.cred.token(t, resume, true))
-	if status != http.StatusOK || result.Page == nil || !result.Page.Gap {
-		t.Fatalf("evicted-root cursor did not report a gap: status=%d page=%+v", status, result.Page)
+	if status != http.StatusOK || result.Page == nil || result.Page.Gap {
+		t.Fatalf("evicted-root cursor did not resume from the archive: status=%d page=%+v", status, result.Page)
+	}
+	if ids := pageIDs(result.Page); !ids[direct.ID] || !ids[nested.ID] {
+		t.Fatalf("resumed thread lost a descendant: page=%+v", result.Page)
 	}
 }
 

@@ -62,10 +62,11 @@ func FuzzContextWireBudget(f *testing.F) {
 			t.Skip()
 		}
 		s, root := contextFixture(1+int(count%32), 0)
-		for i := 0; i < s.history.size; i++ {
+		s.history.each(func(e *entry) bool {
 			// Only change fixture bodies, leaving generated IDs/annotations intact.
-			s.history.items[s.history.positions[s.history.at(i).ID]].Body = text
-		}
+			e.Body = text
+			return true
+		})
 		s.chat.Pins["#room"] = []Message{s.history.at(0)}
 		fullEntries, _ := contextResponse(t, s, root, 1000, 0)
 		full, _ := referenceContextWire(fullEntries, root, 1<<20)

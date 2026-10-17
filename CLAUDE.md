@@ -11,7 +11,7 @@ go vet ./...
 GOTOOLCHAIN=go1.27.0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...  # @latest alone selects an older toolchain
 go test -race -count=1 -timeout 120m ./...  # full suite (~25 min); there is no CI, so run it before pushing
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
-go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
+go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem  # FullWindow fills 1 GiB
 ```
 
 ## Layout

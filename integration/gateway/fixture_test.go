@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -105,6 +106,16 @@ func fixtureRoot(t *testing.T) string {
 	return root
 }
 
+// memoryHistory holds the tests whose daemon keeps no history file, so a
+// cursor pushed out of its 32-message window is a gap; with a history file
+// the archive would resume it.
+var memoryHistory sync.Map
+
+func withoutHistoryFile(t *testing.T) {
+	memoryHistory.Store(t.Name(), true)
+	t.Cleanup(func() { memoryHistory.Delete(t.Name()) })
+}
+
 // startNative runs aircd on a Unix socket in root, which the caller owns, with
 // any extra flags, and stops it when the test ends.
 func startNative(t *testing.T, root string, administration bool, syncMode string, extra ...string) string {
@@ -116,6 +127,11 @@ func startNative(t *testing.T, root string, administration bool, syncMode string
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", syncMode, "--log-format", "json"}
+	if _, memory := memoryHistory.Load(t.Name()); memory {
+		// Drop --history-file and its path; accounts, which default to
+		// sitting beside it, keep their usual file.
+		args = append(slices.Delete(args, 4, 6), "--accounts-file", filepath.Join(root, "history.jsonl.accounts.json"))
+	}
 	if administration {
 		adminFile := filepath.Join(root, "admin.token")
 		if err := auth.CreateCredential(adminFile); err != nil {

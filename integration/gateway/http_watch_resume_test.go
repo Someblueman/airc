@@ -12,6 +12,7 @@ import (
 )
 
 func TestHTTPWatchQuietPollAndRetainedResume(t *testing.T) {
+	withoutHistoryFile(t) // an evicted cursor must be a gap, not an archive read
 	f := gatewayHTTPFixture(t, true)
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}}
 	read := func() backend.HistoryPage {

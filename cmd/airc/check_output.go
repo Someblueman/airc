@@ -150,7 +150,10 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 			}
 			cursors[read.target.key] = message.ID
 		}
-		if complete && !read.more && read.page.status != "more" && read.page.cursor != "" {
+		// A page's cursor follows every message it returned; with more to
+		// come it can also pass archived messages that did not match, so
+		// the next check does not read them again.
+		if complete && read.page.cursor != "" && (read.page.status == "more" || !read.more) {
 			cursors[read.target.key] = read.page.cursor
 		}
 	}

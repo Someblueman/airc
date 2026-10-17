@@ -12,8 +12,10 @@ import (
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/atomicfile"
+	"github.com/Someblueman/airc/internal/bytesize"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/retention"
 	"github.com/Someblueman/airc/internal/server"
 )
 
@@ -26,15 +28,18 @@ func main() {
 	gatewayFile := flags.String("gateway-token-file", "", "let a gateway presenting this owner-only credential assert its clients' real sources (WEBIRC)")
 	logFile := flags.String("log-file", "", "bounded log file (5 MiB plus one backup)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
-	history := flags.Int("history", 0, "number of recent messages to retain in memory")
-	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
+	history := flags.Int("history", 0, "maximum recent messages to retain in memory (0 disables history; at most 10000000)")
+	historyMemory := flags.String("history-memory", "1GiB", "approximate memory the retained messages may use; the oldest are dropped first")
+	historyRetain := flags.String("history-retain", retention.DefaultAge, "how long the history file's archive keeps messages, such as 30d or 72h; 0 keeps them until --history-retain-size")
+	historyRetainSize := flags.String("history-retain-size", retention.DefaultSize, "disk the history file and its archive may use; the oldest messages are deleted first; 0 means no limit")
+	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window)")
 	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
 	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file")
 	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
 	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
 	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
-	maxConnections := flags.Int("max-connections", 512, "maximum simultaneous clients")
+	maxConnections := flags.Int("max-connections", 4096, "maximum simultaneous clients (1-16384)")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
@@ -61,16 +66,31 @@ func main() {
 		fmt.Fprintln(os.Stderr, "--max-message-size must be between 1 and 4096")
 		os.Exit(2)
 	}
-	if *maxConnections < 1 || *maxConnections > 1024 {
-		fmt.Fprintln(os.Stderr, "--max-connections must be between 1 and 1024")
+	if *maxConnections < 1 || *maxConnections > 16384 {
+		fmt.Fprintln(os.Stderr, "--max-connections must be between 1 and 16384")
 		os.Exit(2)
 	}
 	if *outboundBytes < 1 || *outboundBytes > 16<<20 {
 		fmt.Fprintln(os.Stderr, "--outbound-bytes must be between 1 and 16777216")
 		os.Exit(2)
 	}
-	if *history < 0 || *history > 10000 {
-		fmt.Fprintln(os.Stderr, "--history must be between 0 and 10000")
+	if *history < 0 || *history > 10_000_000 {
+		fmt.Fprintln(os.Stderr, "--history must be between 0 and 10000000")
+		os.Exit(2)
+	}
+	historyBytes, err := bytesize.Parse(*historyMemory)
+	if err != nil || historyBytes < 1<<20 {
+		fmt.Fprintln(os.Stderr, "--history-memory must be a size of at least 1MiB, such as 512MiB or 2GiB")
+		os.Exit(2)
+	}
+	retainAge, err := retention.ParseAge(*historyRetain)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--history-retain:", err)
+		os.Exit(2)
+	}
+	retainSize, err := retention.ParseSize(*historyRetainSize)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--history-retain-size:", err)
 		os.Exit(2)
 	}
 	transport, accessToken, err := serverTransport(*tlsCert, *tlsKey, *accessFile, *unixPath)
@@ -92,8 +112,7 @@ func main() {
 	}
 
 	if *historyFile != "" && *history == 0 {
-		fmt.Fprintln(os.Stderr, "--history-file requires --history N")
-		os.Exit(2)
+		*history = 10_000_000 // the window is bounded by --history-memory
 	}
 	if *topicsFile == "" && *historyFile != "" {
 		*topicsFile = *historyFile + ".topics.json"
@@ -135,7 +154,7 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, HistoryRetain: retainAge, HistoryRetainBytes: retainSize, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)

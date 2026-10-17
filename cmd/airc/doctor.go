@@ -128,7 +128,15 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	} else {
 		fmt.Fprintf(stdout, "Client: %s\nServer: %s (connected: %t)\n", report.ClientVersion, report.Address, report.Connected)
 		if report.Server != nil {
-			fmt.Fprintf(stdout, "Daemon: %s, PID %d; clients %d/%d; retained messages %d/%d; history file: %t\n", report.Server.Version, report.Server.PID, report.Server.Connections, report.Server.MaxConnections, report.Server.HistorySize, report.Server.HistoryLimit, report.Server.HistoryFile)
+			fmt.Fprintf(stdout, "Daemon: %s, PID %d; clients %d/%d; retained messages %d", report.Server.Version, report.Server.PID, report.Server.Connections, report.Server.MaxConnections, report.Server.HistorySize)
+			if report.Server.HistoryMaxBytes > 0 {
+				fmt.Fprintf(stdout, " (%s of %s in memory)", readableBytes(report.Server.HistoryBytes), readableBytes(report.Server.HistoryMaxBytes))
+			}
+			fmt.Fprintf(stdout, "; history file: %t", report.Server.HistoryFile)
+			if report.Server.ArchiveBytes > 0 {
+				fmt.Fprintf(stdout, " (%s on disk)", readableBytes(report.Server.ArchiveBytes))
+			}
+			fmt.Fprintln(stdout)
 		}
 		var features []string
 		for key, value := range report.Features {
@@ -198,4 +206,17 @@ func printResources(out io.Writer, r processResources, label string) {
 	} else {
 		fmt.Fprintln(out, "; limit unknown (inspect/configure the launcher before starting the agent)")
 	}
+}
+
+// readableBytes rounds a byte count to its largest whole binary unit.
+func readableBytes(n int64) string {
+	for _, unit := range []struct {
+		name  string
+		scale int64
+	}{{"GiB", 1 << 30}, {"MiB", 1 << 20}, {"KiB", 1 << 10}} {
+		if n >= unit.scale {
+			return fmt.Sprintf("%.1f %s", float64(n)/float64(unit.scale), unit.name)
+		}
+	}
+	return fmt.Sprintf("%d bytes", n)
 }

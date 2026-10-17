@@ -18,31 +18,6 @@ func (s *Server) historyTarget(target string) (string, error) {
 	return "", errors.New("history target must be a channel, nickname, inbox or conversation")
 }
 
-// Search scans the same finite ring as history. No second index retains pruned messages.
-func (h *historyRing) search(target, after, query, from string, limit int) ([]Message, string) {
-	cursor := -1
-	if after != "*" {
-		index, found := h.positions[after]
-		if !found {
-			return nil, historyExpired
-		}
-		cursor = (index - h.start + h.limit) % h.limit
-	}
-	matcher := newSearchText(query)
-	messages := make([]Message, 0, min(limit, h.size))
-	for i := cursor + 1; i < h.size; i++ {
-		message := h.at(i)
-		if target != "*" && !h.matchesAt(i, target) || from != "*" && !strings.EqualFold(message.From, from) || !matcher.contains(message.Body) {
-			continue
-		}
-		if len(messages) == limit {
-			return messages, historyMore
-		}
-		messages = append(messages, message)
-	}
-	return messages, historyOK
-}
-
 func (s *Server) searchLocked(client *session, command protocol.Command) {
 	target, _ := command.Param(0)
 	rawLimit, _ := command.Param(1)
@@ -61,12 +36,22 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 			return
 		}
 	}
-	messages, status := s.history.search(selected, after, command.Trailing, from, limit)
+	matcher := newSearchText(command.Trailing)
+	accept := func(e *entry) bool {
+		return (from == "*" || strings.EqualFold(e.From, from)) && matcher.contains(e.Body)
+	}
+	// "*" is the start of the window; an older cursor continues from the archive.
+	messages, status, next, found := s.readAfterLocked(selected, after, limit, accept)
+	if !found {
+		messages, status = nil, historyExpired
+	}
 	for _, message := range messages {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}
 	params := []string{target, status}
-	if len(messages) > 0 {
+	if status == historyMore {
+		params = append(params, next)
+	} else if len(messages) > 0 {
 		params = append(params, messages[len(messages)-1].ID)
 	}
 	s.numericLocked(client, "761", params, "End of search")

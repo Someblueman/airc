@@ -90,28 +90,28 @@ type channelListing struct {
 // members, with retained history, or with a header. LIST only covers the first.
 func (s *Server) channelsLocked(client *session) {
 	known := map[string]*channelListing{}
-	entry := func(name string) *channelListing {
+	listingFor := func(name string) *channelListing {
 		if known[name] == nil {
 			known[name] = &channelListing{Name: name}
 		}
 		return known[name]
 	}
 	for name, members := range s.channels {
-		entry(name).Members = len(members)
+		listingFor(name).Members = len(members)
 	}
 	for name, t := range s.topics {
-		entry(name).Topic = t.Text
+		listingFor(name).Topic = t.Text
 	}
-	for i := 0; i < s.history.size; i++ {
-		message := s.history.at(i)
-		if !protocol.IsChannel(message.Target) {
+	for target, count := range s.history.counts {
+		if !protocol.IsChannel(target) {
 			continue
 		}
-		listing := entry(message.Target)
-		listing.Messages++
-		if message.Timestamp.After(listing.LastActivity) {
-			listing.LastActivity = message.Timestamp
-		}
+		listing := listingFor(target)
+		listing.Messages = count
+		s.history.backward(s.history.selectTarget(target), func(_ uint64, e *entry) bool {
+			listing.LastActivity = e.Timestamp
+			return false
+		})
 	}
 	names := slices.Sorted(maps.Keys(known))
 	for _, name := range names {

@@ -8,14 +8,6 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-func (h *historyRing) message(id string) (Message, bool) {
-	index, ok := h.positions[id]
-	if !ok {
-		return Message{}, false
-	}
-	return h.items[index], true
-}
-
 // conversation resolves a child ID to its root. Descendants remain readable
 // after a root is evicted, without keeping any extra history outside the ring.
 func (h *historyRing) conversation(target string) (string, error) {
@@ -29,11 +21,13 @@ func (h *historyRing) conversation(target string) (string, error) {
 		}
 		return target, nil
 	}
-	for i := 0; i < h.size; i++ {
-		message := h.at(i)
-		if !replies && message.ThreadID == id || replies && message.ReplyTo == id && message.Reaction == "" {
-			return target, nil
-		}
+	retained := false
+	h.forward(h.selectTarget(target), 0, func(uint64, *entry) bool {
+		retained = true
+		return false
+	})
+	if retained {
+		return target, nil
 	}
 	return "", errors.New("message or conversation is no longer retained")
 }
@@ -65,12 +59,16 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 			return
 		}
 		// Repeating a retained reaction from this nickname is idempotent.
-		for i := s.history.size - 1; i >= 0; i-- {
-			message := s.history.at(i)
-			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) && message.AccountID == client.accountID {
-				s.receiptLocked(client, message, !protocol.IsChannel(message.Target) && s.liveNickLocked(message.Target) == nil)
-				return
+		var repeated *Message
+		s.history.backward(selection{lists: s.history.lists("child:" + id)}, func(_ uint64, e *entry) bool {
+			if e.Reaction == command.Trailing && strings.EqualFold(e.From, client.client.Nick) && e.AccountID == client.accountID {
+				repeated = &e.Message
 			}
+			return repeated == nil
+		})
+		if repeated != nil {
+			s.receiptLocked(client, *repeated, !protocol.IsChannel(repeated.Target) && s.liveNickLocked(repeated.Target) == nil)
+			return
 		}
 	}
 	command.Params[0] = target

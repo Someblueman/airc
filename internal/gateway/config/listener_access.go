@@ -15,7 +15,7 @@ type ListenerLimits struct {
 	RequestsPerMinute int `json:"requests_per_minute,omitempty"`
 	// AuthorRequestsPerMinute is the per-author request rate (default 1200).
 	AuthorRequestsPerMinute int `json:"author_requests_per_minute,omitempty"`
-	// Connections caps this listener's open connections (default 256);
+	// Connections caps this listener's open connections (default 1024);
 	// the global session limit still applies.
 	Connections int `json:"connections,omitempty"`
 	// ConnectionsPerSource caps one client address's open connections
@@ -27,7 +27,7 @@ type ListenerLimits struct {
 const (
 	DefaultRequestsPerMinute       = 2400
 	DefaultAuthorRequestsPerMinute = 1200
-	DefaultConnections             = 256
+	DefaultConnections             = 1024
 	DefaultConnectionsPerSource    = 16
 )
 

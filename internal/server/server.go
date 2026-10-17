@@ -19,7 +19,7 @@ import (
 
 func New(cfg Config) *Server {
 	if cfg.MaxConnections <= 0 || cfg.MaxConnections > maxConnections {
-		cfg.MaxConnections = 512
+		cfg.MaxConnections = defaultConnections
 	}
 	if cfg.MaxMessageSize <= 0 || cfg.MaxMessageSize > 4096 {
 		cfg.MaxMessageSize = 4096
@@ -36,8 +36,11 @@ func New(cfg Config) *Server {
 	if cfg.HistoryLimit > maxHistoryMessages {
 		cfg.HistoryLimit = maxHistoryMessages
 	}
+	if cfg.HistoryBytes <= 0 {
+		cfg.HistoryBytes = defaultHistoryBytes
+	}
 	if cfg.MaxPendingPerAddress <= 0 {
-		cfg.MaxPendingPerAddress = max(4, cfg.MaxConnections/4)
+		cfg.MaxPendingPerAddress = max(4, min(cfg.MaxConnections/4, 128))
 	}
 	if cfg.ReadTimeout <= 0 {
 		cfg.ReadTimeout = 2 * time.Minute
@@ -60,7 +63,7 @@ func New(cfg Config) *Server {
 		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time), failedAddresses: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
-		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
+		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
 }
 
@@ -211,6 +214,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if ordered && s.histFile != nil {
 		s.commit.retire(s.histFile)
 		s.histFile = nil
+	}
+	if s.histStop != nil {
+		close(s.histStop) // the janitor stops between segments
+		s.histStop = nil
 	}
 	s.mu.Unlock()
 	if ordered {

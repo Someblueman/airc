@@ -14,9 +14,10 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-func TestHistoryCompactsDuringRuntimeAndRestoresReceipts(t *testing.T) {
+func TestHistoryRotatesDuringRuntimeAndRestoresReceipts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history")
 	s := New(Config{HistoryLimit: 3})
+	s.histSegment = 1024
 	if err := s.RestoreHistory(path); err != nil {
 		t.Fatal(err)
 	}
@@ -27,19 +28,16 @@ func TestHistoryCompactsDuringRuntimeAndRestoresReceipts(t *testing.T) {
 		last = s.newMessage("writer", "#room", fmt.Sprint(i), nil)
 		last.RequestID = fmt.Sprint("request-", i)
 		s.recordLocked(&last)
-		records := s.histRecords
+		size := s.histBytes
 		s.mu.Unlock()
 		s.messageMu.Unlock()
-		if !last.Persisted || records >= 6 {
-			t.Fatalf("append not persisted/bounded: %+v, %d", last, records)
+		if !last.Persisted || size >= 1024 {
+			t.Fatalf("append not persisted or active file not rotated: %+v, %d bytes", last, size)
 		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lines := strings.Count(string(data), "\n"); lines > 5 || lines < 3 {
-		t.Fatalf("archive grew beyond retention slack: %d", lines)
+	sealed, _ := filepath.Glob(path + ".????????????????????")
+	if len(sealed) < 2 {
+		t.Fatalf("%d sealed segments", len(sealed))
 	}
 	s.Shutdown(context.Background())
 	restored := New(Config{HistoryLimit: 3})
@@ -91,10 +89,11 @@ func TestOutboundBytesAndCountOverloadReportError(t *testing.T) {
 	}
 }
 
-func TestCompactionFailureKeepsAppendingAndRetriesLater(t *testing.T) {
+func TestRotationFailureKeepsAppendingAndRetriesLater(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "archive")
 	path := filepath.Join(dir, "history")
 	s := New(Config{HistoryLimit: 1})
+	s.histSegment = 1 // every append seals the active file
 	if err := s.RestoreHistory(path); err != nil {
 		t.Fatal(err)
 	}
@@ -111,33 +110,33 @@ func TestCompactionFailureKeepsAppendingAndRetriesLater(t *testing.T) {
 	if !write("first").Persisted {
 		t.Fatal("initial append failed")
 	}
-	// The descriptor still points to a writable file, but creating a replacement
-	// in the original directory must fail. Preserve the moved durable file.
+	// The descriptor still points to a writable file, but sealing it under
+	// its path must fail. Preserve the moved durable file.
 	moved := dir + "-moved"
 	if err := os.Rename(dir, moved); err != nil {
 		t.Fatal(err)
 	}
 	second := write("second")
 	if !second.Persisted || s.histFile == nil || s.persistenceError == "" {
-		t.Fatal("a failed compaction must be reported without closing the valid history file")
+		t.Fatal("a failed rotation must be reported without closing the valid history file")
 	}
 	third := write("third")
 	if !third.Persisted {
-		t.Fatal("appends stopped after a compaction failure")
+		t.Fatal("appends stopped after a rotation failure")
 	}
 	data, err := os.ReadFile(filepath.Join(moved, "history"))
 	if err != nil || !strings.Contains(string(data), second.ID) || !strings.Contains(string(data), third.ID) {
 		t.Fatal("synced acceptance lost", err)
 	}
-	// Once the fault clears, the next attempt compacts and clears the error.
+	// Once the fault clears, the next attempt rotates and clears the error.
 	if err := os.Rename(moved, dir); err != nil {
 		t.Fatal(err)
 	}
 	for range 20 {
 		write("later")
 	}
-	if s.persistenceError != "" || s.histRecords > 4 {
-		t.Fatalf("compaction did not recover: %q, %d records", s.persistenceError, s.histRecords)
+	if s.persistenceError != "" || s.histRecords > 1 {
+		t.Fatalf("rotation did not recover: %q, %d records", s.persistenceError, s.histRecords)
 	}
 }
 

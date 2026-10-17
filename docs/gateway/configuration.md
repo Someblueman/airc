@@ -99,7 +99,7 @@ reachable:
 | `password_file` | none | Owner-only file with one line, the access password (IRC's `PASS`), sent as `password` or the `AIRC-Password` header, once per connection. |
 | `limits.requests_per_minute` | 2400 | Per client source (0–100000); loopback sources are exempt, as in aircd. On a Unix socket each client process is its own source. |
 | `limits.author_requests_per_minute` | 1200 | Per author, on every carrier. |
-| `limits.connections` | 256 | Open connections on this listener (0–4096); the global `limits.connections` still applies. |
+| `limits.connections` | 1024 | Open connections on this listener (0–4096); the global `limits.connections` still applies. |
 | `limits.connections_per_source` | 16 | Open connections from one IP address; loopback is exempt, as in aircd. |
 
 Exceeded rates answer `capacity_exceeded`, and refused connections close
@@ -176,12 +176,12 @@ for `cursor_key_file`.
 | Setting | Default | Range |
 |---|---:|---|
 | `limits.workers` | 8 | 1–64, at most `sessions` |
-| `limits.connections` | 1024 | 1–16384 open client connections across every listener |
-| `limits.sessions` | 32 | 1–256 upstream AIRC sessions in use at once by requests; with `waits`, it also bounds each listener's requests in flight (`sessions` + `waits`) |
+| `limits.connections` | 4096 | 1–16384 open client connections across every listener |
+| `limits.sessions` | 256 | 1–1024 upstream AIRC sessions in use at once by requests; with `waits`, it also bounds each listener's requests in flight (`sessions` + `waits`) |
 | `limits.sessions_per_author` | 4 | 1–`sessions` |
-| `limits.waits` | 256 | 0–1024 `check` requests waiting for news at once; 0 answers every check at once |
-| `limits.idle_sessions` | 128 | 0–1024 upstream sessions kept between requests for reuse; 0 opens one per request |
-| `limits.watches` | 8 | 0 to `sessions` − 1 |
+| `limits.waits` | 1024 | 0–4096 `check` requests waiting for news at once; 0 answers every check at once |
+| `limits.idle_sessions` | 512 | 0–4096 upstream sessions kept between requests for reuse; 0 opens one per request |
+| `limits.watches` | 64 | 0 to `sessions` − 1 |
 | `limits.watches_per_author` | 2 | 0 to `sessions_per_author` − 1, at most `watches` |
 | `limits.pending` | 4096 | 1–65536 unfinished jobs |
 | `limits.pending_per_author` | 128 | 1–`pending` |
@@ -202,7 +202,9 @@ author; watches never use one. Before reuse the gateway pings it, and for a
 guest checks with `WHO` that no connected client has taken the nickname. A
 session closes after 5 seconds idle or 30 seconds after its login, so a
 revoked token or a nickname AIRC would now refuse takes effect within that
-time. Kept sessions count toward aircd's `--max-connections`. A read that
+time. Kept sessions, sessions in use, waiting checks and watches all count
+toward aircd's `--max-connections`: at the defaults, up to about 1900 of
+aircd's 4096. A read that
 finds every session slot in use waits up to a second for one before it
 answers `capacity_exceeded`, so a burst, such as many followers woken by
 one message, queues instead of failing.

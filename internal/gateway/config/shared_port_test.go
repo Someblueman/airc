@@ -30,7 +30,7 @@ func TestUDPAndTCPListenersMayShareAPort(t *testing.T) {
 // upstream sessions their requests use.
 func TestConnectionLimitDefaultsAndRange(t *testing.T) {
 	c, err := Parse([]byte(`{"version":1,"realm":"fixture","state_dir":"/tmp/fixture-gateway-state","listeners":[]}`))
-	if err != nil || c.Limits.Connections != 1024 || c.Limits.Sessions != 32 {
+	if err != nil || c.Limits.Connections != 4096 || c.Limits.Sessions != 256 {
 		t.Fatalf("defaults %+v %v", c.Limits, err)
 	}
 	for _, n := range []int{0, 16385} {
