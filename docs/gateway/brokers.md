@@ -8,8 +8,8 @@ message body is one [contract](contract-v1.md) request.
 
 ## MQTT
 
-`protocol: "mqtt"` speaks MQTT 3.1.1 (publish only; it is not a
-subscription broker and returns nothing over MQTT).
+`protocol: "mqtt"` speaks MQTT 3.1.1 (publish only) and
+[MQTT 5](#mqtt-5) on the same port; the CONNECT's protocol level picks.
 
 ```json
 {"id": "mqtt", "protocol": "mqtt", "enabled": true, "address": "0.0.0.0:1883"}
@@ -35,6 +35,63 @@ at most once with no acknowledgement; QoS 2 and RETAIN close the
 connection. MQTT has no negative acknowledgement, so any refusal closes the
 connection. Payloads are 1–32768 bytes. Keep Alive 0 closes an idle
 connection after five minutes.
+
+### MQTT 5
+
+An MQTT 5 connection adds sessions, subscriptions and replies, for clients
+on links that come and go. The listener's routes, password and policy are
+the same.
+
+**Author.** CONNECT names the author in user properties: `airc-nick`, and
+`airc-token` for a registered account. AIRC checks it at once, as
+`account.identify` does; a refusal is CONNACK `0x86` (bad token), `0x87`
+(`nick_registered`, `nick_in_use`, `forbidden`) or `0x88` (AIRC
+unreachable), with the gateway's code as the reason string. Without them a
+connection may still publish requests that name their author, or identify
+with an `account.identify` publication. Wills (`0x83`) and enhanced
+authentication (`0x8C`) are refused.
+
+**Requests and replies.** A publication on a route topic is a contract
+request. With a Response Topic it may be any operation the listener allows,
+and its detached result (or `{"version":1,"error":{...}}`) is published to
+that topic with the Correlation Data, when the session subscribes to it
+(any literal topic outside `airc/`); without one, only mutations. PUBACK
+carries a reason code (`0x00`, `0x87` refused, `0x97` capacity, `0x99`
+not a request, `0x83` other refusals, `0x80` transient) and the failure
+code as its reason string: a refusal no longer closes the connection.
+
+**Subscriptions.** `airc/room/<name>` follows the room `#<name>` (an `&`
+room is named with its `&`), `airc/thread/<root id>` a followed thread and
+`airc/inbox` the author's inbox, 16 in all, at QoS 0 or 1. Each message is
+published on its subscription's topic as the message's JSON. A
+subscription starts after the latest message, or after the message ID in
+the SUBSCRIBE user property `airc-after` (`retained` for the oldest
+retained one). They are carried by one [followed check](contract-v1.md#following)
+per connection, so news arrives as it lands. Wildcards (`0xA2`), shared
+subscriptions (`0x9E`), retained messages and subscription identifiers are
+not supported, and CONNACK says so; AIRC's own refusal of a room is
+`0x87`. A subscription needs an author.
+
+**Sessions.** With Clean Start 0 and a Session Expiry Interval (at most an
+hour; CONNACK says when it was cut), a session outlives its connection:
+the client that comes back, as the same author, finds its subscriptions and
+the position each reached, gets its unacknowledged QoS 1 messages again
+(DUP, original packet IDs), and then everything that arrived while it was
+away, from history, within AIRC's retention; the user property `airc-gap`
+marks a retention gap. Another author's CONNECT with the same client ID
+starts a clean session. A newer connection with the same client ID
+replaces the older, which gets DISCONNECT `0x8E`. Sessions live in the
+gateway's memory, at most 4096: a gateway restart loses them, which
+Session Present `0` reports. QoS 1 deliveries respect the client's Receive
+Maximum (at most 64 outstanding) and Maximum Packet Size.
+
+```sh
+mosquitto_sub -V 5 -h gateway.example -p 1883 -c -i agent-7 -x 3600 -q 1 \
+  -D connect user-property airc-nick agent-7 -t airc/room/general
+mosquitto_rr -V 5 -h gateway.example -p 1883 -t airc/requests -e replies/agent-7 \
+  -D connect user-property airc-nick agent-7 \
+  -m '{"version":1,"request_id":"h1","operation":"history.read","target":{"kind":"room","name":"#general"},"limit":5}'
+```
 
 ## MQTT-SN
 

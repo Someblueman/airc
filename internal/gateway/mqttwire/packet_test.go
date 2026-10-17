@@ -66,7 +66,7 @@ func TestPacketStreamBoundariesAndFields(t *testing.T) {
 
 func TestConnectProfileRefusals(t *testing.T) {
 	for name, mutate := range map[string]func([]byte) []byte{
-		"protocol": func(b []byte) []byte { b[2] = 'm'; return b }, "version": func(b []byte) []byte { b[6] = 5; return b },
+		"protocol": func(b []byte) []byte { b[2] = 'm'; return b }, "version": func(b []byte) []byte { b[6] = 6; return b },
 		"will": func(b []byte) []byte { b[7] |= 4; return b }, "reserved": func(b []byte) []byte { b[7] |= 1; return b },
 		"password_without_user": func(b []byte) []byte {
 			b[7] = 0x42

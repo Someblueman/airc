@@ -14,6 +14,8 @@ const DefaultMQTTTopic = "airc/requests"
 // as on every other carrier; the listener's targets allowlist, when set,
 // bounds the rooms. The CONNECT password, when the listener has a
 // password_file, is the listener access password, never an identity.
+// MQTT 3.1.1 publications carry only mutations, having no reply; MQTT 5
+// carries any operation the listener allows, replying on a Response Topic.
 type MQTT struct {
 	Routes []MQTTRoute `json:"routes,omitempty"`
 }
@@ -25,11 +27,6 @@ type MQTTRoute struct {
 func (c Config) validateMQTT(l Listener) error {
 	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 || len(l.AllowedOrigins) != 0 {
 		return errors.New("MQTT requires 1-128 literal topic routes without origins")
-	}
-	for _, op := range l.Operations {
-		if !op.IsMutation() {
-			return errors.New("MQTT carries only mutations: a publish has no reply")
-		}
 	}
 	topics := make(map[string]bool, len(l.MQTT.Routes))
 	for _, route := range l.MQTT.Routes {
