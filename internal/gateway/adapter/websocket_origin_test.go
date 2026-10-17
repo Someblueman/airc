@@ -15,7 +15,7 @@ import (
 func TestWebSocketOriginPolicySnapshotsCallerSlice(t *testing.T) {
 	origins := []string{"https://allowed.example"}
 	// Upgrade itself has no identity authority and must never dispatch a request.
-	configured, err := WebSocketServer(new(dispatch.Dispatcher), make(chan struct{}, 1), origins)
+	configured, err := WebSocketServer(new(dispatch.Dispatcher), make(chan struct{}, 1), origins, Keepalive{})
 	if err != nil {
 		t.Fatal(err)
 	}

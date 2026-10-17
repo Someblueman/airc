@@ -3,6 +3,7 @@ package fallback
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
+	"github.com/coder/websocket"
 )
 
 // followGateway runs an in-process gateway with a framed and a WebSocket
@@ -200,4 +202,71 @@ func TestFollowOutlivesTheConnectionIdle(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A connection whose requests are done waits the connection idle, not the
+// hour a stream gets: the read already waiting when its last request ends
+// moves back to the idle timeout.
+func TestConnectionIdleAfterARequestEnds(t *testing.T) {
+	released := adapter.ConnectionIdle
+	adapter.ConnectionIdle = 500 * time.Millisecond
+	t.Cleanup(func() { adapter.ConnectionIdle = released })
+	addr := testserver.Start(t, server.Config{HistoryLimit: 100}, nil)
+	endpoints := followGateway(t, addr, 3, 1)
+	frame := []byte(`{"version":1,"correlation_id":"c1","profile":"plain","request":{"version":1,"request_id":"r1","operation":"capabilities.get"}}`)
+
+	t.Run("framed", func(t *testing.T) {
+		conn, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(endpoints["framed"].Port))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+		if _, err := conn.Write(binary.BigEndian.AppendUint32(nil, uint32(len(frame)))); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Write(frame); err != nil {
+			t.Fatal(err)
+		}
+		answered := time.Time{}
+		var header [4]byte
+		for {
+			if _, err := io.ReadFull(conn, header[:]); err != nil {
+				if answered.IsZero() {
+					t.Fatal("closed before answering", err)
+				}
+				break
+			}
+			if _, err := io.CopyN(io.Discard, conn, int64(binary.BigEndian.Uint32(header[:]))); err != nil {
+				t.Fatal(err)
+			}
+			answered = time.Now()
+		}
+		if waited := time.Since(answered); waited > 3*time.Second {
+			t.Fatal("idle connection held for", waited)
+		}
+	})
+
+	t.Run("websocket", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		conn, _, err := websocket.Dial(ctx, "ws://127.0.0.1:"+strconv.Itoa(endpoints["websocket"].Port)+"/v1/socket", &websocket.DialOptions{Subprotocols: []string{adapter.WebSocketSubprotocol}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.CloseNow()
+		if err := conn.Write(ctx, websocket.MessageText, frame); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := conn.Read(ctx); err != nil {
+			t.Fatal("no answer", err)
+		}
+		answered := time.Now()
+		if _, _, err := conn.Read(ctx); err == nil || errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal("idle socket still open", err)
+		}
+		if waited := time.Since(answered); waited > 3*time.Second {
+			t.Fatal("idle socket held for", waited)
+		}
+	})
 }

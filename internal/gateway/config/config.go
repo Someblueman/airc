@@ -82,6 +82,7 @@ type Listener struct {
 	Guests       *bool           `json:"guests,omitempty"`
 	PasswordFile string          `json:"password_file,omitempty"`
 	Limits       *ListenerLimits `json:"limits,omitempty"`
+	Keepalive    *Keepalive      `json:"keepalive,omitempty"`
 	// Local author carriers (see local_author.go).
 	BoundAuthor *BoundAuthor `json:"bound_author,omitempty"`
 	ReplyTo     string       `json:"reply_to,omitempty"`
@@ -237,6 +238,9 @@ func (c *Config) Validate() error {
 		}
 		if len(l.AllowedOrigins) > 0 && !t.Origins {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
+		}
+		if err := validateKeepalive(*l); err != nil {
+			return err
 		}
 		if l.Address == "" {
 			switch t.Address {

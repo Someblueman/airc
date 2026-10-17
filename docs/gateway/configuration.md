@@ -152,10 +152,32 @@ refuse TLS settings. Carriers that are encrypted by definition (`http3`,
 | `posix_queue`, `shared_memory`, `mach_ipc` | local IPC | [streams](streams.md) |
 | `scp_inbox`, `bundle_protocol` | `scp_inbox`, `bpv7` | [offline](offline.md) |
 | `syslog`, `signed_syslog`, `snmp` | provider ingress | [bridges](bridges.md) |
+| `keepalive` | `websocket`, `http3`, `webtransport`, `rawquic`, `rawquic_datagrams` | [below](#keepalive) |
 
 `stdio`, `socketpair`, `inherited`, `fifo`, `uart`, `scp_inbox`,
 `file_mailbox`, `offline_bundle` and `bpv7` run under their own command and
 must be the only enabled listener in their file.
+
+### Keepalive
+
+A listener that holds long-lived connections can be tuned for the links
+its clients use: behind NAT, whose mappings expire after 30 seconds to a few
+minutes of silence, or on mobile networks, where a connection may stall for
+seconds without breaking.
+
+```json
+"keepalive": {"idle_seconds": 120, "ping_seconds": 20}
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `idle_seconds` | 30 | 5–3600; how long a connection may carry nothing before it closes: QUIC's idle timeout on `http3`, `webtransport` and `rawquic`, the wait for the next request on `websocket` (a connection with a request active, such as a follow, waits instead) |
+| `ping_seconds` | 10 on `websocket`, none on QUIC | 1–600, shorter than `idle_seconds`; how often the gateway probes the connection with a WebSocket ping or a QUIC PING, which also keeps NAT mappings open. A WebSocket ping unanswered when the next is due closes the socket |
+
+QUIC takes the smaller of the two sides' idle timeouts, and quic-go clients
+accept none under five seconds. A follow's keepalive frames
+(`limits.follow_keepalive_seconds`) already hold a following connection;
+`ping_seconds` matters for a client that holds a connection without one.
 
 ## Credential files
 

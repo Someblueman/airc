@@ -27,10 +27,13 @@ type correlatedTransport struct {
 	// plain is this connection's source and session: each frame's contract
 	// request runs as its author. nil refuses every frame.
 	plain *dispatch.Ingress
-	// streaming, when set, tells the transport before each read whether a
-	// request is still active on the connection, so a client that is only
-	// reading a stream (a follow for minutes) is not dropped for sending
-	// nothing; the stream's own writes notice a dead peer.
+	// streaming, when set, tells the transport whether a request is active
+	// on the connection, before each read and whenever the last active
+	// request ends, so a client that is only reading a stream (a follow for
+	// minutes) is not dropped for sending nothing, and one whose requests
+	// are done goes back to the idle timeout during the read already
+	// waiting. The stream's own writes notice a dead peer. It may be called
+	// from any goroutine.
 	streaming func(bool)
 }
 
@@ -135,6 +138,9 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 				<-requests
 				activeMu.Lock()
 				delete(active, request.CorrelationID)
+				if transport.streaming != nil && len(active) == 0 {
+					transport.streaming(false)
+				}
 				activeMu.Unlock()
 			}()
 			runCorrelatedPlainRequest(ctx, transport.write, transport.watchModes, transport.sequenced, d, request, *transport.plain, plainBody)

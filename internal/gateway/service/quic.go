@@ -40,27 +40,31 @@ type quicOwner struct {
 
 // newHTTP3Owner bounds open QUIC connections by connections and requests in
 // flight by sessions.
-func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, connections chan struct{}, requests int, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
+func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, connections chan struct{}, requests int, origins []string, pair tls.Certificate, address string, keep adapter.Keepalive) (*quicOwner, error) {
 	server, err := adapter.HTTP3Server(d, requests, origins)
 	if err != nil {
 		return nil, err
 	}
-	return newHTTP3QUICOwner(parent, server, nil, connections, pair, address)
+	return newHTTP3QUICOwner(parent, server, nil, connections, pair, address, keep)
 }
 
-func newWebTransportOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
+func newWebTransportOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, origins []string, pair tls.Certificate, address string, keep adapter.Keepalive) (*quicOwner, error) {
 	transport, err := adapter.WebTransportServer(d, requests, origins)
 	if err != nil {
 		return nil, err
 	}
-	owner, err := newHTTP3QUICOwner(parent, transport.H3, transport, slots, pair, address)
+	owner, err := newHTTP3QUICOwner(parent, transport.H3, transport, slots, pair, address, keep)
 	if err != nil {
 		_ = transport.Close()
 	}
 	return owner, err
 }
 
-func newHTTP3QUICOwner(parent context.Context, server *http3.Server, webTransport *adapter.WebTransport, slots chan struct{}, pair tls.Certificate, address string) (*quicOwner, error) {
+func newHTTP3QUICOwner(parent context.Context, server *http3.Server, webTransport *adapter.WebTransport, slots chan struct{}, pair tls.Certificate, address string, keep adapter.Keepalive) (*quicOwner, error) {
+	server.QUICConfig = keep.QUIC(server.QUICConfig)
+	if keep.Idle > 0 {
+		server.IdleTimeout = keep.Idle
+	}
 	server.TLSConfig = server.TLSConfig.Clone()
 	server.TLSConfig.Certificates = []tls.Certificate{pair}
 	server.TLSConfig.NextProtos = []string{"h3"}
@@ -72,13 +76,13 @@ func newHTTP3QUICOwner(parent context.Context, server *http3.Server, webTranspor
 	return owner, nil
 }
 
-func newRawQUICOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, pair tls.Certificate, address string, datagrams bool) (*quicOwner, error) {
+func newRawQUICOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, pair tls.Certificate, address string, datagrams bool, keep adapter.Keepalive) (*quicOwner, error) {
 	a, err := adapter.QUICServer(d, requests, datagrams)
 	if err != nil {
 		return nil, err
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.QUICALPN}}
-	quicConfig := &quic.Config{Allow0RTT: true, EnableDatagrams: datagrams, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: 4, MaxIncomingUniStreams: 4, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10}
+	quicConfig := keep.QUIC(&quic.Config{Allow0RTT: true, EnableDatagrams: datagrams, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: 4, MaxIncomingUniStreams: 4, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10})
 	owner, err := newQUICOwner(parent, tlsConfig, quicConfig, slots, address)
 	if err != nil {
 		return nil, err

@@ -23,9 +23,9 @@ const websocketPath = "/v1/socket"
 // WebSocket subprotocol names cannot contain a slash.
 const WebSocketSubprotocol = "airc-gateway.v1"
 
-// websocketPingInterval spaces server pings; a ping unanswered for three
-// seconds closes the connection. linkedWebSocketPing is empty in release
-// builds; see core.LinkedDuration.
+// websocketPingInterval spaces server pings by default; a ping unanswered
+// when the next one is due closes the connection. linkedWebSocketPing is
+// empty in release builds; see core.LinkedDuration.
 var (
 	websocketPingInterval = core.LinkedDuration(linkedWebSocketPing, 10*time.Second)
 	linkedWebSocketPing   string
@@ -34,8 +34,9 @@ var (
 // WebSocketServer constructs the HTTP/1.1 WebSocket endpoint. The returned
 // server owns upgraded handlers through their request contexts: a service
 // BaseContext cancellation closes each hijacked connection and waits for its
-// requests before the handler returns.
-func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrigins []string) (*http.Server, error) {
+// requests before the handler returns. keep sets the listener's ping
+// interval and how long a connection may wait between requests.
+func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrigins []string, keep Keepalive) (*http.Server, error) {
 	if d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
@@ -92,7 +93,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 			plain = &dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr), Session: dispatch.NewSession()}
 			defer plain.Session.Close()
 		}
-		serveWebSocket(r.Context(), conn, d, requests, plain)
+		serveWebSocket(r.Context(), conn, d, requests, plain, keep)
 	})
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -108,7 +109,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 	}, nil
 }
 
-func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Dispatcher, requests chan struct{}, plain *dispatch.Ingress) {
+func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Dispatcher, requests chan struct{}, plain *dispatch.Ingress, keep Keepalive) {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
@@ -142,14 +143,15 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 	pingDone := make(chan struct{})
 	go func() {
 		defer close(pingDone)
-		ticker := time.NewTicker(websocketPingInterval)
+		interval := keep.ping(websocketPingInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				pingCtx, finish := context.WithTimeout(ctx, 3*time.Second)
+				pingCtx, finish := context.WithTimeout(ctx, interval)
 				err := conn.Ping(pingCtx)
 				finish()
 				if err != nil {
@@ -160,27 +162,53 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 		}
 	}()
 	defer func() { cancel(); <-pingDone }()
+	// The read waiting for the client's next message ends when its timer
+	// fires; a change in whether a request is active restarts the timer.
+	var idleMu sync.Mutex
 	first, active := true, false
-	next := func() ([]byte, error) {
-		idle := ConnectionIdle
-		if first {
-			idle = 5 * time.Second
-		} else if active {
-			idle = streamIdle
+	var reading *time.Timer
+	idle := func() time.Duration {
+		switch {
+		case first:
+			return 5 * time.Second
+		case active:
+			return streamIdle
 		}
-		readCtx, finish := context.WithTimeout(ctx, idle)
+		return keep.idle(ConnectionIdle)
+	}
+	streaming := func(streaming bool) {
+		idleMu.Lock()
+		defer idleMu.Unlock()
+		if active != streaming {
+			active = streaming
+			if reading != nil {
+				reading.Reset(idle())
+			}
+		}
+	}
+	next := func() ([]byte, error) {
+		readCtx, finish := context.WithCancel(ctx)
+		defer finish()
+		idleMu.Lock()
+		reading = time.AfterFunc(idle(), finish)
+		idleMu.Unlock()
 		kind, body, err := conn.Read(readCtx)
-		finish()
+		idleMu.Lock()
+		reading.Stop()
+		reading = nil
+		if err == nil {
+			first = false
+		}
+		idleMu.Unlock()
 		if err != nil {
 			return nil, err
 		}
-		first = false
 		if kind != websocket.MessageText || len(body) == 0 || len(body) > MaxRequestFrameBytes {
 			return nil, errors.New("invalid websocket message")
 		}
 		return body, nil
 	}
-	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain, streaming: func(streaming bool) { active = streaming }}, d, requests)
+	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain, streaming: streaming}, d, requests)
 }
 
 func requestedSubprotocol(values []string, wanted string) bool {
