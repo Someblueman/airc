@@ -45,7 +45,19 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 	}
 	key := nickKey(nick)
 	if existing := s.nicks[key]; existing != nil && existing != client {
-		s.numericLocked(client, "433", []string{nick}, "Nickname is already in use")
+		// A connection still negotiating CAP may authenticate after NICK,
+		// so whether it can reclaim the holder is decided at registration.
+		if client.registered || !client.capNegotiating && !s.reclaimableLocked(client, existing, key) {
+			s.numericLocked(client, "433", []string{nick}, "Nickname is already in use")
+			return
+		}
+		// The holder keeps its claim until this connection registers and
+		// takes the session over; see reclaim.go.
+		if old := client.client.Nick; old != "" && s.nicks[nickKey(old)] == client {
+			delete(s.nicks, nickKey(old))
+		}
+		client.client.Nick = nick
+		s.tryRegisterLocked(client)
 		return
 	}
 	old := client.client.Nick
@@ -97,22 +109,42 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if client.capNegotiating || client.registered || client.client.Nick == "" || client.client.Username == "" {
 		return
 	}
+	key := nickKey(client.client.Nick)
+	if holder := s.nicks[key]; !client.ephemeral && holder != nil && holder != client && !s.reclaimableLocked(client, holder, key) {
+		// Refused at NICK unless the connection was still negotiating CAP
+		// (see nickLocked); the nickname is in use either way.
+		s.numericLocked(client, "433", []string{client.client.Nick}, "Nickname is already in use")
+		client.client.Nick = ""
+		return
+	}
 	if !s.identityAllowedLocked(client, client.client.Nick) {
 		return
 	}
+	reclaimed := false
 	if client.ephemeral && client.accountID == "" {
 		// Ephemeral sessions do not claim their nickname, so they may share it
 		// with each other, but a guest cannot speak as a nickname a connected
 		// client holds: as in IRC, the name is in use.
-		if holder := s.nicks[nickKey(client.client.Nick)]; holder != nil && holder != client {
+		if holder := s.nicks[key]; holder != nil && holder != client {
 			s.numericLocked(client, "433", []string{client.client.Nick}, "Nickname is already in use")
 			client.client.Nick = ""
 			return
 		}
 	}
+	if !client.ephemeral {
+		switch holder := s.nicks[key]; {
+		case holder == nil:
+			s.nicks[key] = client // the claim lapsed since NICK; see nickLocked
+		case holder == client:
+		default: // reclaimable, checked above
+			s.takeOverLocked(client, holder)
+			reclaimed = true
+		}
+		client.secret = newID()
+	}
 	client.registered = true
 	s.releasePendingLocked(client)
-	if !client.hidden() {
+	if !client.hidden() && !reclaimed {
 		s.monitorChangedLocked(client, true)
 	}
 	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick, "ephemeral", client.ephemeral)
@@ -121,7 +153,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	features := []string{"CHECK=1", "RECEIPTS=1", "BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
+	features := []string{"RESUME=1", "CHECK=1", "RECEIPTS=1", "BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
 	if s.accessEnabled {
 		features = append(features, "ACCESS=1")
 	}
@@ -145,9 +177,16 @@ func (s *Server) tryRegisterLocked(client *session) {
 		features = append(features, "IDEMPOTENCY=1", "SAFE_RETRY=1")
 	}
 	s.numericLocked(client, "005", features, "are supported by this server")
+	if client.secret != "" {
+		// Before the welcome, so a client has it once registration completes.
+		s.numericLocked(client, "767", []string{client.secret}, "Resume secret")
+	}
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")
 	s.numericLocked(client, "004", []string{"airc", "1", "it"}, "")
 	s.numericLocked(client, "422", nil, "MOTD file is missing")
+	if reclaimed {
+		s.announceReclaimedLocked(client)
+	}
 }

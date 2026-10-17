@@ -21,7 +21,7 @@ type quicOwner struct {
 	webtransport *adapter.WebTransport
 	raw          *adapter.QUIC
 	transport    *quic.Transport
-	listener     *quic.Listener
+	listener     *quic.EarlyListener
 	packet       net.PacketConn
 	slots        chan struct{}
 
@@ -78,7 +78,7 @@ func newRawQUICOwner(parent context.Context, d *dispatch.Dispatcher, slots, requ
 		return nil, err
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.QUICALPN}}
-	quicConfig := &quic.Config{Allow0RTT: false, EnableDatagrams: datagrams, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: 4, MaxIncomingUniStreams: 4, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10}
+	quicConfig := &quic.Config{Allow0RTT: true, EnableDatagrams: datagrams, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: 4, MaxIncomingUniStreams: 4, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10}
 	owner, err := newQUICOwner(parent, tlsConfig, quicConfig, slots, address)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,9 @@ func newQUICOwner(parent context.Context, tlsConfig *tls.Config, quicConfig *qui
 		})
 		return ctx, nil
 	}
-	listener, err := transport.Listen(tlsConfig, quicConfig)
+	// Early: a resumed client's first flight (0-RTT) is served before its
+	// handshake completes. The contract is replay-safe (see HTTP3Server).
+	listener, err := transport.ListenEarly(tlsConfig, quicConfig)
 	if err != nil {
 		_ = transport.Close()
 		_ = packetConn.Close()

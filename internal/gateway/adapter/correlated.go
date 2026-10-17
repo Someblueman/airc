@@ -27,7 +27,23 @@ type correlatedTransport struct {
 	// plain is this connection's source and session: each frame's contract
 	// request runs as its author. nil refuses every frame.
 	plain *dispatch.Ingress
+	// streaming, when set, tells the transport before each read whether a
+	// request is still active on the connection, so a client that is only
+	// reading a stream (a follow for minutes) is not dropped for sending
+	// nothing; the stream's own writes notice a dead peer.
+	streaming func(bool)
 }
+
+// ConnectionIdle is how long a connection carrier (framed, Unix, WebSocket)
+// waits for a client's next frame between requests before closing; a
+// connection with a request active, such as a follow, waits streamIdle
+// instead, since the stream's own writes notice a dead peer. Tests shorten
+// them; linkedStreamIdle is empty in release builds (core.LinkedDuration).
+var (
+	ConnectionIdle   = 30 * time.Second
+	streamIdle       = core.LinkedDuration(linkedStreamIdle, time.Hour)
+	linkedStreamIdle string
+)
 
 func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if cap(requests) < 1 || transport.next == nil || transport.write == nil {
@@ -54,6 +70,11 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 		return transport.write(FrameResponse{Version: 1, CorrelationID: id, Sequence: sequence, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
 	}
 	for {
+		if transport.streaming != nil {
+			activeMu.Lock()
+			transport.streaming(len(active) > 0)
+			activeMu.Unlock()
+		}
 		body, err := transport.next()
 		if err != nil {
 			if transport.gracefulEOF && errors.Is(err, errFramedCleanEOF) {
@@ -153,14 +174,30 @@ func decodeFrame(body []byte) (FrameRequest, []byte, error) {
 // (or the connection's identified author) and answers with one result frame,
 // or page frames then an end frame.
 func runCorrelatedPlainRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, in dispatch.Ingress, body []byte) {
-	runCorrelatedExchange(parent, write, watchModes, sequenced, d, request, func(ctx context.Context) (dispatch.DetachedResult, error) {
+	follow := false
+	if request.Stream {
+		// A streamed check is a follow: it runs for the follow lease, not a
+		// watch's.
+		if sub, err := core.DecodeSubmission(body); err == nil && sub.Request.Operation == core.Check {
+			follow = true
+		}
+	}
+	runCorrelatedExchange(parent, write, watchModes, sequenced, d, request, follow, func(ctx context.Context) (dispatch.DetachedResult, error) {
 		return d.Submit(ctx, in, body, time.Now())
-	}, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
-		return d.SubmitWatch(ctx, in, body, time.Now(), emit)
+	}, func(ctx context.Context, sink dispatch.StreamSink) error {
+		sub, err := core.DecodeSubmission(body)
+		if err != nil {
+			return store.ErrInvalid
+		}
+		return d.SubmitDecodedStream(ctx, in, sub, time.Now(), sink)
 	})
 }
 
-func runCorrelatedExchange(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, once func(context.Context) (dispatch.DetachedResult, error), stream func(context.Context, func(backend.HistoryPage) error) error) {
+// followLeaseMargin is added to a follow's lease for its stream deadline,
+// so the lease ends the stream, not the carrier.
+const followLeaseMargin = 5 * time.Second
+
+func runCorrelatedExchange(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, follow bool, once func(context.Context) (dispatch.DetachedResult, error), stream func(context.Context, dispatch.StreamSink) error) {
 	if sequenced {
 		baseWrite := write
 		var sequence uint64
@@ -180,6 +217,9 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 	timeout := 4 * time.Second
 	if request.Stream {
 		timeout = 20 * time.Second
+	}
+	if follow {
+		timeout = d.FollowLease() + followLeaseMargin
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
@@ -202,8 +242,9 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		return
 	}
 	started, bytes, frames := false, 0, 0
-	err := stream(ctx, func(page backend.HistoryPage) error {
-		response := FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}
+	// A follow's frames are unbounded in number (its keepalives would
+	// exhaust a watch's budget), bounded in bytes.
+	emitFrame := func(response FrameResponse, counted bool) error {
 		if sequenced {
 			response.Sequence = uint64(frames + 1)
 		}
@@ -211,7 +252,7 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		if err != nil {
 			return store.ErrInvalid
 		}
-		if len(body) > MaxResponseFrameBytes || bytes+len(body)+4 > MaxStreamBytes-1024 || frames >= MaxStreamFrames {
+		if len(body) > MaxResponseFrameBytes || bytes+len(body)+4 > MaxStreamBytes-1024 || counted && frames >= MaxStreamFrames {
 			return store.ErrCapacity
 		}
 		response.encoded, response.encodedSequence = body, response.Sequence
@@ -222,6 +263,14 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		bytes += len(body) + 4
 		frames++
 		return nil
+	}
+	err := stream(ctx, dispatch.StreamSink{
+		Page: func(page backend.HistoryPage) error {
+			return emitFrame(FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}, true)
+		},
+		Check: func(result core.CheckResult) error {
+			return emitFrame(FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "check", Check: &result}, false)
+		},
 	})
 	if parent.Err() != nil {
 		return

@@ -44,6 +44,7 @@ var commandGates = map[string]commandGate{
 	"PONG":      {preRegistration: true, observerOK: true},
 	"QUIT":      {preRegistration: true, observerOK: true},
 	"EPHEMERAL": {preRegistration: true},
+	"RESUME":    {preRegistration: true},
 	"AUTH":      {preRegistration: true},
 	"REGISTER":  {preRegistration: true},
 	"OBSERVE":   {observerOK: true},
@@ -151,6 +152,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.joinLocked(client, command)
 	case "EPHEMERAL":
 		s.ephemeralLocked(client)
+	case "RESUME":
+		s.resumeLocked(client, command)
 	case "OBSERVE":
 		s.observeLocked(client, command)
 	case "UNOBSERVE":

@@ -130,7 +130,7 @@ func (c *Client) race(ctx context.Context, endpoints []Endpoint) (*Conn, []Endpo
 // connect establishes a connection to e within its connect timeout, calling
 // progress when the connection opens and whenever bytes arrive on it.
 func (c *Client) connect(ctx context.Context, e Endpoint, progress func()) (*Conn, error) {
-	if e.Name == "irc" {
+	if NativeCarrier(e.Name) {
 		ctx, cancel := context.WithTimeout(ctx, c.nativeConnectTimeout())
 		defer cancel()
 		client, err := c.dialNative(ctx, e, progress)

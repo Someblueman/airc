@@ -20,7 +20,7 @@ var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 // goldenProtocols is every listener protocol name the gateway accepts, plus
 // an unknown one.
 var goldenProtocols = []string{
-	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed",
+	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect",
 	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited", "fifo", "uart",
 	"system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc",
 	"udp", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6",
@@ -88,7 +88,11 @@ func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
 		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name}, true); status != want {
 			t.Errorf("%s disabled: %s, want %s", tr.Name, status, want)
 		}
-		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name, Enabled: true}, true); status != "enabled_"+tr.Name+"_partial" {
+		enabled := "enabled_" + tr.Name + "_partial"
+		if config.NativeCarrier(tr.Name) {
+			enabled = "enabled_" + tr.Name + "_native"
+		}
+		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name, Enabled: true}, true); status != enabled {
 			t.Errorf("%s enabled: %s", tr.Name, status)
 		}
 	}

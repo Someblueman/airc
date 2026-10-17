@@ -15,6 +15,21 @@ its row in the [carriers table](README.md#carriers) and delete the line.
 - **Native OSCORE**: build the worker and run it on Linux and Darwin.
 - **Browsers**: the author-header flow over HTTP, WebSocket and WebTransport
   in a real browser with a trusted certificate.
+- **Native tunnels**: a web client (gamja or The Lounge) on
+  `irc_websocket`, and an IRC client with a proxy setting (WeeChat) on
+  `irc_connect`, each as a guest and a registered account.
 - **WebRTC**: a real remote path through NAT or a TURN relay.
 - **Physical links**: UART over a real serial line, and an offline bundle
   carried on removable media.
+
+Staying connected, beyond what is built (session reclaim, native tunnels,
+followed checks, 0-RTT):
+
+- **WebSocket over HTTP/2 and HTTP/3** (RFC 8441, RFC 9220), so one port
+  443 serves every HTTP carrier; the WebSocket library has no extended
+  CONNECT yet.
+- **Per-listener idle and keepalive settings** for WebSocket pings and QUIC
+  idle timeouts, tuned for NAT; today they are fixed (10 s pings, 30 s idle).
+- **Multipath QUIC** when quic-go ships it.
+- **MQTT 5 sessions**, **Web Push and wake webhooks**, and **dual-carrier
+  following in the client**, as planned.

@@ -15,7 +15,7 @@ func (c *Client) Gateways() *Client {
 	gateways := *c
 	gateways.Endpoints = nil
 	for _, e := range c.Endpoints {
-		if e.Name != "irc" {
+		if !NativeCarrier(e.Name) {
 			gateways.Endpoints = append(gateways.Endpoints, e)
 		}
 	}
@@ -30,8 +30,9 @@ type RoomReader struct {
 	k *Conn
 	// readEach is set once the gateway has refused check as unknown: an
 	// older gateway, read one room at a time. noThreads and noInbox are set
-	// once it has refused those parts of a check.
-	readEach, noThreads, noInbox bool
+	// once it has refused those parts of a check, noFollow once it has
+	// refused a followed check.
+	readEach, noThreads, noInbox, noFollow bool
 }
 
 // RoomAfter is a room to read and the message ID to read after, or "" for
@@ -140,40 +141,122 @@ func (r *RoomReader) ServesInbox() bool { return !r.noInbox && !r.readEach }
 func (r *RoomReader) ServesThreads() bool { return !r.noThreads && !r.readEach }
 
 func (r *RoomReader) check(ctx context.Context, set CheckSet) (Checked, error) {
+	if r.readEach {
+		if err := validCheckSet(set); err != nil {
+			return Checked{}, err
+		}
+		pages, err := r.readEachRoom(ctx, set.Rooms, set.Limit)
+		return Checked{Rooms: pages}, err
+	}
+	req, err := r.checkRequest(set)
+	if err != nil {
+		return Checked{}, err
+	}
+	d, err := r.c.call(ctx, r.k, req)
+	if err != nil {
+		return Checked{}, err
+	}
+	return r.checked(d.Check, set)
+}
+
+func validCheckSet(set CheckSet) error {
 	targets := len(set.Rooms) + len(set.Threads)
 	if set.Inbox != nil {
 		targets++
 	}
 	if targets < 1 || targets > maxCheckRooms || set.Limit < 1 || set.Limit > 1000 || set.Wait < 0 {
-		return Checked{}, errors.New("a check needs 1-16 rooms, threads and inbox, a limit of 1-1000 and no negative wait")
+		return errors.New("a check needs 1-16 rooms, threads and inbox, a limit of 1-1000 and no negative wait")
 	}
-	if r.readEach {
-		pages, err := r.readEachRoom(ctx, set.Rooms, set.Limit)
-		return Checked{Rooms: pages}, err
+	return nil
+}
+
+// checkRequest is set as a contract check request.
+func (r *RoomReader) checkRequest(set CheckSet) (request, error) {
+	if err := validCheckSet(set); err != nil {
+		return request{}, err
 	}
 	// The answer must arrive within the call's own timeout.
 	wait := min(set.Wait, maxCheckWait, r.c.callTimeout()-2*time.Second)
 	req := request{RequestID: "check", Operation: "check", Limit: set.Limit, WaitSeconds: int(max(wait, 0) / time.Second)}
 	for _, room := range set.Rooms {
 		if !protocol.IsChannel(room.Room) || room.After != "" && !protocol.ValidMessageID(room.After) {
-			return Checked{}, errors.New("a check reads rooms after message IDs")
+			return request{}, errors.New("a check reads rooms after message IDs")
 		}
 		req.Rooms = append(req.Rooms, checkRoom{Name: room.Room, After: room.After})
 	}
 	for _, thread := range set.Threads {
 		if !protocol.ValidMessageID(thread.ID) || thread.After != "" && thread.After != "retained" && !protocol.ValidMessageID(thread.After) {
-			return Checked{}, errors.New("a check reads threads by root ID after message IDs")
+			return request{}, errors.New("a check reads threads by root ID after message IDs")
 		}
 		req.Threads = append(req.Threads, checkThread(thread))
 	}
 	if set.Inbox != nil {
 		req.Inbox = &checkInbox{After: *set.Inbox}
 	}
-	d, err := r.c.call(ctx, r.k, req)
-	if err != nil {
-		return Checked{}, err
+	return req, nil
+}
+
+// ErrNoFollow is a gateway, or a carrier, without followed checks: poll with
+// CheckAll instead.
+var ErrNoFollow = errors.New("the gateway does not follow checks on this carrier")
+
+// Follows reports whether Follow may work: the carrier streams and the
+// gateway has not refused a follow.
+func (r *RoomReader) Follows() bool {
+	_, ok := r.k.gateway.(streamConn)
+	return ok && !r.readEach && !r.noFollow
+}
+
+// Follow reads set as one stream: the snapshot first, then a Checked for
+// every batch of news and an empty one every keepalive, each page carrying
+// the position to continue from, until the gateway's follow lease ends
+// (nil: resume from the last positions with another Follow), emit returns
+// an error (returned), ctx ends, or nothing at all arrives for idle (the
+// link is presumed dead). The follow owns the connection: nothing else may
+// use the reader until it returns, and after an error the reader is closed
+// and must be reopened. ErrNoFollow means poll with CheckAll.
+func (r *RoomReader) Follow(ctx context.Context, set CheckSet, idle time.Duration, emit func(Checked) error) error {
+	stream, ok := r.k.gateway.(streamConn)
+	if !ok || r.readEach || r.noFollow {
+		return ErrNoFollow
 	}
-	if d.Check == nil || len(d.Check.Rooms) != len(set.Rooms) || len(d.Check.Threads) != len(set.Threads) || (set.Inbox != nil) != (d.Check.Inbox != nil) {
+	if r.noThreads {
+		set.Threads = nil
+	}
+	if r.noInbox {
+		set.Inbox = nil
+	}
+	set.Wait = 0
+	req, err := r.checkRequest(set)
+	if err != nil {
+		return err
+	}
+	if idle <= 0 {
+		idle = time.Minute
+	}
+	req.Version, req.Author, req.Password = 1, r.c.author(), r.c.Password
+	err = stream.follow(ctx, req, idle, func(result *checkResult) error {
+		checked, err := r.checked(result, set)
+		if err != nil {
+			return err
+		}
+		return emit(checked)
+	})
+	var refused *gatewayError
+	if errors.As(err, &refused) && (refused.failure.Code == "invalid_request" || refused.failure.Code == "unsupported_operation") {
+		// A gateway from before followed checks refuses the stream.
+		r.noFollow = true
+		return ErrNoFollow
+	}
+	if err != nil {
+		_ = r.Close()
+	}
+	return err
+}
+
+// checked validates a check's answer against set.
+func (r *RoomReader) checked(d *checkResult, set CheckSet) (Checked, error) {
+	if d == nil || len(d.Rooms) != len(set.Rooms) || len(d.Threads) != len(set.Threads) || (set.Inbox != nil) != (d.Inbox != nil) {
 		return Checked{}, errors.New("gateway answered a check without a page per room")
 	}
 	page := func(p checkPage, room string) (*Page, error) {
@@ -188,7 +271,7 @@ func (r *RoomReader) check(ctx context.Context, set CheckSet) (Checked, error) {
 		return &Page{Endpoint: r.k.Endpoint, Messages: p.Messages, Status: p.Status, Cursor: p.Cursor, Gap: p.Gap, MentionsOnly: p.MentionsOnly}, nil
 	}
 	var checked Checked
-	for i, p := range d.Check.Rooms {
+	for i, p := range d.Rooms {
 		if p.Room != set.Rooms[i].Room {
 			return Checked{}, errors.New("gateway answered a check out of order")
 		}
@@ -198,7 +281,7 @@ func (r *RoomReader) check(ctx context.Context, set CheckSet) (Checked, error) {
 		}
 		checked.Rooms = append(checked.Rooms, next)
 	}
-	for i, p := range d.Check.Threads {
+	for i, p := range d.Threads {
 		if p.Room != "thread:"+set.Threads[i].ID {
 			return Checked{}, errors.New("gateway answered a check out of order")
 		}
@@ -208,8 +291,9 @@ func (r *RoomReader) check(ctx context.Context, set CheckSet) (Checked, error) {
 		}
 		checked.Threads = append(checked.Threads, next)
 	}
-	if d.Check.Inbox != nil {
-		if checked.Inbox, err = page(*d.Check.Inbox, ""); err != nil {
+	if d.Inbox != nil {
+		var err error
+		if checked.Inbox, err = page(*d.Inbox, ""); err != nil {
 			return Checked{}, err
 		}
 	}

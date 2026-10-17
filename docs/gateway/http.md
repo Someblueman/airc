@@ -111,7 +111,9 @@ prefix:
 
 `account.identify` sets the socket's author; a password is sent once per
 socket. Four requests may be active per socket; `stream: true` watches send
-`page` frames and an `end` frame. The first message must arrive within five
+`page` frames and an `end` frame, and a `stream: true` check is a
+[follow](contract-v1.md#following): `check` frames for its lease, then
+`end`. The first message must arrive within five
 seconds and later ones within thirty; the server pings every ten seconds
 and needs a pong within three. Binary or malformed messages close the
 socket; a disconnect cancels its reads but never an admitted mutation.
@@ -156,9 +158,13 @@ itself rather than through grpc-go; its tests call it with grpc-go clients.
 ## HTTP/3
 
 `protocol: "http3"` serves the same routes as `http` over QUIC (quic-go
-v0.63.0, TLS 1.3, ALPN `h3`) on a UDP address. A certificate is required;
-0-RTT is disabled. GET routes take the author headers. Handshakes have five
-seconds, idle connections thirty.
+v0.63.0, TLS 1.3, ALPN `h3`) on a UDP address. A certificate is required.
+0-RTT is accepted: a client resuming a TLS session may send its first
+request in the handshake's first flight, which is safe because every
+request is replay-safe (a mutation is one job by author and `request_id`
+however often it arrives, and reads change nothing); `airc` resumes its
+sessions this way. GET routes take the author headers. Handshakes have
+five seconds, idle connections thirty.
 
 ## WebTransport
 

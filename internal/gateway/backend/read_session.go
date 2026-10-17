@@ -15,6 +15,18 @@ import (
 // withRead owns the admitted SDK session, cancellation and pool release. Both
 // readers consume their one-use grant before invoking this private boundary.
 func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool, read func(context.Context, *irc.Client) error) error {
+	return b.withReadOptions(ctx, a, readOptions{stream: stream, deadline: a.Deadline}, read)
+}
+
+// readOptions shape one read session: stream is a watch's session, left
+// observing and read until deadline; follow is a followed check's, kept
+// observing for its own lease (deadline) past the grant's, so never pooled.
+type readOptions struct {
+	stream, follow bool
+	deadline       time.Time
+}
+
+func (b *Backend) withReadOptions(ctx context.Context, a store.ReadAttempt, opts readOptions, read func(context.Context, *irc.Client) error) error {
 	clientConfig, ok := b.sessionConfig(a.Backend, a.Author, a.Credential, a.Source)
 	if !ok || a.Realm != b.realm || a.Author.Scope() != a.Scope {
 		return auth.ErrForbidden
@@ -31,7 +43,8 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		}
 		defer b.release(lane, store.LookupAttempt)
 	}
-	overall, cancel := context.WithDeadline(ctx, a.Deadline)
+	stream := opts.stream
+	overall, cancel := context.WithDeadline(ctx, opts.deadline)
 	defer cancel()
 	dialDeadline := time.Now().Add(10 * time.Second)
 	if stream {
@@ -41,9 +54,9 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 	if stream {
 		clientConfig.ReadTimeout = store.ReadLeaseDuration
 	}
-	// A watch leaves its session observing, so only reads that are not
-	// watches take and keep pooled sessions.
-	pooled := !stream && !a.Request.Operation.IsWatch()
+	// A watch or a follow leaves its session observing, so only reads that
+	// are neither take and keep pooled sessions.
+	pooled := !stream && !opts.follow && !a.Request.Operation.IsWatch()
 	key := sessionKey(clientConfig, a.Scope)
 	var client *irc.Client
 	var dialed time.Time

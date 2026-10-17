@@ -27,9 +27,12 @@ detached result:
 `correlation_id` is 1–64 letters, digits, `-` or `_`, fresh per request;
 reusing an active one closes the connection. `profile` is optional and, if
 present, `plain`. Retry a mutation by resending the exact request under a
-new correlation ID. With `"stream": true` the request must be a watch and the
-answers are `event: "page"` frames (an empty page is a keepalive) and a final
-`event: "end"` with a `reason`. Requests are at most 16 KiB and responses
+new correlation ID. With `"stream": true` the request must be a watch or a
+check: a watch answers with `event: "page"` frames (an empty page is a
+keepalive), a check with `event: "check"` frames holding a whole check
+result ([following](contract-v1.md#following); an empty one is a
+keepalive), and both end with `event: "end"` and a `reason`. A follow's
+frames are bounded in bytes, not in number. Requests are at most 16 KiB and responses
 64 KiB; whole objects or `capacity_exceeded`, never truncation.
 
 On byte streams each frame is a four-byte big-endian length followed by
@@ -42,8 +45,9 @@ the JSON. Packet carriers send one frame per record, or split it into
 and ALPN `airc-gateway/1`, and clients verify the certificate.
 `account.identify` makes its author the connection's default until it
 closes. Four requests may be active per connection. The first byte must
-arrive within five seconds, later frames within thirty, and the rest of a
-started frame within five; writes and TLS handshakes have three seconds,
+arrive within five seconds, later frames within thirty (while a request is
+active, a follow for instance, the connection waits instead), and the rest
+of a started frame within five; writes and TLS handshakes have three seconds,
 calls four and streams twenty (at most 128 frames, 1 MiB). A disconnect
 cancels reads; admitted mutations continue.
 

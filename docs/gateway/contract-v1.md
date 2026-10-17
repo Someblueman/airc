@@ -264,6 +264,28 @@ Observe) it sends pages until its lease ends with a reason (`resume`,
 `more` or gap page ends the lease, so the retained prefix is read before
 newer live messages.
 
+## Following
+
+On a connection carrier that streams (framed TCP/TLS and Unix streams,
+WebSocket, WebTransport, raw QUIC, WebRTC, CoAP Observe), a `check` sent
+with `"stream": true` is a *follow*: one stream that carries its rooms,
+threads and inbox for the gateway's follow lease (`limits.follow_seconds`,
+default five minutes) instead of a check every few seconds. The first
+frame is the snapshot at the requested positions, news or not; then a frame
+arrives for each batch of live news, and while nothing happens an empty
+frame every `limits.follow_keepalive_seconds` (default 20) holds the
+connection and proves the stream is alive. Every frame is a whole `check`
+result whose page cursors are the positions the next frame continues
+from, so a client needs no state but the last frame: when the stream ends
+(`end` with `lease_expired`, or `capacity` after 1 MiB), it sends the same
+check again from those positions and sees nothing twice. `wait_seconds` is
+ignored. A follow holds its author's session and a wait slot
+(`limits.waits`) for the lease, and a session slot only while it reads;
+the lease also bounds how long a revoked token or a new ban can keep a
+follow alive. `capabilities.get` reports `follow_seconds` and
+`follow_keepalive_seconds`; a gateway without them refuses the stream with
+`invalid_request`, and the client polls with `check` instead.
+
 ## Identity hashes
 
 Fingerprint v1 detects changed content under a reused ID: the lowercase hex

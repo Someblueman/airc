@@ -28,7 +28,9 @@ conversation is named (`--reply-to ID --channel ROOM` or `--to NICK`), which
 the other carriers check against the parent. An unresponsive native port costs
 about a quarter of a second, and the carrier that answered is tried first for
 the next ten minutes. For a first contact, the user can supply them with
-`AIRC_CARRIERS=http:6680,websocket:6681` or `--carriers`. `send --json` names
+`AIRC_CARRIERS=http:6680,websocket:6681` or `--carriers`. Carriers named
+`irc_websocket` and `irc_connect` carry native IRC itself through the gateway,
+so every command, the native-only ones included, works over them. `send --json` names
 the `carrier` it used; `airc doctor` lists the fallback carriers and whether one
 answers.
 

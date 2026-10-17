@@ -20,7 +20,7 @@ type Carrier struct {
 }
 
 // MaxCarriers bounds an advertised carrier list.
-const MaxCarriers = 16
+const MaxCarriers = 32
 
 // String is the advertised form: NAME[+tls]:PORT or NAME:/socket/path.
 func (c Carrier) String() string {

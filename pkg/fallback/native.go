@@ -13,12 +13,22 @@ import (
 
 // dialNative opens an ephemeral session: it claims no nickname and leaves no
 // join or quit traffic, like the CLI's one-shot commands. The connection is
-// established once the server has registered it.
+// established once the server has registered it. On a gateway tunnel the
+// stream is the tunnel's; TLS, when the tunnel has it, is the tunnel's too,
+// so pkg/irc sees a plain stream carrying aircd's protocol.
 func (c *Client) dialNative(ctx context.Context, e Endpoint, progress func()) (*irc.Client, error) {
 	network, address := c.address(e)
-	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true, KeepAlive: c.KeepAlive, ProbeTimeout: c.ProbeTimeout}
-	cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		return c.dial(ctx, network, address, progress)
+	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true, KeepAlive: c.KeepAlive, ProbeTimeout: c.ProbeTimeout}
+	switch e.Name {
+	case "irc_websocket":
+		cfg.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) { return c.dialIRCWebSocket(ctx, e, progress) }
+	case "irc_connect":
+		cfg.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) { return c.dialIRCConnect(ctx, e, progress) }
+	default:
+		cfg.TLSConfig = c.tlsConfig(e)
+		cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return c.dial(ctx, network, address, progress)
+		}
 	}
 	return irc.DialContext(ctx, cfg)
 }

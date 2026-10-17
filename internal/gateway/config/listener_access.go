@@ -57,6 +57,24 @@ func (l Listener) AccessLimits() ListenerLimits {
 }
 
 func validateListenerAccess(l *Listener) error {
+	if NativeCarrier(l.Protocol) {
+		// AIRC admits the client itself; the listener bounds connections.
+		if len(l.Targets) > 0 || l.Guests != nil || l.PasswordFile != "" || len(l.Operations) > 0 {
+			return errors.New("a native carrier takes no operations, targets, guests or password: AIRC itself admits its clients")
+		}
+		if p := l.Limits; p != nil {
+			if p.RequestsPerMinute != 0 || p.AuthorRequestsPerMinute != 0 {
+				return errors.New("a native carrier limits connections only, not requests")
+			}
+			if p.Connections < 0 || p.Connections > 4096 || p.ConnectionsPerSource < 0 || p.ConnectionsPerSource > 4096 {
+				return errors.New("listener limits out of range")
+			}
+			if limits := l.AccessLimits(); limits.ConnectionsPerSource > limits.Connections {
+				return errors.New("connections_per_source exceeds connections")
+			}
+		}
+		return nil
+	}
 	if !AuthorCarrier(l.Protocol) {
 		if len(l.Targets) > 0 || l.Guests != nil || l.PasswordFile != "" || l.Limits != nil {
 			return errors.New("author access settings require a listener that carries author requests")

@@ -192,7 +192,37 @@ func (c *checker) awaitNews(ctx context.Context, opt options, reader *fallback.R
 			set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: target.name, After: after})
 		}
 	}
+	if reader.Follows() {
+		// One stream carries the wake-up: keepalives while quiet, the
+		// first news ends it. A lease ending without news is a wake-up
+		// too; the round that follows reads nothing and waits again.
+		woke := errors.New("news")
+		err := reader.Follow(ctx, set, followIdle, func(checked fallback.Checked) error {
+			if checkedHasNews(checked) {
+				return woke
+			}
+			return nil
+		})
+		if !errors.Is(err, fallback.ErrNoFollow) {
+			return
+		}
+	}
 	_, _ = reader.CheckAll(ctx, set)
+}
+
+// checkedHasNews reports a check answer with a message, a gap or more
+// waiting on any page.
+func checkedHasNews(checked fallback.Checked) bool {
+	pages := append(slices.Clone(checked.Rooms), checked.Threads...)
+	if checked.Inbox != nil {
+		pages = append(pages, checked.Inbox)
+	}
+	for _, page := range pages {
+		if len(page.Messages) > 0 || page.Gap || page.Status == "more" {
+			return true
+		}
+	}
+	return false
 }
 
 // redialNative dials native IRC with backoff until a connection registers,

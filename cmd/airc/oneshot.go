@@ -37,7 +37,14 @@ func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
 	cfg.Ephemeral = true
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	client, err := irc.DialContext(ctx, cfg)
+	var client *irc.Client
+	if tunnels := nativeTunnels(opt); len(tunnels) > 0 {
+		// The gateway's native tunnels carry aircd's own protocol, so a
+		// command that needs native IRC can reach it through them too.
+		client, err = dialNativeRacing(ctx, opt, cfg, tunnels)
+	} else {
+		client, err = irc.DialContext(ctx, cfg)
+	}
 	if err != nil && ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

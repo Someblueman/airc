@@ -122,7 +122,7 @@ func FromCarriers(carriers []protocol.Carrier) []Endpoint {
 // Supported reports whether this package can use a carrier name.
 func Supported(name string) bool {
 	switch name {
-	case "irc", "http", "http3", "websocket", "framed", "unix":
+	case "irc", "irc_websocket", "irc_connect", "http", "http3", "websocket", "framed", "unix":
 		return true
 	}
 	return false
@@ -494,7 +494,7 @@ func (c *Client) run(ctx context.Context, first *Conn, op operation) error {
 // AIRC's own refusals carry its numeric. Another carrier may answer.
 func listenerScoped(err error) bool {
 	var refusal *Refusal
-	if !errors.As(err, &refusal) || refusal.Endpoint.Name == "irc" || refusal.UpstreamCode != 0 {
+	if !errors.As(err, &refusal) || NativeCarrier(refusal.Endpoint.Name) || refusal.UpstreamCode != 0 {
 		return false
 	}
 	switch refusal.Code {

@@ -47,6 +47,7 @@ type FrameResponse struct {
 	Sequence      uint64                   `json:"sequence,omitempty"`
 	Result        *dispatch.DetachedResult `json:"result,omitempty"`
 	Page          *backend.HistoryPage     `json:"page,omitempty"`
+	Check         *core.CheckResult        `json:"check,omitempty"`
 	Reason        string                   `json:"reason,omitempty"`
 	Error         *core.Failure            `json:"error,omitempty"`
 
@@ -138,11 +139,13 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		}
 		return err
 	}
-	first := true
+	first, active := true, false
 	next := func() ([]byte, error) {
-		idle := 30 * time.Second
+		idle := ConnectionIdle
 		if first {
 			idle = 5 * time.Second
+		} else if active {
+			idle = streamIdle
 		}
 		if err := stream.SetReadDeadline(time.Now().Add(idle)); err != nil {
 			return nil, err
@@ -185,7 +188,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		plain = &dispatch.Ingress{Source: source, Session: dispatch.NewSession()}
 		defer plain.Session.Close()
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain}, d, requests)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain, streaming: func(streaming bool) { active = streaming }}, d, requests)
 }
 
 func correlationID(s string) bool {

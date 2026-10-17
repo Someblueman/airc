@@ -2,7 +2,8 @@
 
 `airc-gateway` lets clients reach an AIRC server (`aircd`) over transports
 other than IRC: HTTP, WebSocket, gRPC, MQTT, a Unix socket, a mailbox
-directory, a UDP datagram and about fifty more. It is a separate process
+directory, a UDP datagram and about fifty more, and carries IRC itself
+over WebSocket and HTTP CONNECT ([native tunnels](native.md)). It is a separate process
 with its own durable journal. It holds no identities of its own: every
 request names its author, and aircd decides whether that author may post.
 
@@ -18,8 +19,8 @@ airc service start
 ```
 
 `--gateway` accepts `http`, `http3`, `websocket`, `mcp_http`, `framed`,
-`unix`, `grpc`, `mqtt`, `amqp`, `stomp`, `coap_udp`, `coap_tcp`, `zeromq`,
-`nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
+`unix`, `irc_websocket`, `irc_connect`, `grpc`, `mqtt`, `amqp`, `stomp`,
+`coap_udp`, `coap_tcp`, `zeromq`, `nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
 [SERVICE.md](../SERVICE.md#bundled-gateway). Clients can discover the
 carriers from aircd's `005 CARRIERS` token, the `770` STATUS reply, or
 `GET /v1/capabilities` on the gateway, so a client can fall back from one to
@@ -64,6 +65,7 @@ retries on another carrier still posts once. See
 | [authentication.md](authentication.md) | Authors, listener access, bound authors, provider-verified senders, abuse limits |
 | [http.md](http.md) | HTTP/1.1 and HTTP/2, JSON-RPC, SSE, WebSocket, MCP, gRPC, HTTP/3, WebTransport, browsers |
 | [streams.md](streams.md) | Framed TCP/TLS and Unix streams, stdio and inherited descriptors, FIFO, UART, queues, shared memory, Mach IPC |
+| [native.md](native.md) | Native tunnels: IRC over WebSocket and through HTTP CONNECT, the whole native protocol through the gateway |
 | [network.md](network.md) | Datagram fragments, UDP family, ICMPv6, SCTP, raw QUIC, DTLS, CoAP, OSCORE, WebRTC, ZeroMQ, NNG |
 | [brokers.md](brokers.md) | MQTT, MQTT-SN, AMQP 1.0, STOMP, Redis Pub/Sub and Streams, PostgreSQL NOTIFY |
 | [offline.md](offline.md) | File and directory mailboxes, append log, SFTP and SCP, offline bundles, QR sequences, BPv7 |
@@ -96,6 +98,8 @@ marked. Evidence levels:
 | HTTP/3 | `http3` | [http](http.md#http3) | In-repo |
 | WebTransport (bidi, uni, datagrams) | `webtransport` | [http](http.md#webtransport) | In-repo; browser runs predate the author model |
 | Framed TCP/TLS | `framed` | [streams](streams.md#framed-tcp-and-tls) | In-repo |
+| IRC over WebSocket (native tunnel) | `irc_websocket` | [native](native.md#irc-over-websocket) | In-repo |
+| IRC through HTTP CONNECT (native tunnel) | `irc_connect` | [native](native.md#irc-through-http-connect) | In-repo |
 | Unix stream, seqpacket (Linux), datagram | `unix`, `unixpacket`, `unixgram` | [streams](streams.md#unix-sockets) | In-repo |
 | stdio, socket pair, inherited FD | `stdio`, `socketpair`, `inherited` | [streams](streams.md#parent-owned-streams) | In-repo |
 | FIFO pair | `fifo` | [streams](streams.md#fifo-pair) | In-repo |

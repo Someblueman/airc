@@ -51,6 +51,9 @@ type Backend struct {
 	// pool keeps sessions that finished a request cleanly for the same
 	// author's next one; see sessionPool.
 	pool *sessionPool
+	// followLease and followKeepAlive shape followed checks (Follow); a
+	// zero lease refuses them.
+	followLease, followKeepAlive time.Duration
 }
 
 // Outcome contains evidence after all connection work has stopped. Observed
@@ -85,7 +88,7 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor, pool: newSessionPool(c.Limits.IdleSessions, c.Limits.SessionsPerAuthor), waitActive: map[string]int{}, waitLimit: c.Limits.Waits}
+	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor, pool: newSessionPool(c.Limits.IdleSessions, c.Limits.SessionsPerAuthor), waitActive: map[string]int{}, waitLimit: c.Limits.Waits, followLease: time.Duration(c.Limits.FollowSeconds) * time.Second, followKeepAlive: time.Duration(c.Limits.FollowKeepAliveSeconds) * time.Second}
 	if entry, ok := c.AuthorUpstream(); ok {
 		dial, err := dialTemplate(entry)
 		if err != nil {

@@ -117,6 +117,23 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		}
 	}
 	nick := c.currentNick()
+	c.mu.Lock()
+	resume := c.resume
+	c.mu.Unlock()
+	if resume != "" && !c.cfg.Ephemeral {
+		// Only a server that issued the secret (767) knows RESUME, so an
+		// older server is never asked.
+		line, err := commandLine("RESUME", []string{nick, resume}, "")
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, err
+		}
+		if err := c.writeLine(line); err != nil {
+			c.clearConn(conn)
+			_ = conn.Close()
+			return nil, nil, err
+		}
+	}
 	nickLine, err := commandLine("NICK", []string{nick}, "")
 	if err != nil {
 		_ = conn.Close()
@@ -152,6 +169,12 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		}
 		if command.Name == "766" {
 			c.setEphemeral(true)
+		}
+		if command.Name == "767" {
+			secret, _ := command.Param(1)
+			if protocol.ValidMessageID(secret) {
+				c.setResume(secret)
+			}
 		}
 		if command.Name == "005" {
 			c.addFeatures(command.Params)

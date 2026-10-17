@@ -66,6 +66,11 @@ func TestHTTP3EndpointDialsByNameAndRedials(t *testing.T) {
 	if h.q.conn == first {
 		t.Fatal("did not dial again")
 	}
+	// The redial resumed the TLS session and sent its request in the
+	// first flight.
+	if !h.Resumed0RTT() {
+		t.Fatal("the redial did not use 0-RTT")
+	}
 	_ = k.Close()
 	if _, err := h.call(t.Context(), request{RequestID: "c", Operation: "history.read", Target: targetOf("#room"), Limit: 1}); err == nil || !strings.Contains(err.Error(), "closed") {
 		t.Fatalf("after Close: %v", err)

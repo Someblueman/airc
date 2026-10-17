@@ -69,16 +69,21 @@ const (
 )
 
 type Client struct {
-	cfg         Config
-	mu          sync.Mutex
-	writeMu     sync.Mutex
-	conn        net.Conn
-	nick        string
-	joined      map[string]struct{}
-	away        string
-	monitoring  []string
-	ephemeral   bool
-	accountID   string
+	cfg        Config
+	mu         sync.Mutex
+	writeMu    sync.Mutex
+	conn       net.Conn
+	nick       string
+	joined     map[string]struct{}
+	away       string
+	monitoring []string
+	ephemeral  bool
+	accountID  string
+	// resume is the secret the server issued at registration (767). On
+	// reconnect it is presented with RESUME, so a session the server still
+	// holds for a link that went silent is taken over instead of refusing
+	// the nickname.
+	resume      string
 	features    map[string]string
 	channelsRaw bool
 	agentsRaw   bool
@@ -496,6 +501,17 @@ func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }
 
 func (c *Client) setAccountID(id string) { c.mu.Lock(); c.accountID = id; c.mu.Unlock() }
+
+func (c *Client) setResume(secret string) { c.mu.Lock(); c.resume = secret; c.mu.Unlock() }
+
+// Resumable reports whether the server issued this connection a resume
+// secret, so a reconnect can take the session over if the server still
+// holds it (RESUME=1).
+func (c *Client) Resumable() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.resume != ""
+}
 
 // Ephemeral reports whether the server granted a one-shot session.
 func (c *Client) Ephemeral() bool {
