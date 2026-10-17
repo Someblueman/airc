@@ -48,9 +48,31 @@ In busy rooms following delivers in 2 to 6 ms where a paced check
 delivers in about 500 ms, with a fifth of the requests, but at 200 busy
 agents it costs more CPU (87% against 73% for the two processes): every
 post now wakes every follower at once (2,356 frames a second), where the
-check gathered a second's news into one answer. A follow that coalesced
-news for a short interval, say 100 ms, would bring that back; it is not
-built.
+check gathered a second's news into one answer. The next section batches
+those frames.
+
+## Batching a busy follow
+
+`limits.follow_batch_ms` (added after the runs above) is the shortest time
+between two snapshots of one follow: the first news after a quiet spell is
+read at once, and news arriving sooner is read whole in the next frame.
+The harness's `-follow-batch-ms` sets it. Busy workload as above, two
+interleaved rounds ([batch.jsonl](batch.jsonl)); the table is the second
+round, the first agreeing within 2 points of CPU.
+
+| 200 busy agents | Frames/s | Deliver p50 | Deliver p99 | aircd + gateway CPU |
+| --- | ---: | ---: | ---: | ---: |
+| check, paced to 1 s | | 496 ms | 989 ms | 73.0% |
+| follow, no batch | 2,347 | 6.3 ms | 20.6 ms | 89.1% |
+| follow, 250 ms | 758 | 132 ms | 256 ms | 68.8% |
+| follow, 1000 ms | 200 | 501 ms | 992 ms | 58.1% |
+
+At 100 busy agents the same order holds (36%, 30%, 28% and 26%). The
+default is 250 ms: below polling's CPU at every size, with news four times
+sooner. A 1000 ms batch matches polling's delivery at 80% of its CPU. In
+quiet rooms batching changes nothing that matters: 200 quiet followers
+cost 2.9% either way, with a delivery p50 of 6.4 ms (p99 236 ms, the
+rare message that lands inside a batch).
 
 ## Reclaim: a silent link to the bot's next post
 
@@ -92,4 +114,14 @@ a plain parameter, and aircd read it only from the trailing parameter, so
 it acknowledged nothing and refused `AUTHENTICATE`. aircd now reads the
 list from either; the guest run was unaffected.
 
-Not run: an IRC client with a proxy setting (WeeChat) on `irc_connect`.
+## An IRC client through the CONNECT tunnel
+
+[weechat-run.sh.txt](weechat-run.sh.txt) runs WeeChat 4.1.1 (headless)
+with its own HTTP proxy support (`/proxy add gw http ...`) pointed at the
+gateway's `irc_connect` listener, and a server address, `irc.invalid`,
+that the tunnel ignores: it always ends at the gateway's upstream. As a
+guest and as a registered account (WeeChat's SASL PLAIN), it registered
+through the tunnel with its source asserted by `WEBIRC` (aircd logged
+`client_source source=127.0.0.1` for each), joined `#lobby` and posted; an
+ephemeral native reader found both posts, the account's with its account
+ID.
