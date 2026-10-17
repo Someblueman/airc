@@ -39,10 +39,17 @@ func (s *Server) capLocked(c *session, cmd protocol.Command) {
 		if !c.registered {
 			c.capNegotiating = true
 		}
-		caps := strings.Fields(cmd.Trailing)
+		// The list is the last parameter, with or without the colon a
+		// multi-word list needs: "CAP REQ sasl" and "CAP REQ :sasl" are
+		// both standard, and web clients send the former.
+		requested := cmd.Trailing
+		if requested == "" {
+			requested, _ = cmd.Param(1)
+		}
+		caps := strings.Fields(requested)
 		for _, cap := range caps {
 			if (cap != "sasl" && cap != "-sasl") || s.accountsAt == "" || c.registered {
-				reply("NAK", cmd.Trailing)
+				reply("NAK", requested)
 				return
 			}
 		}
@@ -52,7 +59,7 @@ func (s *Server) capLocked(c *session, cmd protocol.Command) {
 		if !c.saslEnabled {
 			c.saslBuffer, c.saslStarted = "", false
 		}
-		reply("ACK", cmd.Trailing)
+		reply("ACK", requested)
 	case "END":
 		if c.saslStarted {
 			s.numericLocked(c, "906", nil, "SASL authentication aborted")

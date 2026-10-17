@@ -15,9 +15,9 @@ its row in the [carriers table](README.md#carriers) and delete the line.
 - **Native OSCORE**: build the worker and run it on Linux and Darwin.
 - **Browsers**: the author-header flow over HTTP, WebSocket and WebTransport
   in a real browser with a trusted certificate.
-- **Native tunnels**: a web client (gamja or The Lounge) on
-  `irc_websocket`, and an IRC client with a proxy setting (WeeChat) on
-  `irc_connect`, each as a guest and a registered account.
+- **Native tunnels**: an IRC client with a proxy setting (WeeChat) on
+  `irc_connect`, as a guest and a registered account; gamja has run on
+  `irc_websocket`.
 - **WebRTC**: a real remote path through NAT or a TURN relay.
 - **Physical links**: UART over a real serial line, and an offline bundle
   carried on removable media.

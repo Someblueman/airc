@@ -100,3 +100,18 @@ func TestSASLUnfinishedLoginReceivesNoLiveTraffic(t *testing.T) {
 		}
 	})
 }
+
+// A client may send the capability list as a plain parameter, "CAP REQ
+// sasl", as web clients do; it is the same request as "CAP REQ :sasl".
+func TestSASLRequestWithoutTrailingColon(t *testing.T) {
+	address, _ := collaborationServer(t, t.TempDir())
+	createWireAccount(t, address, "alice")
+	c, r := rawConn(t, address)
+	io.WriteString(c, "CAP LS 302\r\nNICK alice\r\nUSER u 0 * :Alice\r\nCAP REQ sasl\r\nAUTHENTICATE PLAIN\r\n")
+	expectLine(t, r, c, " ACK :sasl")
+	expectLine(t, r, c, "AUTHENTICATE +")
+	payload := base64.StdEncoding.EncodeToString([]byte("\x00alice\x00" + testAdminToken))
+	io.WriteString(c, "AUTHENTICATE "+payload+"\r\nCAP END\r\n")
+	expectLine(t, r, c, " 903 ")
+	expectLine(t, r, c, " 001 ")
+}

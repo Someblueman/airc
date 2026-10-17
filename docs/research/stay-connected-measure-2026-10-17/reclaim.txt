@@ -1,0 +1,18 @@
+mode=reclaim keepalive=15s probe=5s read_timeout=2m0s
+trial 1: back in 19.66s (room saw quit: false)
+trial 2: back in 19.16s (room saw quit: false)
+trial 3: back in 19.19s (room saw quit: false)
+trial 4: back in 22.97s (room saw quit: false)
+trial 5: back in 19.17s (room saw quit: false)
+trial 6: back in 19.25s (room saw quit: false)
+trial 7: back in 19.20s (room saw quit: false)
+trial 8: back in 19.16s (room saw quit: false)
+trial 9: back in 19.15s (room saw quit: false)
+trial 10: back in 19.25s (room saw quit: false)
+summary: trials=10 p50=19.20s min=19.15s max=22.97s quits_seen=0
+mode=strip-resume keepalive=15s probe=5s read_timeout=2m0s
+trial 1: back in 126.89s (room saw quit: true)
+trial 2: back in 120.10s (room saw quit: true)
+trial 3: back in 121.60s (room saw quit: true)
+summary: trials=3 p50=121.60s min=120.10s max=126.89s quits_seen=3
+DONE

@@ -50,11 +50,11 @@ third-party client yet:
 
 ## Not measured
 
-The plan's targets were not run on a harness here: silent drop to a bot
-posting again (the test proves promptness, not a number), requests per
-second for 200 quiet followers (the 2026-10-14 harness polls `check`; it
-has not been taught to follow), and the saved round trip of 0-RTT on a
-real network. The datagram tests that need multicast, UDP-Lite over IPv6
+The plan's targets were not run on a harness here; the
+[measurement note](../stay-connected-measure-2026-10-17/README.md) of
+the same day runs the reclaim and follower targets and a real browser on
+the WebSocket tunnel. The saved round trip of 0-RTT on a real network
+remains unmeasured. The datagram tests that need multicast, UDP-Lite over IPv6
 and `/dev/mqueue` fail in this container as they do on `main`.
 
 ## Left for later

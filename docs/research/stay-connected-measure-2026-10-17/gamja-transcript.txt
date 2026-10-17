@@ -1,0 +1,52 @@
+gamja 1.0.0-beta.11 in Chromium 141.0.7390.37 (Playwright 1.56.1), served from
+http://127.0.0.1:16688 with config.json pointing at ws://127.0.0.1:16689/,
+the gateway's irc_websocket listener (allowed_origins: the page's origin),
+in front of aircd at 127.0.0.1:16690 with a gateway token. Frames as the
+browser saw them (> sent, < received), abridged.
+
+== guest (auth disabled, autoconnect)
+> CAP LS 302
+> NICK gamja-guest
+> USER gamja-guest 0 * gamja-guest
+< :server 786 * 127.0.0.1 :Source accepted
+< :server CAP * LS :sasl=PLAIN
+> CAP REQ sasl
+> CAP END
+< :server CAP gamja-guest ACK :
+< :server 005 gamja-guest RESUME=1 CHECK=1 ... :are supported by this server
+< :server 767 gamja-guest 760e02af43637c283fc969f0d42e8423 :Resume secret
+< :server 001 gamja-guest :Welcome to airc, gamja-guest
+> JOIN #lobby
+< :gamja-guest!gamja-guest@localhost JOIN #lobby
+> PRIVMSG #lobby :hello from gamja as a guest
+< @msgid=32c154ecaf0e6b2f45ccaf5a058a2b9f;time=... :gamja-guest!gamja-guest@localhost PRIVMSG #lobby :hello from gamja as a guest
+
+== account (auth mandatory; carol registered natively first)
+> CAP LS 302
+> NICK carol
+> USER carol 0 * carol
+< :server 786 * 127.0.0.1 :Source accepted
+< :server CAP * LS :sasl=PLAIN
+> CAP REQ sasl
+> AUTHENTICATE PLAIN
+> AUTHENTICATE AGNhcm9sAGI4...
+> CAP END
+< :server CAP carol ACK :sasl
+< AUTHENTICATE +
+< :server 779 carol 20ee48eb683acd2ed4cc433977f641ec :Account authenticated
+< :server 900 carol carol!carol@localhost carol :Logged in as carol
+< :server 903 carol :SASL authentication successful
+< :server 767 carol b93e260a4d8855495edab71951881999 :Resume secret
+> JOIN #lobby
+< :carol!carol@localhost JOIN #lobby
+> PRIVMSG #lobby :hello from gamja as carol
+< @msgid=6a7906d5aa4675e78d3fd9d91affd335;...;+airc/chat=... :carol!carol@localhost PRIVMSG #lobby :hello from gamja as carol
+
+== native history (an ephemeral reader on aircd's own port)
+:server 760 auditor #lobby :{"id":"4ebdd4be...","seq":1,"from":"gamja-guest","target":"#lobby","body_base64":"aGVsbG8gZnJvbSBnYW1qYSBhcyBhIGd1ZXN0",...}
+:server 760 auditor #lobby :{"account_id":"20ee48eb683acd2ed4cc433977f641ec","id":"6a7906d5...","seq":2,"from":"carol","target":"#lobby","body_base64":"aGVsbG8gZnJvbSBnYW1qYSBhcyBjYXJvbA",...}
+
+Before the CAP fix in this change, the account run failed: gamja sends
+"CAP REQ sasl" (no colon) and aircd read the list from the trailing
+parameter only, answered "ACK :" and refused AUTHENTICATE with 904
+"Enable SASL before registration".
