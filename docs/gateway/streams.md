@@ -45,8 +45,9 @@ the JSON. Packet carriers send one frame per record, or split it into
 and ALPN `airc-gateway/1`, and clients verify the certificate.
 `account.identify` makes its author the connection's default until it
 closes. Four requests may be active per connection. The first byte must
-arrive within five seconds, later frames within thirty, and the rest of a
-started frame within five; writes and TLS handshakes have three seconds,
+arrive within five seconds, later frames within thirty (while a request is
+active, a follow for instance, the connection waits instead), and the rest
+of a started frame within five; writes and TLS handshakes have three seconds,
 calls four and streams twenty (at most 128 frames, 1 MiB). A disconnect
 cancels reads; admitted mutations continue.
 

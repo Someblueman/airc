@@ -27,7 +27,23 @@ type correlatedTransport struct {
 	// plain is this connection's source and session: each frame's contract
 	// request runs as its author. nil refuses every frame.
 	plain *dispatch.Ingress
+	// streaming, when set, tells the transport before each read whether a
+	// request is still active on the connection, so a client that is only
+	// reading a stream (a follow for minutes) is not dropped for sending
+	// nothing; the stream's own writes notice a dead peer.
+	streaming func(bool)
 }
+
+// ConnectionIdle is how long a connection carrier (framed, Unix, WebSocket)
+// waits for a client's next frame between requests before closing; a
+// connection with a request active, such as a follow, waits streamIdle
+// instead, since the stream's own writes notice a dead peer. Tests shorten
+// them; linkedStreamIdle is empty in release builds (core.LinkedDuration).
+var (
+	ConnectionIdle   = 30 * time.Second
+	streamIdle       = core.LinkedDuration(linkedStreamIdle, time.Hour)
+	linkedStreamIdle string
+)
 
 func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if cap(requests) < 1 || transport.next == nil || transport.write == nil {
@@ -54,6 +70,11 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 		return transport.write(FrameResponse{Version: 1, CorrelationID: id, Sequence: sequence, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
 	}
 	for {
+		if transport.streaming != nil {
+			activeMu.Lock()
+			transport.streaming(len(active) > 0)
+			activeMu.Unlock()
+		}
 		body, err := transport.next()
 		if err != nil {
 			if transport.gracefulEOF && errors.Is(err, errFramedCleanEOF) {

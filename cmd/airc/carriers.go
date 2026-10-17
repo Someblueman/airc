@@ -475,9 +475,9 @@ func answeredBy(opt options, r reached, e fallback.Endpoint) {
 }
 
 // carrierName is the carrier to report for an answer: empty for native IRC
-// at opt's own address.
+// at opt's own address, or when no race chose one.
 func carrierName(opt options, e fallback.Endpoint) string {
-	if e == primaryEndpoint(opt) {
+	if e.Name == "" || e == primaryEndpoint(opt) {
 		return ""
 	}
 	return e.String()

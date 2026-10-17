@@ -2,6 +2,7 @@ package fallback
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -28,6 +29,20 @@ func (c *Client) dialHTTP3(ctx context.Context, e Endpoint, progress func()) (*h
 	h.use(q)
 	h.url = "https://" + net.JoinHostPort(c.host(e), strconv.Itoa(e.Port)) + "/v1/request"
 	return h, nil
+}
+
+// quicSessions is the TLS session cache every QUIC connection shares, keyed
+// by server name, so a redial resumes the session and may send 0-RTT.
+var quicSessions = tls.NewLRUClientSessionCache(64)
+
+func (c *Client) sessions() tls.ClientSessionCache { return quicSessions }
+
+// Resumed0RTT reports whether the QUIC connection in use sent 0-RTT data:
+// a resumed session whose first request rode the handshake.
+func (h *http3Conn) Resumed0RTT() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.q != nil && h.q.conn.ConnectionState().Used0RTT
 }
 
 // http3Conn carries contract requests over one QUIC connection at a time,
@@ -155,7 +170,12 @@ func (h *http3Conn) dialAddr(ctx context.Context, addr netip.AddrPort, progress 
 	if keepAlive <= 0 {
 		keepAlive = 15 * time.Second
 	}
-	conn, err := transport.Dial(ctx, net.UDPAddrFromAddrPort(addr), h.c.tlsConfig(h.e, http3.NextProtoH3), &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
+	// A resumed session sends its first request in the handshake's first
+	// flight (0-RTT): the gateway's contract is replay-safe, and a redial
+	// after the gateway closed an idle connection costs no round trip.
+	tlsConfig := h.c.tlsConfig(h.e, http3.NextProtoH3)
+	tlsConfig.ClientSessionCache = h.c.sessions()
+	conn, err := transport.DialEarly(ctx, net.UDPAddrFromAddrPort(addr), tlsConfig, &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
 	if err != nil {
 		_ = transport.Close()
 		_ = udp.Close()

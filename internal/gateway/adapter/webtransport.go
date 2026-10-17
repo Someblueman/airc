@@ -50,7 +50,7 @@ func WebTransportServer(d *dispatch.Dispatcher, requests chan struct{}, origins 
 	}
 	a.H3 = &http3.Server{
 		TLSConfig:      &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h3"}},
-		QUICConfig:     &quic.Config{Allow0RTT: false, EnableDatagrams: true, EnableStreamResetPartialDelivery: true, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: int64(cap(requests)), MaxIncomingUniStreams: 16, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10},
+		QUICConfig:     &quic.Config{Allow0RTT: true, EnableDatagrams: true, EnableStreamResetPartialDelivery: true, HandshakeIdleTimeout: 5 * time.Second, MaxIdleTimeout: 30 * time.Second, MaxIncomingStreams: int64(cap(requests)), MaxIncomingUniStreams: 16, InitialStreamReceiveWindow: 64 << 10, MaxStreamReceiveWindow: 64 << 10, InitialConnectionReceiveWindow: 64 << 10, MaxConnectionReceiveWindow: 64 << 10},
 		MaxHeaderBytes: 16 << 10, IdleTimeout: 30 * time.Second,
 	}
 	a.H3.ConnContext = func(ctx context.Context, conn *quic.Conn) context.Context {

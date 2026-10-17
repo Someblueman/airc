@@ -52,7 +52,10 @@ func HTTP3Server(d *dispatch.Dispatcher, slots int, origins []string) (*http3.Se
 		Handler:   h,
 		TLSConfig: tlsConfig,
 		QUICConfig: &quic.Config{
-			Allow0RTT:                      false,
+			// Requests are replay-safe: a mutation is one job by author and
+			// request ID however often it arrives, reads change nothing, so
+			// a resumed client may post in its first flight.
+			Allow0RTT:                      true,
 			HandshakeIdleTimeout:           http3HandshakeIdle,
 			MaxIdleTimeout:                 http3IdleTimeout,
 			MaxIncomingStreams:             int64(slots),

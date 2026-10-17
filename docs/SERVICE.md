@@ -115,7 +115,7 @@ airc service install --listen 0.0.0.0:6697 \
 
 - `http+tls` on TCP 443 looks like any HTTPS site and goes through proxies (`airc` honours `HTTPS_PROXY` and tunnels with `CONNECT`, so TLS stays end to end). WebSocket on another port is a second TCP path.
 - `irc_websocket` and `irc_connect` carry native IRC the same way, so the commands that need native IRC keep working on such a network; `--gateway irc_websocket=0.0.0.0:8443` puts one on another TCP port.
-- `http3` on UDP 443 reaches the gateway where TCP is blocked or throttled. Its QUIC connection survives the client's address changing (a NAT rebinding, or Wi-Fi giving way to cellular) without a new handshake, and HTTP proxies do not apply to it.
+- `http3` on UDP 443 reaches the gateway where TCP is blocked or throttled. Its QUIC connection survives the client's address changing (a NAT rebinding, or Wi-Fi giving way to cellular) without a new handshake, a redial resumes the TLS session and sends its request in the first flight (0-RTT), and HTTP proxies do not apply to it.
 - Ports below 1024 need privileges: on Linux, `sudo setcap cap_net_bind_service=+ep "$(command -v airc-gateway)"` (again after each upgrade), or forward 443 to the default ports with the firewall. Without a privileged port, the defaults (6680 TCP and UDP, 6681) still give clients three different paths.
 
 The carriers are advertised to every client that connects natively once, so later commands race them on their own (see [client fallback](#client-fallback)).

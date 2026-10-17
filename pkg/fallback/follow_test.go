@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	gwservice "github.com/Someblueman/airc/internal/gateway/service"
@@ -160,5 +161,43 @@ func TestFollowIsRefusedOnARequestCarrier(t *testing.T) {
 	}
 	if err := reader.Follow(t.Context(), CheckSet{Rooms: []RoomAfter{{Room: "#room"}}, Limit: 10}, 0, func(Checked) error { return nil }); !errors.Is(err, ErrNoFollow) {
 		t.Fatalf("Follow on HTTP: %v", err)
+	}
+}
+
+// A client that only reads its follow sends the gateway nothing for the
+// whole lease; the connection must not be dropped for that silence.
+func TestFollowOutlivesTheConnectionIdle(t *testing.T) {
+	released := adapter.ConnectionIdle
+	adapter.ConnectionIdle = 500 * time.Millisecond
+	t.Cleanup(func() { adapter.ConnectionIdle = released })
+	addr := testserver.Start(t, server.Config{HistoryLimit: 100}, nil)
+	endpoints := followGateway(t, addr, 3, 1)
+	for _, name := range []string{"framed", "websocket"} {
+		t.Run(name, func(t *testing.T) {
+			c := &Client{Host: "127.0.0.1", Nick: "quiet-" + name, Endpoints: []Endpoint{endpoints[name]}}
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			reader, err := c.ReadRooms(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reader.Close()
+			frames := 0
+			start := time.Now()
+			err = reader.Follow(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#quiet"}}, Limit: 10}, 5*time.Second, func(Checked) error {
+				frames++
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("follow ended with %v after %v and %d frames", err, time.Since(start), frames)
+			}
+			if elapsed := time.Since(start); elapsed < 2500*time.Millisecond {
+				t.Fatalf("the follow lasted %v, not its lease", elapsed)
+			}
+			// The connection is still usable after the lease.
+			if _, err := reader.Check(ctx, []RoomAfter{{Room: "#quiet"}}, 10, 0); err != nil {
+				t.Fatalf("after the follow: %v", err)
+			}
+		})
 	}
 }

@@ -160,11 +160,13 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 		}
 	}()
 	defer func() { cancel(); <-pingDone }()
-	first := true
+	first, active := true, false
 	next := func() ([]byte, error) {
-		idle := 30 * time.Second
+		idle := ConnectionIdle
 		if first {
 			idle = 5 * time.Second
+		} else if active {
+			idle = streamIdle
 		}
 		readCtx, finish := context.WithTimeout(ctx, idle)
 		kind, body, err := conn.Read(readCtx)
@@ -178,7 +180,7 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 		}
 		return body, nil
 	}
-	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain}, d, requests)
+	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain, streaming: func(streaming bool) { active = streaming }}, d, requests)
 }
 
 func requestedSubprotocol(values []string, wanted string) bool {
