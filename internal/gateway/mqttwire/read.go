@@ -1,6 +1,8 @@
-// Package mqttwire implements the bounded MQTT 3.1.1 publish-only ingress profile:
-// QoS 0 and 1 publications, no subscriptions, wills or retained messages.
-// Parsing does not authenticate, admit work, or acknowledge native acceptance.
+// Package mqttwire implements bounded MQTT profiles: MQTT 3.1.1 publish-only
+// ingress (QoS 0 and 1 publications, no subscriptions, wills or retained
+// messages), and MQTT 5 with request/response, subscriptions and sessions
+// (see v5.go). Parsing does not authenticate, admit work, or acknowledge
+// native acceptance.
 package mqttwire
 
 import (
@@ -29,15 +31,27 @@ const (
 )
 
 type Packet struct {
-	Kind                         Kind
+	Kind Kind
+	// Version is the protocol level: 4 (MQTT 3.1.1) or 5.
+	Version                      byte
 	ClientID, Username, Password string
-	HasPassword, CleanSession    bool
-	KeepAlive                    uint16
-	Topic, Payload               string
-	// QoS is 0 (at most once, no acknowledgement) or 1 (PUBACK, with ID).
+	// CleanSession is MQTT 5's Clean Start.
+	HasPassword, CleanSession bool
+	KeepAlive                 uint16
+	Topic, Payload            string
+	// QoS is 0 (at most once, no acknowledgement) or 1 (PUBACK, with ID);
+	// an MQTT 5 PUBLISH may also carry 2, which the service refuses.
 	QoS       byte
 	ID        uint16
 	Duplicate bool
+	// MQTT 5 only: Will and Retain flags, which the service refuses, the
+	// packet's properties, a DISCONNECT's or PUBACK's reason code, and a
+	// SUBSCRIBE's entries or an UNSUBSCRIBE's filters.
+	Will, Retain  bool
+	Props         Properties
+	Reason        byte
+	Subscriptions []Subscription
+	Filters       []string
 }
 
 // Read consumes exactly one packet. It never buffers the next packet, and

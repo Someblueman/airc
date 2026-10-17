@@ -55,13 +55,16 @@ func (f *fields) text(limit int) string {
 }
 
 func decode(header byte, body []byte) (Packet, error) {
-	p := Packet{Kind: Kind(header >> 4), Duplicate: header&8 != 0}
+	p := Packet{Kind: Kind(header >> 4), Version: 4, Duplicate: header&8 != 0}
 	switch p.Kind {
 	case Ping, Disconnect:
 		return p, nil
 	case Connect:
 		if len(body) < 10 || string(body[:6]) != "\x00\x04MQTT" {
 			return Packet{}, ErrPacket
+		}
+		if body[6] == 5 {
+			return decodeConnectV5(body)
 		}
 		if body[6] != 4 {
 			return Packet{}, ErrVersion
