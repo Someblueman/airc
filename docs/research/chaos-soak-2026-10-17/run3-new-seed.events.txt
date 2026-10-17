@@ -1,0 +1,227 @@
+    0.0s seed               8830618716642717531
+   35.9s fault-aircd-pause  SIGSTOP for 9s
+   64.9s fault-gateway      SIGTERM and restart
+   64.9s mqtt-reconnect     mqtt-1: EOF
+   64.9s mqtt-reconnect     mqtt-0: EOF
+   64.9s follow-resume      follow-websocket-2: gateway follow went silent
+   64.9s follow-resume      follow-websocket-3: gateway follow went silent
+   64.9s follow-resume      follow-framed-0: EOF
+   64.9s follow-resume      follow-framed-1: EOF
+   74.9s fault-cut          websocket: 2 connections
+   74.9s follow-resume      follow-websocket-2: gateway follow went silent
+   74.9s follow-resume      follow-websocket-3: gateway follow went silent
+   90.9s fault-aircd        SIGTERM and restart
+   90.9s follow-resume      follow-framed-1: gateway error upstream_unavailable
+   90.9s follow-resume      follow-framed-0: gateway error upstream_unavailable
+   90.9s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+   90.9s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  108.0s fault-aircd        SIGTERM and restart
+  108.0s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  108.0s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  108.0s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  108.0s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  145.0s fault-gateway      SIGTERM and restart
+  145.0s mqtt-reconnect     mqtt-1: EOF
+  145.0s follow-resume      follow-websocket-2: gateway follow went silent
+  145.0s follow-resume      follow-websocket-3: gateway follow went silent
+  145.0s follow-resume      follow-framed-0: EOF
+  145.0s mqtt-reconnect     mqtt-0: EOF
+  145.0s follow-resume      follow-framed-1: EOF
+  157.1s fault-cut          websocket: 2 connections
+  157.1s follow-resume      follow-websocket-3: gateway follow went silent
+  157.1s follow-resume      follow-websocket-2: gateway follow went silent
+  194.1s fault-gateway      SIGKILL and restart
+  194.1s mqtt-reconnect     mqtt-1: EOF
+  194.1s follow-resume      follow-framed-0: EOF
+  194.1s follow-resume      follow-framed-1: EOF
+  194.1s mqtt-reconnect     mqtt-0: EOF
+  194.1s follow-resume      follow-websocket-2: gateway follow went silent
+  194.1s follow-resume      follow-websocket-3: gateway follow went silent
+  219.1s fault-cut          irc: 0 connections
+  243.1s fault-freeze       mqtt for 28s
+  303.2s fault-freeze       irc for 36s
+  363.2s fault-aircd        SIGTERM and restart
+  363.2s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  363.2s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  363.2s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  363.2s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  393.2s fault-gateway      SIGKILL and restart
+  393.2s follow-resume      follow-websocket-2: gateway follow went silent
+  393.2s mqtt-reconnect     mqtt-1: EOF
+  393.2s follow-resume      follow-framed-0: EOF
+  393.2s follow-resume      follow-websocket-3: gateway follow went silent
+  393.2s mqtt-reconnect     mqtt-0: EOF
+  393.2s follow-resume      follow-framed-1: EOF
+  409.3s fault-cut          mqtt: 2 connections
+  409.3s mqtt-reconnect     mqtt-1: EOF
+  409.3s mqtt-reconnect     mqtt-0: EOF
+  425.3s fault-aircd-pause  SIGSTOP for 11s
+  435.1s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  435.1s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  435.1s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  435.1s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  475.3s fault-cut          framed: 2 connections
+  475.3s follow-resume      follow-framed-0: EOF
+  475.3s follow-resume      follow-framed-1: EOF
+  497.3s fault-cut          mqtt: 2 connections
+  497.3s mqtt-reconnect     mqtt-1: EOF
+  497.3s mqtt-reconnect     mqtt-0: EOF
+  507.3s fault-aircd        SIGTERM and restart
+  507.3s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  507.3s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  507.3s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  507.3s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  524.3s fault-freeze       mqtt for 15s
+  560.3s fault-gateway      SIGTERM and restart
+  560.3s mqtt-reconnect     mqtt-0: EOF
+  560.3s mqtt-reconnect     mqtt-1: EOF
+  560.3s follow-resume      follow-framed-1: EOF
+  560.3s follow-resume      follow-framed-0: EOF
+  560.3s follow-resume      follow-websocket-2: gateway follow went silent
+  560.3s follow-resume      follow-websocket-3: gateway follow went silent
+  576.4s fault-freeze       irc for 29s
+  624.4s fault-freeze       framed for 25s
+  679.4s fault-freeze       framed for 23s
+  724.4s fault-gateway      SIGTERM and restart
+  724.4s follow-resume      follow-websocket-2: gateway follow went silent
+  724.4s follow-resume      follow-websocket-3: gateway follow went silent
+  724.4s mqtt-reconnect     mqtt-0: EOF
+  724.4s follow-resume      follow-framed-1: EOF
+  724.4s mqtt-reconnect     mqtt-1: EOF
+  724.4s follow-resume      follow-framed-0: EOF
+  762.5s fault-aircd        SIGTERM and restart
+  762.5s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  762.5s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  762.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  762.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  790.5s fault-aircd        SIGTERM and restart
+  790.5s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  790.5s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  790.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  790.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  828.6s fault-cut          irc: 0 connections
+  846.6s fault-aircd        SIGTERM and restart
+  846.6s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  846.6s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  846.6s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  846.6s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  862.6s fault-freeze       mqtt for 33s
+  895.6s mqtt-reconnect     mqtt-0: write tcp 127.0.0.1:34520->127.0.0.1:41813: write: connection reset by peer
+  895.6s mqtt-reconnect     mqtt-1: EOF
+  906.6s fault-aircd-pause  SIGSTOP for 6s
+  932.6s fault-gateway      SIGTERM and restart
+  932.6s follow-resume      follow-websocket-2: gateway follow went silent
+  932.6s follow-resume      follow-framed-1: EOF
+  932.6s mqtt-reconnect     mqtt-1: EOF
+  932.6s follow-resume      follow-websocket-3: gateway follow went silent
+  932.6s follow-resume      follow-framed-0: EOF
+  932.6s mqtt-reconnect     mqtt-0: EOF
+  952.7s fault-cut          irc: 0 connections
+  990.7s fault-aircd        SIGTERM and restart
+  990.7s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  990.7s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  990.7s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  990.7s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1027.7s fault-cut          framed: 2 connections
+ 1027.7s follow-resume      follow-framed-1: EOF
+ 1027.7s follow-resume      follow-framed-0: EOF
+ 1038.7s fault-aircd        SIGTERM and restart
+ 1038.7s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1038.7s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1038.7s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1038.7s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1065.8s fault-cut          irc: 0 connections
+ 1085.8s fault-cut          mqtt: 2 connections
+ 1085.8s mqtt-reconnect     mqtt-0: EOF
+ 1085.8s mqtt-reconnect     mqtt-1: EOF
+ 1106.8s fault-gateway      SIGTERM and restart
+ 1106.8s follow-resume      follow-framed-1: EOF
+ 1106.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1106.8s follow-resume      follow-framed-0: EOF
+ 1106.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1106.8s mqtt-reconnect     mqtt-1: EOF
+ 1106.8s mqtt-reconnect     mqtt-0: EOF
+ 1143.9s fault-cut          websocket: 2 connections
+ 1143.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1143.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1172.9s fault-cut          framed: 2 connections
+ 1172.9s follow-resume      follow-framed-0: EOF
+ 1172.9s follow-resume      follow-framed-1: EOF
+ 1187.9s fault-cut          irc: 0 connections
+ 1215.9s fault-cut          websocket: 2 connections
+ 1215.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1215.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1244.9s fault-aircd        SIGTERM and restart
+ 1244.9s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1244.9s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1244.9s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1244.9s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1279.9s fault-freeze       irc for 22s
+ 1330.9s fault-cut          mqtt: 2 connections
+ 1330.9s mqtt-reconnect     mqtt-1: EOF
+ 1330.9s mqtt-reconnect     mqtt-0: EOF
+ 1367.9s fault-cut          websocket: 2 connections
+ 1367.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1367.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1404.9s fault-freeze       irc for 12s
+ 1447.9s mqtt-reconnect     mqtt-1: EOF
+ 1447.9s mqtt-reconnect     mqtt-0: EOF
+ 1447.9s fault-cut          mqtt: 2 connections
+ 1457.9s fault-aircd-pause  SIGSTOP for 3s
+ 1483.9s fault-gateway      SIGTERM and restart
+ 1483.9s mqtt-reconnect     mqtt-1: EOF
+ 1483.9s mqtt-reconnect     mqtt-0: EOF
+ 1483.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1483.9s follow-resume      follow-framed-1: EOF
+ 1483.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1483.9s follow-resume      follow-framed-0: EOF
+ 1504.0s fault-gateway      SIGKILL and restart
+ 1504.0s follow-resume      follow-framed-0: EOF
+ 1504.0s mqtt-reconnect     mqtt-1: EOF
+ 1504.0s follow-resume      follow-websocket-2: gateway follow went silent
+ 1504.0s follow-resume      follow-framed-1: EOF
+ 1504.0s mqtt-reconnect     mqtt-0: EOF
+ 1504.0s follow-resume      follow-websocket-3: gateway follow went silent
+ 1522.0s fault-gateway      SIGKILL and restart
+ 1522.0s follow-resume      follow-framed-1: EOF
+ 1522.0s follow-resume      follow-websocket-2: gateway follow went silent
+ 1522.0s follow-resume      follow-framed-0: EOF
+ 1522.0s mqtt-reconnect     mqtt-0: EOF
+ 1522.0s mqtt-reconnect     mqtt-1: EOF
+ 1522.0s follow-resume      follow-websocket-3: gateway follow went silent
+ 1558.1s fault-cut          websocket: 2 connections
+ 1558.1s follow-resume      follow-websocket-2: gateway follow went silent
+ 1558.1s follow-resume      follow-websocket-3: gateway follow went silent
+ 1594.1s fault-gateway      SIGTERM and restart
+ 1594.1s follow-resume      follow-websocket-3: gateway follow went silent
+ 1594.1s mqtt-reconnect     mqtt-0: EOF
+ 1594.1s follow-resume      follow-websocket-2: gateway follow went silent
+ 1594.1s follow-resume      follow-framed-0: EOF
+ 1594.1s mqtt-reconnect     mqtt-1: EOF
+ 1594.1s follow-resume      follow-framed-1: EOF
+ 1628.2s follow-resume      follow-framed-1: EOF
+ 1628.2s fault-cut          framed: 2 connections
+ 1628.2s follow-resume      follow-framed-0: EOF
+ 1651.2s fault-freeze       mqtt for 7s
+ 1683.2s follow-resume      follow-framed-0: EOF
+ 1683.2s follow-resume      follow-framed-1: EOF
+ 1683.2s fault-cut          framed: 2 connections
+ 1708.2s fault-aircd        SIGTERM and restart
+ 1708.2s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1708.2s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1708.2s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1708.2s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1724.2s fault-freeze       websocket for 5s
+ 1742.2s fault-gateway      SIGKILL and restart
+ 1742.2s follow-resume      follow-framed-0: EOF
+ 1742.2s mqtt-reconnect     mqtt-1: EOF
+ 1742.2s mqtt-reconnect     mqtt-0: EOF
+ 1742.2s follow-resume      follow-framed-1: EOF
+ 1742.2s follow-resume      follow-websocket-3: gateway follow went silent
+ 1742.2s follow-resume      follow-websocket-2: gateway follow went silent
+ 1762.3s fault-aircd-pause  SIGSTOP for 10s
+ 1772.3s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1772.3s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1772.3s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1772.3s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1807.3s calm               faults over; stopping posters

@@ -1,0 +1,68 @@
+{
+  "seed": 8830618716642717531,
+  "duration": "30m0s",
+  "events": {
+    "calm": 1,
+    "fault-aircd": 11,
+    "fault-aircd-pause": 5,
+    "fault-cut": 21,
+    "fault-freeze": 11,
+    "fault-gateway": 13,
+    "follow-resume": 126,
+    "mqtt-reconnect": 38,
+    "seed": 1
+  },
+  "posts_acknowledged": 8574,
+  "posts_unacknowledged": 0,
+  "posts_retried": 0,
+  "posts_in_history": 8574,
+  "duplicate_posts": 0,
+  "acknowledged_posts_missing": 0,
+  "clients": [
+    {
+      "name": "follow-framed-0",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-framed-1",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-websocket-2",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-websocket-3",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "mqtt-0",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 730,
+      "gaps": 0
+    },
+    {
+      "name": "mqtt-1",
+      "received": 8232,
+      "missing": 0,
+      "duplicates": 729,
+      "gaps": 0
+    }
+  ],
+  "wake_notices": 183,
+  "direct_messages": 343,
+  "final_direct_message_woke": true
+}
