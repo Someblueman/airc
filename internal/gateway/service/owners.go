@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
@@ -278,7 +279,7 @@ type served struct {
 	listener          net.Listener
 	slots, requests   chan struct{}
 	sessionsPerAuthor int
-	realm             string
+	realm, stateDir   string
 	syslog            *auth.SyslogAuthenticator
 	signedSyslog      *auth.SignedSyslogAuthenticator
 	sctp              adapter.SCTPMode
@@ -301,11 +302,17 @@ func serveNNG(ctx context.Context, s served) error {
 }
 
 func serveMQTT(ctx context.Context, s served) error {
-	return adapter.ServeMQTT(ctx, s.listener, s.d, s.requests, *s.l.MQTT)
+	return adapter.ServeMQTT(ctx, s.listener, s.d, s.requests, *s.l.MQTT, mqttSessionsFile(s.stateDir, s.l))
 }
 
 func mqttWebSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, func(), error) {
-	return adapter.MQTTWebSocketServer(o.work, d, o.requests, *l.MQTT, l.AllowedOrigins)
+	return adapter.MQTTWebSocketServer(o.work, d, o.requests, *l.MQTT, l.AllowedOrigins, mqttSessionsFile(o.c.StateDir, l))
+}
+
+// mqttSessionsFile is where an MQTT listener keeps its sessions across
+// restarts: in the private state directory, by listener ID.
+func mqttSessionsFile(stateDir string, l config.Listener) string {
+	return filepath.Join(stateDir, "mqtt-"+l.ID+".sessions")
 }
 
 func serveAMQP(ctx context.Context, s served) error {
@@ -494,7 +501,7 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 		transport = tls.NewListener(transport, tlsConfig)
 	}
 	serve := func() error {
-		return s.serve(o.work, served{l: l, d: d, listener: transport, slots: o.slots, requests: o.requests, sessionsPerAuthor: o.c.Limits.SessionsPerAuthor, realm: o.c.Realm, syslog: syslog, signedSyslog: signedSyslog, sctp: s.sctp})
+		return s.serve(o.work, served{l: l, d: d, listener: transport, slots: o.slots, requests: o.requests, sessionsPerAuthor: o.c.Limits.SessionsPerAuthor, realm: o.c.Realm, stateDir: o.c.StateDir, syslog: syslog, signedSyslog: signedSyslog, sctp: s.sctp})
 	}
 	if server != nil {
 		serve = func() error { return server.Serve(transport) }

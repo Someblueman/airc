@@ -30,9 +30,10 @@ type mqttBroker struct {
 	stop     context.CancelFunc
 }
 
-// newMQTTBroker builds the shared state for a listener living for parent;
-// close ends it.
-func newMQTTBroker(parent context.Context, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT) (*mqttBroker, error) {
+// newMQTTBroker builds the shared state for a listener living for parent,
+// restoring the MQTT 5 sessions kept in sessionsFile ("" keeps them in
+// memory only); close ends it.
+func newMQTTBroker(parent context.Context, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT, sessionsFile string) (*mqttBroker, error) {
 	if d == nil || !d.AuthorAccess() || cap(requests) < 1 || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return nil, errors.New("invalid MQTT owner")
 	}
@@ -45,6 +46,11 @@ func newMQTTBroker(parent context.Context, d *dispatch.Dispatcher, requests chan
 	}
 	ctx, stop := context.WithCancel(parent)
 	b := &mqttBroker{d: d, requests: requests, routes: routes, owners: mqttSessions{active: make(map[string]*mqttSession)}, sessions: newMQTT5Store(ctx), stop: stop}
+	b.sessions.path = sessionsFile
+	if err := b.sessions.load(); err != nil {
+		stop()
+		return nil, err
+	}
 	go b.sessions.sweep(ctx)
 	return b, nil
 }
@@ -53,11 +59,11 @@ func (b *mqttBroker) serve(ctx context.Context, conn net.Conn) {
 	serveMQTTConnection(ctx, conn, b.d, b.requests, b.routes, &b.owners, b.sessions)
 }
 
-// close drops waiting wills and joins running ones; call it once the
-// connections are joined.
+// close drops waiting wills, joins running ones and saves the sessions.
 func (b *mqttBroker) close() {
 	b.stop()
 	b.sessions.close()
+	_ = b.sessions.save()
 }
 
 // ServeMQTT owns and joins MQTT 3.1.1 and MQTT 5 connections, plain or TLS
@@ -67,11 +73,11 @@ func (b *mqttBroker) close() {
 // password is the listener access password, never an identity; user names
 // and client IDs carry no authority. A newer connection with the same client
 // ID replaces the older one, as MQTT requires.
-func ServeMQTT(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT) error {
+func ServeMQTT(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT, sessionsFile string) error {
 	if listener == nil {
 		return errors.New("invalid MQTT owner")
 	}
-	b, err := newMQTTBroker(parent, d, requests, options)
+	b, err := newMQTTBroker(parent, d, requests, options, sessionsFile)
 	if err != nil {
 		return err
 	}

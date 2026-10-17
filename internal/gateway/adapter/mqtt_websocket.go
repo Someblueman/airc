@@ -24,13 +24,14 @@ const MQTTWebSocketSubprotocol = "mqtt"
 // MQTTWebSocketServer serves MQTT over WebSocket: binary messages carry the
 // MQTT byte stream, for browsers and networks that pass only HTTP. Its
 // connections behave as the mqtt listener's and share one broker, living
-// for parent; close joins its wills once the server's connections are done.
-func MQTTWebSocketServer(parent context.Context, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT, allowedOrigins []string) (*http.Server, func(), error) {
+// for parent, its MQTT 5 sessions kept in sessionsFile; close joins its
+// wills and saves the sessions.
+func MQTTWebSocketServer(parent context.Context, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT, allowedOrigins []string, sessionsFile string) (*http.Server, func(), error) {
 	allowedOrigins = slices.Clone(allowedOrigins)
 	if err := config.ValidateOrigins(allowedOrigins); err != nil {
 		return nil, nil, err
 	}
-	b, err := newMQTTBroker(parent, d, requests, options)
+	b, err := newMQTTBroker(parent, d, requests, options, sessionsFile)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -96,7 +96,10 @@ const (
 // delay, by client identifier.
 type mqtt5Store struct {
 	// ctx is the listener's: a will runs within it after its connection.
-	ctx      context.Context
+	ctx context.Context
+	// path is the file the sessions are kept in across restarts; "" keeps
+	// them in memory only.
+	path     string
 	mu       sync.Mutex
 	sessions map[string]*mqtt5State
 	wills    map[string]*mqtt5Will
@@ -116,6 +119,10 @@ type mqtt5Will struct {
 // mqtt5State is one session: who owns it, what it subscribes to and where
 // each subscription has got to, and its unacknowledged QoS 1 messages.
 type mqtt5State struct {
+	// mu guards the session's subscriptions, positions and messages, which
+	// its connection's read loop and follow share and a snapshot reads;
+	// the store's mutex guards the rest.
+	mu        sync.Mutex
 	owner     string // the author scope; "" for a session without an author
 	expiry    time.Duration
 	expiresAt time.Time // zero while a connection holds the session
@@ -270,7 +277,8 @@ func (s *mqtt5Store) close() {
 	s.running.Wait()
 }
 
-// sweep forgets expired sessions every minute until ctx ends.
+// sweep forgets expired sessions, and saves the rest, every minute until
+// ctx ends.
 func (s *mqtt5Store) sweep(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -282,6 +290,8 @@ func (s *mqtt5Store) sweep(ctx context.Context) {
 			s.mu.Lock()
 			s.sweepLocked(now)
 			s.mu.Unlock()
+			// A failed save is retried at the next one.
+			_ = s.save()
 		}
 	}
 }
@@ -295,8 +305,6 @@ type mqtt5Conn struct {
 	routes   map[string]config.MQTTRoute
 	in       dispatch.Ingress
 	state    *mqtt5State
-	// stateMu guards state, which the read loop and the follow share.
-	stateMu sync.Mutex
 	// writeMu orders writes from the read loop, the follow and a takeover.
 	writeMu sync.Mutex
 	// slots holds one token per unacknowledged QoS 1 message, so no more
@@ -472,9 +480,9 @@ func (c *mqtt5Conn) scheduleWill(sessions *mqtt5Store, clientID string, will cor
 	if c.willless {
 		return
 	}
-	c.stateMu.Lock()
+	c.state.mu.Lock()
 	delay := c.state.expiry
-	c.stateMu.Unlock()
+	c.state.mu.Unlock()
 	if willDelay == nil {
 		delay = 0
 	} else {
@@ -555,9 +563,9 @@ func (c *mqtt5Conn) readLoop(idle time.Duration, expiring bool) {
 					c.disconnect(mqttProtocolError, "a session without expiry cannot gain one at DISCONNECT")
 					return
 				}
-				c.stateMu.Lock()
+				c.state.mu.Lock()
 				c.state.expiry = min(time.Duration(*e)*time.Second, mqtt5MaxSessionExpiry)
-				c.stateMu.Unlock()
+				c.state.mu.Unlock()
 			}
 			return
 		case mqttwire.PubAck:
@@ -586,8 +594,8 @@ func (c *mqtt5Conn) readLoop(idle time.Duration, expiring bool) {
 
 // acknowledged takes a client's PUBACK: the message is delivered.
 func (c *mqtt5Conn) acknowledged(id uint16) {
-	c.stateMu.Lock()
-	defer c.stateMu.Unlock()
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
 	for i, out := range c.state.inflight {
 		if out.id == id {
 			c.state.inflight = append(c.state.inflight[:i], c.state.inflight[i+1:]...)
@@ -606,9 +614,9 @@ func (c *mqtt5Conn) acknowledged(id uint16) {
 // resend sends a resumed session's unacknowledged messages again, with
 // their original packet identifiers, as MQTT requires.
 func (c *mqtt5Conn) resend() {
-	c.stateMu.Lock()
+	c.state.mu.Lock()
 	inflight := append([]*mqtt5Outbound(nil), c.state.inflight...)
-	c.stateMu.Unlock()
+	c.state.mu.Unlock()
 	for _, out := range inflight {
 		select {
 		case c.slots <- struct{}{}:
@@ -651,11 +659,11 @@ func (c *mqtt5Conn) send(ctx context.Context, topic string, qos byte, props mqtt
 		return c.write(packet)
 	}
 	for {
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		out := &mqtt5Outbound{topic: topic, props: props, body: body}
 		size := out.size()
 		if size > c.maxPacket {
-			c.stateMu.Unlock()
+			c.state.mu.Unlock()
 			<-c.slots
 			return nil
 		}
@@ -663,11 +671,11 @@ func (c *mqtt5Conn) send(ctx context.Context, topic string, qos byte, props mqtt
 			out.id = c.nextIDLocked()
 			c.state.inflight = append(c.state.inflight, out)
 			c.state.inflightBytes += size
-			c.stateMu.Unlock()
+			c.state.mu.Unlock()
 			return c.write(mqttwire.PublishV5(topic, out.id, 1, false, props, body))
 		}
 		acked := c.acked
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 		if !wait {
 			<-c.slots
 			packet := mqttwire.PublishV5(topic, 0, 0, false, props, body)
@@ -772,11 +780,11 @@ func (c *mqtt5Conn) request(packet mqttwire.Packet) (byte, string) {
 	if err == nil && op == core.AccountIdentify && sub.Author != nil {
 		// An anonymous session becomes the identified author's.
 		c.identified = true
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		if c.state.owner == "" {
 			c.state.owner = sub.Author.Scope()
 		}
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 	}
 	if responseTopic != "" {
 		c.reply(responseTopic, packet.Props.CorrelationData, result, err)
@@ -794,9 +802,9 @@ func (c *mqtt5Conn) request(packet mqttwire.Packet) (byte, string) {
 // session subscribes to it; with no subscriber it goes nowhere, as on any
 // broker.
 func (c *mqtt5Conn) reply(topic string, correlation []byte, result dispatch.DetachedResult, err error) {
-	c.stateMu.Lock()
+	c.state.mu.Lock()
 	sub := c.state.subs[topic]
-	c.stateMu.Unlock()
+	c.state.mu.Unlock()
 	if sub == nil || sub.kind != mqtt5Reply {
 		return
 	}
@@ -920,16 +928,16 @@ func (c *mqtt5Conn) subscribe(packet mqttwire.Packet) bool {
 			continue
 		}
 		sub.qos = min(s.QoS, 1)
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		existing := c.state.subs[s.Filter]
 		follows, replies := c.countLocked()
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 		if existing != nil {
 			// A repeated subscription keeps its position; only its QoS
 			// changes.
-			c.stateMu.Lock()
+			c.state.mu.Lock()
 			existing.qos = sub.qos
-			c.stateMu.Unlock()
+			c.state.mu.Unlock()
 			reasons[i] = sub.qos
 			continue
 		}
@@ -954,9 +962,9 @@ func (c *mqtt5Conn) subscribe(packet mqttwire.Packet) bool {
 			sub.after = position
 			changed = true
 		}
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		c.state.subs[s.Filter] = sub
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 		reasons[i] = sub.qos
 	}
 	c.writeMu.Lock()
@@ -1029,7 +1037,7 @@ func (c *mqtt5Conn) position(sub *mqtt5Sub, start string) (string, error) {
 func (c *mqtt5Conn) unsubscribe(packet mqttwire.Packet) bool {
 	reasons := make([]byte, len(packet.Filters))
 	changed := false
-	c.stateMu.Lock()
+	c.state.mu.Lock()
 	for i, filter := range packet.Filters {
 		sub := c.state.subs[filter]
 		if sub == nil {
@@ -1039,7 +1047,7 @@ func (c *mqtt5Conn) unsubscribe(packet mqttwire.Packet) bool {
 		delete(c.state.subs, filter)
 		changed = changed || sub.kind != mqtt5Reply
 	}
-	c.stateMu.Unlock()
+	c.state.mu.Unlock()
 	c.writeMu.Lock()
 	err := c.conn.SetWriteDeadline(time.Now().Add(mqttDeadline))
 	if err == nil {
@@ -1064,14 +1072,14 @@ func (c *mqtt5Conn) stopFollow() {
 // subscriptions, from their positions. Only the read loop calls it.
 func (c *mqtt5Conn) restartFollow() {
 	c.stopFollow()
-	c.stateMu.Lock()
+	c.state.mu.Lock()
 	var subs []*mqtt5Sub
 	for _, sub := range c.state.subs {
 		if sub.kind != mqtt5Reply {
 			subs = append(subs, sub)
 		}
 	}
-	c.stateMu.Unlock()
+	c.state.mu.Unlock()
 	if len(subs) == 0 || !c.identified {
 		return
 	}
@@ -1092,7 +1100,7 @@ func (c *mqtt5Conn) runFollow(ctx context.Context, subs []*mqtt5Sub) {
 		r := core.Request{Version: 1, RequestID: "mqtt-follow", Operation: core.Check, Limit: mqtt5FollowLimit}
 		var order []*mqtt5Sub
 		var inbox *mqtt5Sub
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		for _, sub := range subs {
 			after := sub.after
 			if after == "" {
@@ -1117,7 +1125,7 @@ func (c *mqtt5Conn) runFollow(ctx context.Context, subs []*mqtt5Sub) {
 				order = append(order, sub)
 			}
 		}
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 		if inbox != nil {
 			order = append(order, inbox)
 		}
@@ -1156,9 +1164,9 @@ func (c *mqtt5Conn) deliver(ctx context.Context, order []*mqtt5Sub, result core.
 		if page.Status == "withheld" || page.Status == "expired" {
 			continue
 		}
-		c.stateMu.Lock()
+		c.state.mu.Lock()
 		qos := sub.qos
-		c.stateMu.Unlock()
+		c.state.mu.Unlock()
 		for j, m := range page.Messages {
 			body, err := json.Marshal(m)
 			if err != nil {
@@ -1171,14 +1179,14 @@ func (c *mqtt5Conn) deliver(ctx context.Context, order []*mqtt5Sub, result core.
 			if err := c.send(ctx, mqtt5Topic(sub.kind, sub.target), qos, props, body, true); err != nil {
 				return err
 			}
-			c.stateMu.Lock()
+			c.state.mu.Lock()
 			sub.after = m.ID
-			c.stateMu.Unlock()
+			c.state.mu.Unlock()
 		}
 		if page.Cursor != "" {
-			c.stateMu.Lock()
+			c.state.mu.Lock()
 			sub.after = page.Cursor
-			c.stateMu.Unlock()
+			c.state.mu.Unlock()
 		}
 	}
 	return nil
