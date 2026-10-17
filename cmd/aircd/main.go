@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/Someblueman/airc/internal/admin"
@@ -39,6 +40,8 @@ func main() {
 	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
 	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
 	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
+	wakeAllow := flags.String("wake-allow", "", "comma-separated URL prefixes accounts may register for wake notices, such as https://ntfy.sh/ (requires an accounts file; default: wake notices off)")
+	wakeFile := flags.String("wake-file", "", "wake registrations (default: next to the accounts file)")
 	maxConnections := flags.Int("max-connections", 4096, "maximum simultaneous clients (1-16384)")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
@@ -110,6 +113,17 @@ func main() {
 	if *chatFile == "" && *accountsFile != "" {
 		*chatFile = *accountsFile + ".chat.json"
 	}
+	var wakePrefixes []string
+	if *wakeAllow != "" {
+		if *accountsFile == "" {
+			fmt.Fprintln(os.Stderr, "--wake-allow needs an accounts file: wake notices are for registered accounts")
+			os.Exit(2)
+		}
+		wakePrefixes = strings.Split(*wakeAllow, ",")
+		if *wakeFile == "" {
+			*wakeFile = *accountsFile + ".wakes.json"
+		}
+	}
 
 	if *historyFile != "" && *history == 0 {
 		*history = 10_000_000 // the window is bounded by --history-memory
@@ -133,7 +147,7 @@ func main() {
 	if *logFile != "" {
 		logBackup = *logFile + ".1"
 	}
-	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
+	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *wakeFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -180,6 +194,12 @@ func main() {
 	if *chatFile != "" {
 		if err := srv.RestoreChat(*chatFile); err != nil {
 			logger.Error("chat_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if wakePrefixes != nil {
+		if err := srv.EnableWake(wakePrefixes, *wakeFile, nil); err != nil {
+			logger.Error("wake_config_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}

@@ -78,7 +78,7 @@ var sessionCommands = map[string]sessionCommand{
 // connection and so are not session commands.
 var otherCommands = []string{
 	"op", "deop", "operators", "kick", "monitor", "away", "bot", "service", "user", "admin",
-	"watch", "agents", "skill", "topic", "ui", "thread", "names", "doctor", "interactive", "mcp", "react",
+	"watch", "agents", "skill", "topic", "ui", "thread", "names", "doctor", "interactive", "mcp", "react", "wake",
 }
 
 // commands names dispatch's subcommands, so a command typed as a flag

@@ -151,6 +151,7 @@ type serviceInstallOptions struct {
 	history, connections, messageSize       int
 	historyMemory, retain, retainSize       string
 	gateway, gatewayBinary                  string
+	wakeAllow                               string
 }
 
 func (o *serviceInstallOptions) flags(fs *flag.FlagSet) {
@@ -168,6 +169,7 @@ func (o *serviceInstallOptions) flags(fs *flag.FlagSet) {
 	fs.IntVar(&o.messageSize, "max-message-size", 4096, "message body bytes (1-4096)")
 	fs.StringVar(&o.gateway, "gateway", "", "also run the bundled gateway with these carriers, e.g. http,websocket=8081 ("+strings.Join(service.SupportedCarriers(), ", ")+")")
 	fs.StringVar(&o.gatewayBinary, "gateway-binary", "", "airc-gateway executable (default: beside airc, then PATH)")
+	fs.StringVar(&o.wakeAllow, "wake-allow", "", "let accounts register wake notices to URLs under these comma-separated prefixes, such as https://ntfy.sh/")
 	fs.StringVar(&o.sync, "sync", "full", "write durability: full (survives power loss), fsync (survives an OS crash; much faster on macOS) or none (survives a daemon crash)")
 }
 
@@ -201,6 +203,13 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 	}
 	if _, err := atomicfile.ParseSync(o.sync); err != nil {
 		return c, fmt.Errorf("--sync: %w", err)
+	}
+	if o.wakeAllow != "" {
+		for _, prefix := range strings.Split(o.wakeAllow, ",") {
+			if !protocol.ValidWakePrefix(prefix) {
+				return c, errors.New("--wake-allow entries must be http or https URLs with a path, such as https://ntfy.sh/")
+			}
+		}
 	}
 	if o.history < 1 || o.history > 10_000_000 || o.connections < 1 || o.connections > 16384 || o.messageSize < 1 || o.messageSize > 4096 {
 		return c, errors.New("invalid history, connection or message-size limit")
@@ -266,7 +275,7 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 		}
 		return value
 	}
-	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}, {"--sync", syncArgument(o.sync)},
+	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}, {"--sync", syncArgument(o.sync)}, {"--wake-allow", o.wakeAllow},
 		{"--history-memory", nonDefault(o.historyMemory, "1GiB")}, {"--history-retain", nonDefault(o.retain, retention.DefaultAge)}, {"--history-retain-size", nonDefault(o.retainSize, retention.DefaultSize)}} {
 		if pair[1] != "" {
 			c.Args = append(c.Args, pair[0], pair[1])

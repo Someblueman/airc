@@ -1,0 +1,57 @@
+#!/bin/sh
+# Wake notices from aircd to a local ntfy server and to a receiver that
+# checks the signature, for registered accounts that hold no connection.
+S=${S:?directory holding bin7/ with aircd and airc, and ntfy/bin/ntfy}
+R=$(cd "$(dirname "$0")" && pwd)
+rm -rf $R/state; mkdir -p $R/state/client; chmod 700 $R/state $R/state/client
+AIRC=127.0.0.1:16710; NTFY=16711; HOOK=16712
+export AIRC_STATE_DIR=$R/state/client AIRC_ADDR=$AIRC
+$S/ntfy/bin/ntfy serve --listen-http 127.0.0.1:$NTFY --base-url http://127.0.0.1:$NTFY --cache-file $R/state/ntfy-cache.db > $R/state/ntfy.log 2>&1 &
+NTFYPID=$!
+$S/bin7/aircd --listen $AIRC --history 1000 --accounts-file $R/state/accounts.json --log-file $R/state/aircd.log \
+  --wake-allow "http://127.0.0.1:$NTFY/airc-,http://127.0.0.1:$HOOK/wake/" &
+AIRCD=$!; sleep 1
+echo "ntfy v2.11.0 (built from its tag)"
+echo "== accounts"
+$S/bin7/airc user create --nick carol | head -1
+$S/bin7/airc user create --nick dave | head -1
+echo "== a URL off the allowlist is refused"
+$S/bin7/airc wake --nick carol --url https://elsewhere.example/hook --json 2>&1 | head -c 200; echo
+echo "== carol registers her ntfy topic; the CLI makes a secret"
+$S/bin7/airc wake --nick carol --url http://127.0.0.1:$NTFY/airc-carol --quiet 10s --json | python3 -c "
+import json,sys; r=json.load(sys.stdin); print({k: r[k] for k in ('registered','url','quiet_seconds')}, 'secret shown once:', len(r.get('secret',''))//2, 'bytes')"
+echo "== dave registers the verifying receiver with his own secret"
+python3 -c "import secrets; print(secrets.token_hex(32))" > $R/state/dave.secret; chmod 600 $R/state/dave.secret
+python3 $R/verify_receiver.py.txt $HOOK $R/state/dave.secret $R/state/hook.jsonl &
+HOOKPID=$!; sleep 0.5
+$S/bin7/airc wake --nick dave --url http://127.0.0.1:$HOOK/wake/dave --secret-file $R/state/dave.secret --json | python3 -c "
+import json,sys; r=json.load(sys.stdin); print({k: r[k] for k in ('registered','url','quiet_seconds')}, 'secret printed:', 'secret' in r)"
+echo "== a guest posts while carol and dave hold no connection"
+python3 - <<'PY'
+import socket,time
+s=socket.create_connection(("127.0.0.1",16710)); s.sendall(b"NICK erin\r\nUSER u 0 * :u\r\nJOIN #lobby\r\n"); time.sleep(0.5)
+s.sendall(b"PRIVMSG carol :are you around?\r\n"); time.sleep(0.2)
+s.sendall(b"PRIVMSG #lobby :dave: the build is green\r\n"); time.sleep(0.2)
+s.sendall(b"PRIVMSG #lobby :carol: and one more\r\n"); time.sleep(0.2)
+s.sendall(b"PRIVMSG #lobby :nobody named here\r\n"); time.sleep(2); s.close()
+PY
+sleep 9
+echo "== ntfy topic airc-carol"
+curl -s "http://127.0.0.1:$NTFY/airc-carol/json?poll=1" | python3 -c "
+import json,sys
+for line in sys.stdin:
+    m=json.loads(line); n=json.loads(m['message']); print(m['event'], {k: n[k] for k in ('event','nick','messages')}, 'latest', n['latest'][:8])"
+echo "== verifying receiver"
+python3 -c "
+import json
+for line in open('$R/state/hook.jsonl'):
+    r=json.loads(line); n=r['notice']; print('signature_valid', r['signature_valid'], 'fresh', r['fresh'], r['path'], {k: n[k] for k in ('event','nick','messages')})"
+echo "== carol reads her inbox natively"
+$S/bin7/airc check --nick carol --mentions --json | python3 -c "
+import json,sys
+for line in sys.stdin:
+    m=json.loads(line)
+    if m.get('type')=='message': print(m['from'], '->', m['target'], ':', m['message'])"
+echo "== status after"
+$S/bin7/airc wake --nick carol
+kill $HOOKPID $AIRCD $NTFYPID 2>/dev/null; wait 2>/dev/null

@@ -138,6 +138,8 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runSkill(args[1:], stdout, stderr)
 	case "topic":
 		return runTopic(args[1:], stdout, stderr)
+	case "wake":
+		return runWake(args[1:], stdout, stderr)
 	case "ui":
 		return runUI(args[1:], stdout, stderr)
 	case "react":

@@ -202,6 +202,8 @@ Polls and reactions are conversation, never approval or independent evidence.
 - An admin grants the first with `airc op --channel '#room' --who NAME --token-file PATH`. Operators use their identity for `op`, `deop`, and `kick --channel '#room' --who NAME`. Channel kicks permit explicit rejoining; they do not block one-shot sends or history. Existing `admin kick` disconnects all sessions.
 - `airc away --nick NAME --message TEXT --ttl 20m` publishes expiring presence.
 - `airc presence --clear` clears it.
+- `airc wake --nick NAME --url URL` asks a daemon that allows wake notices to POST a signed notice to the URL when your inbox gets news while you hold no connection, at most once a minute (`--quiet`). It prints a signing secret for the receiver once; `--secret-file` supplies your own, `airc wake --nick NAME` shows the registration and its last error, and `--clear` removes it.
+- A wake notice names no sender and carries no text: when one arrives, read your inbox with an ordinary check.
 - `airc monitor --who alice,bob --json` waits for connection changes and runs until interrupted. Prefer it over polling; one-shot activity is not online presence.
 - Create a dedicated account with `airc user create --nick utility`.
 - Run `airc bot --nick utility --channel '#room'`. Address it with `utility: help`, `utility: ping`, `utility: calc (2+3)*4`, or a DM. Responses preserve reply/thread context. Commands are live-only and limited to one per second by default; don't retry in a tight loop.

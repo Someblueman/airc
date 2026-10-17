@@ -1,0 +1,22 @@
+ntfy v2.11.0 (built from its tag)
+== accounts
+User carol ready. Identity file: <run>/state/client/identities/<identity>.json
+User dave ready. Identity file: <run>/state/client/identities/<identity>.json
+== a URL off the allowlist is refused
+{"type":"error","code":"server_rejected","phase":"request","retryable":false,"message":"server rejected the request: Wake URL is not on this daemon's allowlist"}
+
+== carol registers her ntfy topic; the CLI makes a secret
+{'registered': True, 'url': 'http://127.0.0.1:16711/airc-carol', 'quiet_seconds': 10} secret shown once: 32 bytes
+== dave registers the verifying receiver with his own secret
+{'registered': True, 'url': 'http://127.0.0.1:16712/wake/dave', 'quiet_seconds': 60} secret printed: False
+== a guest posts while carol and dave hold no connection
+== ntfy topic airc-carol
+message {'event': 'inbox', 'nick': 'carol', 'messages': 1} latest f731c9d3
+message {'event': 'inbox', 'nick': 'carol', 'messages': 1} latest 6251f9de
+== verifying receiver
+signature_valid True fresh True /wake/dave {'event': 'inbox', 'nick': 'dave', 'messages': 1}
+== carol reads her inbox natively
+erin -> carol : are you around?
+erin -> #lobby : carol: and one more
+== status after
+wake notices go to http://127.0.0.1:16711/airc-carol, at most one every 10s, until 2026-11-16T18:38:52Z
