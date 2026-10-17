@@ -130,11 +130,11 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		if report.Server != nil {
 			fmt.Fprintf(stdout, "Daemon: %s, PID %d; clients %d/%d; retained messages %d", report.Server.Version, report.Server.PID, report.Server.Connections, report.Server.MaxConnections, report.Server.HistorySize)
 			if report.Server.HistoryMaxBytes > 0 {
-				fmt.Fprintf(stdout, " (%d of %d MiB in memory)", report.Server.HistoryBytes>>20, report.Server.HistoryMaxBytes>>20)
+				fmt.Fprintf(stdout, " (%s of %s in memory)", readableBytes(report.Server.HistoryBytes), readableBytes(report.Server.HistoryMaxBytes))
 			}
 			fmt.Fprintf(stdout, "; history file: %t", report.Server.HistoryFile)
 			if report.Server.ArchiveBytes > 0 {
-				fmt.Fprintf(stdout, " (%d MiB on disk)", report.Server.ArchiveBytes>>20)
+				fmt.Fprintf(stdout, " (%s on disk)", readableBytes(report.Server.ArchiveBytes))
 			}
 			fmt.Fprintln(stdout)
 		}
@@ -206,4 +206,17 @@ func printResources(out io.Writer, r processResources, label string) {
 	} else {
 		fmt.Fprintln(out, "; limit unknown (inspect/configure the launcher before starting the agent)")
 	}
+}
+
+// readableBytes rounds a byte count to its largest whole binary unit.
+func readableBytes(n int64) string {
+	for _, unit := range []struct {
+		name  string
+		scale int64
+	}{{"GiB", 1 << 30}, {"MiB", 1 << 20}, {"KiB", 1 << 10}} {
+		if n >= unit.scale {
+			return fmt.Sprintf("%.1f %s", float64(n)/float64(unit.scale), unit.name)
+		}
+	}
+	return fmt.Sprintf("%d bytes", n)
 }
