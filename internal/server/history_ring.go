@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -151,15 +152,25 @@ func (h *historyRing) uncount(target string) {
 }
 
 func (h *historyRing) add(message Message) []string {
-	var mentions []string
+	e := newEntry(message)
+	if h.limit > 0 {
+		h.insert(e)
+	}
+	return e.mentions
+}
+
+// newEntry derives what the window keeps beside a message.
+func newEntry(message Message) *entry {
+	e := &entry{Message: message}
 	if protocol.IsChannel(message.Target) {
-		mentions = protocol.Mentions(message.Body)
+		e.mentions = protocol.Mentions(message.Body)
 	}
-	if h.limit == 0 {
-		return mentions
-	}
-	e := &entry{Message: message, mentions: mentions}
 	e.bytes = e.size()
+	return e
+}
+
+func (h *historyRing) insert(e *entry) {
+	message, mentions := e.Message, e.mentions
 	h.makeRoom(message.Target, e.bytes)
 	p := h.next()
 	h.entries = append(h.entries, e)
@@ -187,7 +198,6 @@ func (h *historyRing) add(message Message) []string {
 	for h.size > h.limit || h.maxBytes > 0 && h.bytes > h.maxBytes && h.size > 1 {
 		h.remove(h.base + uint64(h.head))
 	}
-	return mentions
 }
 
 // remove drops the live message at position p.
@@ -488,6 +498,49 @@ func (h *historyRing) page(s selection, from uint64, limit int, skip func(*entry
 		return true
 	})
 	return out, status
+}
+
+// firstSeq returns the sequence number of the oldest retained message;
+// anything older is only in the archive. An empty window returns ok false.
+func (h *historyRing) firstSeq() (uint64, bool) {
+	for _, e := range h.entries[h.head:] {
+		if e != nil {
+			return e.Seq, true
+		}
+	}
+	return 0, false
+}
+
+// afterSeq returns the position of the first retained message with a
+// sequence number above seq. Positions follow sequence order.
+func (h *historyRing) afterSeq(seq uint64) uint64 {
+	lo, hi := h.head, len(h.entries)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		j := mid
+		for j < hi && h.entries[j] == nil {
+			j++
+		}
+		if j == hi {
+			hi = mid
+		} else if h.entries[j].Seq > seq {
+			hi = mid
+		} else {
+			lo = j + 1
+		}
+	}
+	return h.base + uint64(lo)
+}
+
+// dropBefore removes the oldest messages sent before cutoff.
+func (h *historyRing) dropBefore(cutoff time.Time) {
+	for {
+		e := h.get(h.base + uint64(h.head))
+		if e == nil || !e.Timestamp.Before(cutoff) {
+			return
+		}
+		h.remove(h.base + uint64(h.head))
+	}
 }
 
 // full reports whether adding bytes more would evict.

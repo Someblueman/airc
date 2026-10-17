@@ -41,6 +41,10 @@ func (s *Server) recordLocked(message *Message) []string {
 		if err == nil {
 			s.histBytes += int64(len(line) + 1)
 			s.histRecords++
+			if s.histFirstSeq == 0 {
+				s.histFirstSeq = message.Seq
+			}
+			s.histLastSeq, s.histLastID, s.histNewest = message.Seq, message.ID, message.Timestamp
 			if grouped {
 				s.commit.wrote(ticket)
 			}
@@ -80,15 +84,18 @@ func (s *Server) recordLocked(message *Message) []string {
 	if e := s.history.entryByID(message.ID); e != nil {
 		e.Persisted = true
 	}
-	if s.histFile == file && s.histRecords >= s.histCompactAfter && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
-		// A failed compaction leaves a valid descriptor: keep appending and
-		// try again later, so a passing fault does not switch durability off.
-		if compactErr := s.compactHistoryLocked(); compactErr != nil {
-			s.persistenceError = compactErr.Error()
-			s.histCompactAfter = s.histRecords + max(16, s.history.limit/4)
-			s.logger.Error("history_compaction_failed", "error", compactErr.Error(), "retry_after_records", s.histCompactAfter)
+	if s.archive != nil {
+		s.archive.noteCorrection(*message)
+	}
+	if s.histFile == file && s.histBytes >= max(s.histSegment, s.histRotateAfter) {
+		// A failed rotation leaves the active file in place: keep appending
+		// and try again later, so a passing fault does not stop durability.
+		if rotateErr := s.rotateHistoryLocked(); rotateErr != nil {
+			s.persistenceError = rotateErr.Error()
+			s.histRotateAfter = s.histBytes + s.histSegment/4
+			s.logger.Error("history_rotation_failed", "error", rotateErr.Error(), "retry_after_bytes", s.histRotateAfter)
 		} else {
-			s.persistenceError, s.histCompactAfter = "", 0
+			s.persistenceError, s.histRotateAfter = "", 0
 		}
 	}
 	return mentions

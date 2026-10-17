@@ -15,6 +15,7 @@ import (
 	"github.com/Someblueman/airc/internal/bytesize"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/retention"
 	"github.com/Someblueman/airc/internal/server"
 )
 
@@ -29,6 +30,8 @@ func main() {
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "maximum recent messages to retain in memory (0 disables history; at most 10000000)")
 	historyMemory := flags.String("history-memory", "1GiB", "approximate memory the retained messages may use; the oldest are dropped first")
+	historyRetain := flags.String("history-retain", retention.DefaultAge, "how long the history file's archive keeps messages, such as 30d or 72h; 0 keeps them until --history-retain-size")
+	historyRetainSize := flags.String("history-retain-size", retention.DefaultSize, "disk the history file and its archive may use; the oldest messages are deleted first; 0 means no limit")
 	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
 	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
@@ -78,6 +81,16 @@ func main() {
 	historyBytes, err := bytesize.Parse(*historyMemory)
 	if err != nil || historyBytes < 1<<20 {
 		fmt.Fprintln(os.Stderr, "--history-memory must be a size of at least 1MiB, such as 512MiB or 2GiB")
+		os.Exit(2)
+	}
+	retainAge, err := retention.ParseAge(*historyRetain)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--history-retain:", err)
+		os.Exit(2)
+	}
+	retainSize, err := retention.ParseSize(*historyRetainSize)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--history-retain-size:", err)
 		os.Exit(2)
 	}
 	transport, accessToken, err := serverTransport(*tlsCert, *tlsKey, *accessFile, *unixPath)
@@ -142,7 +155,7 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, HistoryRetain: retainAge, HistoryRetainBytes: retainSize, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)

@@ -35,8 +35,14 @@ type Config struct {
 	// HistoryBytes bounds the memory the retained window uses, approximately;
 	// the oldest messages are dropped first. Default 1 GiB.
 	HistoryBytes int64
-	ReadTimeout  time.Duration
-	PingInterval time.Duration
+	// HistoryRetain and HistoryRetainBytes bound the history archive by the
+	// age of its messages and by its total size; zero means no limit. The
+	// oldest segments are deleted first, and HistoryRetain also drops older
+	// messages from the window.
+	HistoryRetain      time.Duration
+	HistoryRetainBytes int64
+	ReadTimeout        time.Duration
+	PingInterval       time.Duration
 	// MaxPendingPerAddress caps connections from one non-loopback address that
 	// have not finished registering. Zero means a quarter of MaxConnections,
 	// but at least 4. Loopback and Unix-socket peers are never limited.
@@ -111,9 +117,16 @@ type Server struct {
 	seq              uint64
 	histFile         *os.File
 	histPath         string
-	histRecords      int
-	histBytes        int64
-	histCompactAfter int // after a failed compaction, the record count at which to retry
+	histRecords      int   // records in the active file
+	histBytes        int64 // size of the active file
+	histFirstSeq     uint64
+	histLastSeq      uint64
+	histLastID       string
+	histNewest       time.Time
+	histSegment      int64 // the active file is sealed at this size
+	histRotateAfter  int64 // after a failed rotation, the size at which to retry
+	histStop         chan struct{}
+	archive          *archive
 	persistenceError string
 	listener         net.Listener
 	closed           chan struct{}

@@ -69,7 +69,7 @@ func TestHistorySinceReportsExpiredCursor(t *testing.T) {
 	}
 }
 
-func TestRestoreHistoryCompactsAndContinuesSequence(t *testing.T) {
+func TestRestoreHistoryLoadsTheWindowAndContinuesSequence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	var lines []string
 	for i := 1; i <= 20; i++ {
@@ -103,8 +103,9 @@ func TestRestoreHistoryCompactsAndContinuesSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count := strings.Count(string(data), "\n"); count != 6 {
-		t.Fatalf("history file has %d lines, want 5 compacted + 1 appended:\n%s", count, data)
+	// The file keeps everything, unreadable lines included, as the archive.
+	if count := strings.Count(string(data), "\n"); count != 23 {
+		t.Fatalf("history file has %d lines, want 22 kept + 1 appended:\n%s", count, data)
 	}
 	if info, _ := os.Stat(path); info.Mode().Perm() != 0o600 {
 		t.Fatalf("history file mode = %04o", info.Mode().Perm())

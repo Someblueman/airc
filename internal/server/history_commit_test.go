@@ -168,12 +168,13 @@ func TestGroupCommitFailedSyncReportsEveryPostInIt(t *testing.T) {
 	}
 }
 
-// Many concurrent posts against a tiny retention limit compact the file
-// while others wait for their sync; a restart must find the newest posts,
-// in order, and every one reported persisted.
-func TestGroupCommitCompactsUnderConcurrentPosts(t *testing.T) {
+// Many concurrent posts against tiny segments seal the file while others
+// wait for their sync; a restart must find the newest posts, in order, and
+// every one reported persisted, and the archive must hold all of them.
+func TestGroupCommitRotatesUnderConcurrentPosts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.jsonl")
 	srv := New(Config{HistoryLimit: 4, PingInterval: time.Hour, ReadTimeout: time.Hour})
+	srv.histSegment = 2048
 	if err := srv.RestoreHistory(path); err != nil {
 		t.Fatal(err)
 	}
@@ -223,5 +224,24 @@ func TestGroupCommitCompactsUnderConcurrentPosts(t *testing.T) {
 		if got := restored.history.at(i).Seq; got != uint64(12*15-3+i) {
 			t.Fatalf("restored message %d has seq %d", i, got)
 		}
+	}
+	sealed, _ := filepath.Glob(path + ".????????????????????")
+	if len(sealed) < 2 {
+		t.Fatalf("%d sealed segments", len(sealed))
+	}
+	var seqs []uint64
+	for _, file := range append(sealed, path) {
+		_ = readSegment(file, 0, 1<<40, func(m Message, _, _ int64) bool {
+			seqs = append(seqs, m.Seq)
+			return true
+		})
+	}
+	for i, seq := range seqs {
+		if seq != uint64(i+1) {
+			t.Fatalf("archive holds %d messages, out of order or missing at %d: %v", len(seqs), i, seqs)
+		}
+	}
+	if len(seqs) != 12*15 {
+		t.Fatalf("archive holds %d of %d messages", len(seqs), 12*15)
 	}
 }

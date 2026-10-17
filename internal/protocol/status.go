@@ -12,6 +12,11 @@ type ServerStatus struct {
 	HistoryLimit     int    `json:"history_limit"`
 	HistorySize      int    `json:"history_size"`
 	HistoryFile      bool   `json:"history_file"`
+	// HistoryBytes is the approximate memory the retained window uses, out
+	// of HistoryMaxBytes; ArchiveBytes is the history file and its archive.
+	HistoryBytes    int64 `json:"history_bytes,omitempty"`
+	HistoryMaxBytes int64 `json:"history_max_bytes,omitempty"`
+	ArchiveBytes    int64 `json:"archive_bytes,omitempty"`
 	PersistenceError string `json:"persistence_error,omitempty"`
 	// Carriers is the advertised carrier list (see Carrier), in preference order.
 	Carriers []string `json:"carriers,omitempty"`

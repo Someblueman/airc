@@ -29,12 +29,18 @@ func (s *Server) statusLocked(client *session) {
 	for _, c := range s.cfg.Carriers {
 		carriers = append(carriers, c.String())
 	}
+	var archived int64
+	if s.archive != nil {
+		_, archived = s.archive.stats()
+		archived += s.histBytes
+	}
 	data, _ := json.Marshal(protocol.ServerStatus{
 		Carriers:  carriers,
 		Observers: observers,
 		TLS:       s.cfg.TLSConfig != nil, AccessRequired: s.accessEnabled, Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
 		MaxConnections: s.cfg.MaxConnections, HistoryLimit: s.cfg.HistoryLimit,
 		HistorySize: s.history.size, HistoryFile: s.histFile != nil, PersistenceError: s.persistenceError,
+		HistoryBytes: s.history.bytes, HistoryMaxBytes: s.history.maxBytes, ArchiveBytes: archived,
 	})
 	s.numericLocked(client, "770", nil, string(data))
 }
@@ -180,17 +186,28 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 	if after == "-" {
 		after = ""
 	}
-	messages, status := s.history.since(selected, after, limit)
+	var messages []Message
+	status, next := historyOK, ""
+	if after == "" {
+		messages = s.history.recent(selected, limit)
+	} else {
+		var found bool
+		messages, status, next, found = s.readAfterLocked(selected, after, limit, nil)
+		if !found {
+			messages, status = s.history.recent(selected, limit), historyExpired
+		}
+	}
 	for _, message := range messages {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}
 	params := []string{target, status}
 	if newest, ok := s.history.last(); ok {
 		cursor := newest.ID
-		if status == historyMore || status == historyExpired {
-			if len(messages) > 0 {
-				cursor = messages[len(messages)-1].ID
-			}
+		switch {
+		case status == historyMore:
+			cursor = next
+		case status == historyExpired && len(messages) > 0:
+			cursor = messages[len(messages)-1].ID
 		}
 		params = append(params, cursor)
 	}

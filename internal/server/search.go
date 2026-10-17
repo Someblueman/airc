@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -18,48 +17,6 @@ func (s *Server) historyTarget(target string) (string, error) {
 	}
 	return "", errors.New("history target must be a channel, nickname, inbox or conversation")
 }
-
-// search pages through the retained window like since, matching a substring
-// of message bodies and optionally a sender. It reads at most searchChunk
-// messages between calls to yield, which releases the server lock, so a
-// search of the whole window never stalls the server; positions are stable,
-// so the scan continues where it stopped.
-func (h *historyRing) search(target, after, query, from string, limit int, yield func()) ([]Message, string) {
-	start, found := h.start(after)
-	if !found {
-		return nil, historyExpired
-	}
-	matcher := newSearchText(query)
-	messages := make([]Message, 0, min(limit, 64))
-	for {
-		read, done, more := 0, true, false
-		h.forward(h.selectTarget(target), start, func(p uint64, e *entry) bool {
-			if read == searchChunk {
-				start, done = p, false
-				return false
-			}
-			read++
-			if from != "*" && !strings.EqualFold(e.From, from) || !matcher.contains(e.Body) {
-				return true
-			}
-			if len(messages) == limit {
-				more = true
-				return false
-			}
-			messages = append(messages, e.Message)
-			return true
-		})
-		if more {
-			return messages, historyMore
-		}
-		if done {
-			return messages, historyOK
-		}
-		yield()
-	}
-}
-
-const searchChunk = 4096
 
 func (s *Server) searchLocked(client *session, command protocol.Command) {
 	target, _ := command.Param(0)
@@ -79,16 +36,22 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 			return
 		}
 	}
-	messages, status := s.history.search(selected, after, command.Trailing, from, limit, func() {
-		s.mu.Unlock()
-		runtime.Gosched() // let waiting goroutines take the lock
-		s.mu.Lock()
-	})
+	matcher := newSearchText(command.Trailing)
+	accept := func(e *entry) bool {
+		return (from == "*" || strings.EqualFold(e.From, from)) && matcher.contains(e.Body)
+	}
+	// "*" is the start of the window; an older cursor continues from the archive.
+	messages, status, next, found := s.readAfterLocked(selected, after, limit, accept)
+	if !found {
+		messages, status = nil, historyExpired
+	}
 	for _, message := range messages {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}
 	params := []string{target, status}
-	if len(messages) > 0 {
+	if status == historyMore {
+		params = append(params, next)
+	} else if len(messages) > 0 {
 		params = append(params, messages[len(messages)-1].ID)
 	}
 	s.numericLocked(client, "761", params, "End of search")

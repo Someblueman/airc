@@ -215,6 +215,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.commit.retire(s.histFile)
 		s.histFile = nil
 	}
+	if s.histStop != nil {
+		close(s.histStop) // the janitor stops between segments
+		s.histStop = nil
+	}
 	s.mu.Unlock()
 	if ordered {
 		s.messageMu.Unlock()

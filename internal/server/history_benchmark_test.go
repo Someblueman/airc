@@ -79,11 +79,15 @@ func BenchmarkHistoryFullWindow(b *testing.B) {
 		})
 	}
 	b.Run("SearchWholeWindow", func(b *testing.B) {
-		chunks := 0
+		s := New(Config{HistoryLimit: 1})
+		s.history = h
+		matcher := newSearchText("no such text")
+		s.mu.Lock()
 		for b.Loop() {
-			h.search("*", "*", "no such text", "*", 50, func() { chunks++ })
+			s.readAfterLocked("*", "*", 50, func(e *entry) bool { return matcher.contains(e.Body) })
 		}
-		b.ReportMetric(float64(chunks)/float64(b.N), "yields/op")
+		s.mu.Unlock()
+		h = s.history
 	})
 	b.Run("Add", func(b *testing.B) {
 		b.ReportAllocs()

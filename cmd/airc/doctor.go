@@ -128,7 +128,15 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	} else {
 		fmt.Fprintf(stdout, "Client: %s\nServer: %s (connected: %t)\n", report.ClientVersion, report.Address, report.Connected)
 		if report.Server != nil {
-			fmt.Fprintf(stdout, "Daemon: %s, PID %d; clients %d/%d; retained messages %d/%d; history file: %t\n", report.Server.Version, report.Server.PID, report.Server.Connections, report.Server.MaxConnections, report.Server.HistorySize, report.Server.HistoryLimit, report.Server.HistoryFile)
+			fmt.Fprintf(stdout, "Daemon: %s, PID %d; clients %d/%d; retained messages %d", report.Server.Version, report.Server.PID, report.Server.Connections, report.Server.MaxConnections, report.Server.HistorySize)
+			if report.Server.HistoryMaxBytes > 0 {
+				fmt.Fprintf(stdout, " (%d of %d MiB in memory)", report.Server.HistoryBytes>>20, report.Server.HistoryMaxBytes>>20)
+			}
+			fmt.Fprintf(stdout, "; history file: %t", report.Server.HistoryFile)
+			if report.Server.ArchiveBytes > 0 {
+				fmt.Fprintf(stdout, " (%d MiB on disk)", report.Server.ArchiveBytes>>20)
+			}
+			fmt.Fprintln(stdout)
 		}
 		var features []string
 		for key, value := range report.Features {

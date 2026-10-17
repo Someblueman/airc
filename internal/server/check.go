@@ -64,18 +64,17 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 			continue
 		}
 		var messages []Message
-		status := historyOK
+		status, next := historyOK, ""
 		if t.After == "" {
 			messages = s.history.recent(selected[i], t.Limit)
 		} else {
-			from, found := s.history.start(t.After)
-			p.end.Gap = !found
+			accept := func(e *entry) bool { return r.IncludeOwn || !strings.EqualFold(e.From, client.client.Nick) }
+			var found bool
+			messages, status, next, found = s.readAfterLocked(selected[i], t.After, t.Limit, accept)
 			if !found {
-				from = 0
+				p.end.Gap = true
+				messages, status, next = s.windowPageLocked(selected[i], 0, t.Limit, accept, nil)
 			}
-			messages, status = s.history.page(s.history.selectTarget(selected[i]), from, t.Limit, func(e *entry) bool {
-				return !r.IncludeOwn && strings.EqualFold(e.From, client.client.Nick)
-			})
 		}
 		for _, m := range messages {
 			if !r.IncludeOwn && strings.EqualFold(m.From, client.client.Nick) {
@@ -88,17 +87,15 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 		if newest, ok := s.history.last(); ok {
 			p.end.Cursor = newest.ID
 		}
-		if status == historyMore && len(messages) > 0 {
-			p.end.Cursor = messages[len(messages)-1].ID
+		if status == historyMore {
+			p.end.Cursor = next
 		}
 	}
 	ordered := make([]Message, 0, len(unique))
 	for _, m := range unique {
 		ordered = append(ordered, m)
 	}
-	sort.Slice(ordered, func(i, j int) bool {
-		return s.history.positions[ordered[i].ID] < s.history.positions[ordered[j].ID]
-	})
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Seq < ordered[j].Seq })
 	if len(ordered) > r.MaxMessages {
 		ordered = ordered[:r.MaxMessages]
 	}
