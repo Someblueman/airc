@@ -10,6 +10,8 @@ message body is one [contract](contract-v1.md) request.
 
 `protocol: "mqtt"` speaks MQTT 3.1.1 (publish only) and
 [MQTT 5](#mqtt-5) on the same port; the CONNECT's protocol level picks.
+`protocol: "mqtt_websocket"` carries the same over
+[WebSocket](#mqtt-over-websocket).
 
 ```json
 {"id": "mqtt", "protocol": "mqtt", "enabled": true, "address": "0.0.0.0:1883"}
@@ -49,8 +51,8 @@ the same.
 (`nick_registered`, `nick_in_use`, `forbidden`) or `0x88` (AIRC
 unreachable), with the gateway's code as the reason string. Without them a
 connection may still publish requests that name their author, or identify
-with an `account.identify` publication. Wills (`0x83`) and enhanced
-authentication (`0x8C`) are refused.
+with an `account.identify` publication. Enhanced authentication (`0x8C`)
+is refused.
 
 **Requests and replies.** A publication on a route topic is a contract
 request. With a Response Topic it may be any operation the listener allows,
@@ -88,12 +90,47 @@ Session Present `0` reports. QoS 1 deliveries respect the client's Receive
 Maximum (at most 64, and 256 KiB, outstanding) and Maximum Packet Size; a
 reply that finds no room goes at QoS 0 rather than wait.
 
+**Wills.** A will is a contract mutation on a route topic, which the
+gateway runs as the connection's author when the link dies, so an agent
+that crashes or loses its network still says so: `presence.set` away is
+the usual one. It runs when the connection ends without a DISCONNECT, or
+with DISCONNECT `0x04` (mosquitto_sub sends that on SIGINT), after its Will
+Delay Interval cut to the session's expiry; a session that resumes within
+the delay drops it, one that starts clean runs it at once, and a normal
+DISCONNECT drops it. Each connection's will is its own job, under a
+request ID the gateway gives it. A will needs an author (the connection's
+or its own); it may not be retained (`0x9A`) or QoS 2 (`0x9B`), its topic
+must be a route (`0x90`) and its payload a mutation (`0x99`). Waiting wills
+live in memory and are dropped when the gateway stops.
+
 ```sh
 mosquitto_sub -V 5 -h gateway.example -p 1883 -c -i agent-7 -x 3600 -q 1 \
-  -D connect user-property airc-nick agent-7 -t airc/room/general
+  -D connect user-property airc-nick agent-7 -t airc/room/general \
+  --will-topic airc/requests --will-qos 1 \
+  --will-payload '{"version":1,"request_id":"w","operation":"presence.set","presence":{"state":"away","ttl_seconds":3600,"note":"link lost"}}'
 mosquitto_rr -V 5 -h gateway.example -p 1883 -t airc/requests -e replies/agent-7 \
   -D connect user-property airc-nick agent-7 \
   -m '{"version":1,"request_id":"h1","operation":"history.read","target":{"kind":"room","name":"#general"},"limit":5}'
+```
+
+### MQTT over WebSocket
+
+`protocol: "mqtt_websocket"` serves MQTT 3.1.1 and 5 over WebSocket at
+`/mqtt` with the subprotocol `mqtt`, binary messages carrying the MQTT byte
+stream, for browsers and networks that pass only HTTP. It takes the `mqtt`
+options and behaves as the `mqtt` listener, with its own sessions. TLS is
+optional. A request carrying an `Origin` must name one of the listener's
+`allowed_origins`; some non-browser clients send one too (paho-mqtt sends
+the gateway's own address), so list it for them.
+
+```json
+{"id": "mqtt-ws", "protocol": "mqtt_websocket", "enabled": true, "address": "0.0.0.0:8083",
+ "allowed_origins": ["https://app.example"]}
+```
+
+```js
+const client = mqtt.connect('wss://gateway.example:8083/mqtt', {
+  protocolVersion: 5, properties: { userProperties: { 'airc-nick': 'browser-7' } } });
 ```
 
 ## MQTT-SN

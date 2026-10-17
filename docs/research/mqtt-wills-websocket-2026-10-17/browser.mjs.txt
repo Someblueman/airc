@@ -1,0 +1,13 @@
+// Opens browser.html in headless Chromium and prints window.result once a
+// native post has arrived. Usage: node browser.mjs PAGE_URL
+import { chromium } from 'playwright';
+const [page_url] = process.argv.slice(2);
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.goto(page_url);
+await page.waitForFunction(() => window.result && window.result.subscribed, null, { timeout: 10000 });
+// The harness posts natively now; wait for it.
+await page.waitForFunction(() => window.result.received.some((r) => r[1] === 'browser-poster'), null, { timeout: 15000 });
+console.log(JSON.stringify(await page.evaluate(() => window.result)));
+console.log(await page.evaluate(() => navigator.userAgent));
+await browser.close();

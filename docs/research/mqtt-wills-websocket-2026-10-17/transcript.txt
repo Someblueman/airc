@@ -1,0 +1,28 @@
+{"version":1,"state":"ready","listeners":[{"id":"mqtt","address":"127.0.0.1:16697"},{"id":"mqttws","address":"127.0.0.1:16698"}]}
+
+:server 779 * <redacted> :Account authenticated
+== mosquitto_sub as carol with a presence will, then SIGKILL
+before:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "unknown", "connected": false}
+after SIGKILL:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "away", "note": "MQTT link lost", "expires_at": "2026-10-17T16:59:07.12002526Z", "last_seen": "2026-10-17T16:49:07.12002526Z", "connected": false}
+== mosquitto_sub with the will, exiting after one message: DISCONNECT 0x00, no will
+cleared:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "unknown", "connected": false}
+after a clean exit:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "unknown", "connected": false}
+== mosquitto_sub with the will, then SIGINT: mosquitto_sub sends DISCONNECT 0x04, asking for the will
+cleared:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "unknown", "connected": false}
+after SIGINT:
+{"type": "agent", "nick": "carol", "account_id": "<redacted>", "state": "away", "note": "MQTT link lost", "expires_at": "2026-10-17T16:59:11.92512689Z", "last_seen": "2026-10-17T16:49:11.92512689Z", "connected": false}
+== paho-mqtt over WebSocket
+{"replies": [["replies/paho-ws", "ws-1", "channels.read"]], "received": [["airc/room/lobby", "to paho over websocket"]]}
+== MQTT.js 5.16.0 in headless Chromium
+{"received":[["airc/room/lobby","browser-guest","hello from MQTT.js in a browser"],["airc/room/lobby","browser-poster","to the browser"]],"puback":"ok","error":null,"subscribed":true}
+Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.7390.37 Safari/537.36
+== native history
+will-poster one message for mosquitto_sub
+ws-poster to paho over websocket
+browser-guest hello from MQTT.js in a browser
+browser-poster to the browser

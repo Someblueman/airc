@@ -236,7 +236,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if len(l.AllowedOrigins) > 0 && !t.Origins {
-			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
+			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, MQTT over WebSocket, or WebRTC listener")
 		}
 		if l.Address == "" {
 			switch t.Address {

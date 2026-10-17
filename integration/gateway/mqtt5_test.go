@@ -218,11 +218,30 @@ func dialMQTT5(t *testing.T, address, clientID string, cleanStart bool, expiry u
 	if err != nil {
 		t.Fatal(err)
 	}
+	return connectMQTT5(t, conn, clientID, cleanStart, expiry, nil, user...)
+}
+
+// mqttWill is a CONNECT's will; delay is its Will Delay Interval.
+type mqttWill struct {
+	topic, payload string
+	delay          uint32
+	retain         bool
+}
+
+// connectMQTT5 sends CONNECT on conn and reads the CONNACK.
+func connectMQTT5(t *testing.T, conn net.Conn, clientID string, cleanStart bool, expiry uint32, will *mqttWill, user ...string) (*mqtt5Client, *mqtt5Packet) {
+	t.Helper()
 	t.Cleanup(func() { _ = conn.Close() })
 	c := &mqtt5Client{t: t, conn: conn, r: bufio.NewReader(conn)}
 	flags := byte(0)
 	if cleanStart {
 		flags |= 2
+	}
+	if will != nil {
+		flags |= 4
+		if will.retain {
+			flags |= 0x20
+		}
 	}
 	body := mqttString(nil, "MQTT")
 	body = append(body, 5, flags, 0, 30)
@@ -232,6 +251,11 @@ func dialMQTT5(t *testing.T, address, clientID string, cleanStart bool, expiry u
 	}
 	body = append(body, mqttProps(pairs...)...)
 	body = mqttString(body, clientID)
+	if will != nil {
+		body = append(body, mqttProps(byte(0x18), will.delay)...)
+		body = mqttString(body, will.topic)
+		body = mqttString(body, will.payload)
+	}
 	c.send(0x10, body)
 	return c, c.next(2)
 }

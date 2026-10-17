@@ -1,0 +1,38 @@
+# paho-mqtt (MQTT 5) over WebSocket against the gateway's mqtt_websocket
+# listener: a request with a response topic, then a live room message.
+import json, socket, sys, time, base64
+import paho.mqtt.client as mqtt
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.properties import Properties
+
+host, port, nick, native = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+got = {"replies": [], "received": []}
+
+def on_message(client, userdata, msg):
+    if msg.topic.startswith("replies/"):
+        got["replies"].append([msg.topic, msg.properties.CorrelationData.decode(), json.loads(msg.payload).get("operation")])
+    else:
+        m = json.loads(msg.payload)
+        got["received"].append([msg.topic, base64.b64decode(m["body_base64"] + "==").decode()])
+
+c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="paho-ws-" + nick, protocol=mqtt.MQTTv5, transport="websockets")
+c.ws_set_options(path="/mqtt")
+c.on_message = on_message
+props = Properties(PacketTypes.CONNECT)
+props.UserProperty = [("airc-nick", nick)]
+c.connect(host, port, keepalive=30, clean_start=True, properties=props)
+c.loop_start()
+time.sleep(0.5)
+c.subscribe("replies/" + nick, qos=1)
+c.subscribe("airc/room/lobby", qos=1)
+time.sleep(0.5)
+req = Properties(PacketTypes.PUBLISH)
+req.ResponseTopic, req.CorrelationData = "replies/" + nick, b"ws-1"
+c.publish("airc/requests", json.dumps({"version": 1, "request_id": "paho-ws-1", "operation": "channels.read", "author": {"nick": nick}}), qos=1, properties=req)
+a_host, a_port = native.rsplit(":", 1)
+s = socket.create_connection((a_host, int(a_port)))
+s.sendall(b"EPHEMERAL\r\nNICK ws-poster\r\nUSER u 0 * :u\r\n"); time.sleep(0.3)
+s.sendall(b"PRIVMSG #lobby :to paho over websocket\r\n"); time.sleep(0.3); s.close()
+time.sleep(1.5)
+c.disconnect(); c.loop_stop()
+print(json.dumps(got))

@@ -19,6 +19,47 @@ const mqttDeadline = 3 * time.Second
 // mqttIdle bounds a connection that disables MQTT keep-alive.
 const mqttIdle = 5 * time.Minute
 
+// mqttBroker is what one MQTT listener's connections share: its request
+// routes, the client IDs connected now, and the MQTT 5 sessions and wills.
+type mqttBroker struct {
+	d        *dispatch.Dispatcher
+	requests chan struct{}
+	routes   map[string]config.MQTTRoute
+	owners   mqttSessions
+	sessions *mqtt5Store
+	stop     context.CancelFunc
+}
+
+// newMQTTBroker builds the shared state for a listener living for parent;
+// close ends it.
+func newMQTTBroker(parent context.Context, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT) (*mqttBroker, error) {
+	if d == nil || !d.AuthorAccess() || cap(requests) < 1 || len(options.Routes) < 1 || len(options.Routes) > 128 {
+		return nil, errors.New("invalid MQTT owner")
+	}
+	routes := make(map[string]config.MQTTRoute, len(options.Routes))
+	for _, route := range options.Routes {
+		if _, exists := routes[route.Topic]; exists || !mqttwire.ValidTopic(route.Topic) {
+			return nil, errors.New("invalid MQTT route")
+		}
+		routes[route.Topic] = route
+	}
+	ctx, stop := context.WithCancel(parent)
+	b := &mqttBroker{d: d, requests: requests, routes: routes, owners: mqttSessions{active: make(map[string]*mqttSession)}, sessions: newMQTT5Store(ctx), stop: stop}
+	go b.sessions.sweep(ctx)
+	return b, nil
+}
+
+func (b *mqttBroker) serve(ctx context.Context, conn net.Conn) {
+	serveMQTTConnection(ctx, conn, b.d, b.requests, b.routes, &b.owners, b.sessions)
+}
+
+// close drops waiting wills and joins running ones; call it once the
+// connections are joined.
+func (b *mqttBroker) close() {
+	b.stop()
+	b.sessions.close()
+}
+
 // ServeMQTT owns and joins MQTT 3.1.1 and MQTT 5 connections, plain or TLS
 // (MQTT 5 in mqtt5.go). The caller limits accepted sockets; requests share
 // the service's global admission capacity. Each PUBLISH payload is a plain contract request naming its
@@ -27,23 +68,16 @@ const mqttIdle = 5 * time.Minute
 // and client IDs carry no authority. A newer connection with the same client
 // ID replaces the older one, as MQTT requires.
 func ServeMQTT(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, options config.MQTT) error {
-	if listener == nil || d == nil || !d.AuthorAccess() || cap(requests) < 1 || len(options.Routes) < 1 || len(options.Routes) > 128 {
+	if listener == nil {
 		return errors.New("invalid MQTT owner")
 	}
-	routes := make(map[string]config.MQTTRoute, len(options.Routes))
-	for _, route := range options.Routes {
-		if _, exists := routes[route.Topic]; exists || !mqttwire.ValidTopic(route.Topic) {
-			return errors.New("invalid MQTT route")
-		}
-		routes[route.Topic] = route
+	b, err := newMQTTBroker(parent, d, requests, options)
+	if err != nil {
+		return err
 	}
-	owners := mqttSessions{active: make(map[string]*mqttSession)}
-	sessions := newMQTT5Store()
-	sweepCtx, stopSweep := context.WithCancel(parent)
-	defer stopSweep()
-	go sessions.sweep(sweepCtx)
+	defer b.close()
 	return ServeAccepted(parent, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
-		return func() { serveMQTTConnection(ctx, conn, d, requests, routes, &owners, sessions) }, nil
+		return func() { b.serve(ctx, conn) }, nil
 	})
 }
 

@@ -142,9 +142,9 @@ refuse TLS settings. Carriers that are encrypted by definition (`http3`,
 
 | Option object | Listener | Page |
 |---|---|---|
-| `allowed_origins` | `http`, `http3`, `webtransport`, `websocket`, `mcp_http`, `webrtc` | [http](http.md#browsers) |
+| `allowed_origins` | `http`, `http3`, `webtransport`, `websocket`, `mcp_http`, `webrtc`, `mqtt_websocket` | [http](http.md#browsers) |
 | `webrtc` | `webrtc` | [network](network.md#webrtc) |
-| `mqtt`, `amqp`, `stomp`, `mqtt_sn` | brokers | [brokers](brokers.md) |
+| `mqtt`, `amqp`, `stomp`, `mqtt_sn` | brokers (`mqtt` also on `mqtt_websocket`) | [brokers](brokers.md) |
 | `udp_lite`, `ipv4_multicast`, `ipv6_multicast`, `ipv4_broadcast`, `icmp_v6` | packet carriers | [network](network.md#udp-family) |
 | `oscore` | `coap_oscore` | [network](network.md#oscore) |
 | `bound_author` | mailboxes, queues, shared memory, mapped file, `offline_bundle`, `bpv7` | [authentication](authentication.md#bound-authors) |

@@ -40,7 +40,7 @@ func mqttConnection(t *testing.T, secure bool, password string) (net.Conn, conte
 	done := make(chan struct{})
 	owners := &mqttSessions{active: make(map[string]*mqttSession)}
 	go func() {
-		serveMQTTConnection(ctx, serverConn, d, make(chan struct{}, 1), mqttFixtureRoutes(), owners, newMQTT5Store())
+		serveMQTTConnection(ctx, serverConn, d, make(chan struct{}, 1), mqttFixtureRoutes(), owners, newMQTT5Store(ctx))
 		close(done)
 	}()
 	t.Cleanup(func() { cancel(); _ = client.Close(); <-done })

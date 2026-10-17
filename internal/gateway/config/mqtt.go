@@ -25,8 +25,11 @@ type MQTTRoute struct {
 }
 
 func (c Config) validateMQTT(l Listener) error {
-	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 || len(l.AllowedOrigins) != 0 {
-		return errors.New("MQTT requires 1-128 literal topic routes without origins")
+	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 {
+		return errors.New("MQTT requires 1-128 literal topic routes")
+	}
+	if len(l.AllowedOrigins) != 0 && l.Protocol != "mqtt_websocket" {
+		return errors.New("MQTT takes origins only over WebSocket")
 	}
 	topics := make(map[string]bool, len(l.MQTT.Routes))
 	for _, route := range l.MQTT.Routes {
