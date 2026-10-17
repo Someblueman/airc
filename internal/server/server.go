@@ -195,8 +195,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	// A post holds messageMu across its history write. If that write stalls,
 	// still stop accepting and disconnect clients within the caller's deadline;
-	// the history file is left to the writer that owns it.
+	// the history file is left to the writer that owns it. Lines already
+	// written get their sync before the file is closed, within the deadline.
 	ordered := s.lockMessages(ctx)
+	if ordered {
+		s.commit.drainContext(ctx)
+	}
 	s.mu.Lock()
 	if s.listener != nil {
 		_ = s.listener.Close()
@@ -205,7 +209,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		client.close()
 	}
 	if ordered && s.histFile != nil {
-		_ = s.histFile.Close()
+		s.commit.retire(s.histFile)
 		s.histFile = nil
 	}
 	s.mu.Unlock()

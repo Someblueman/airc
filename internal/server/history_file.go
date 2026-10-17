@@ -52,6 +52,7 @@ func (s *Server) RestoreHistory(path string) error {
 		}
 	}
 	s.histFile = file
+	s.commit.init(file, s.cfg.Sync)
 	s.histPath = path
 	s.histRecords = len(messages)
 	if info, err := file.Stat(); err == nil {
@@ -157,14 +158,22 @@ func syncHistoryDir(path string, mode atomicfile.Sync) error {
 
 // messageMu excludes concurrent appends while the replacement is synced. mu
 // remains available to readers; the old descriptor stays open until replacement.
+// Lines written by posts still waiting for their sync are synced first, so the
+// replacement, which holds them too, never races a sync of the old file.
 func (s *Server) compactHistoryLocked() error {
+	s.mu.Unlock()
+	err := s.commit.drain()
+	s.mu.Lock()
+	if err != nil {
+		return err
+	}
 	messages := make([]Message, s.history.size)
 	for i := range messages {
 		messages[i] = s.history.at(i)
 	}
 	path, old := s.histPath, s.histFile
 	s.mu.Unlock()
-	err := rewriteHistoryFile(path, messages, s.cfg.Sync)
+	err = rewriteHistoryFile(path, messages, s.cfg.Sync)
 	var next *os.File
 	if err == nil {
 		next, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
@@ -174,7 +183,8 @@ func (s *Server) compactHistoryLocked() error {
 		return err
 	}
 	s.histFile = next
-	_ = old.Close()
+	s.commit.retire(old)
+	s.commit.init(next, s.cfg.Sync)
 	s.histRecords = len(messages)
 	if info, err := next.Stat(); err == nil {
 		s.histBytes = info.Size()

@@ -10,7 +10,8 @@ import (
 )
 
 // serializesPosts reports whether a command may append to history and so must
-// hold messageMu, which a post keeps across its disk write. Reads and
+// hold messageMu, which a post keeps across its file write (not its sync; see
+// groupCommit). Reads and
 // transient signals skip it so they never queue behind a burst of posts.
 // Anything unrecognised is serialized.
 func serializesPosts(command protocol.Command) bool {
