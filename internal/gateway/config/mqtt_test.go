@@ -33,6 +33,11 @@ func TestMQTTConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal("refused a plaintext author MQTT listener", err)
 	}
+	// Reads are allowed: MQTT 5 answers them on a response topic.
+	c.Listeners[0].Operations = []core.Operation{core.Send, core.HistoryRead, core.Check}
+	if err := c.Validate(); err != nil {
+		t.Fatal("refused an MQTT listener allowing reads", err)
+	}
 	// Only an address: the listener policy's operations and one default topic.
 	bare := mqttConfig()
 	bare.Listeners[0] = Listener{ID: "mqtt", Protocol: "mqtt", Address: "127.0.0.1:1883", Enabled: true}
@@ -42,7 +47,6 @@ func TestMQTTConfiguration(t *testing.T) {
 	for name, mutate := range map[string]func(*Config){
 		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
 		"origins":        func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
-		"read":           func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send, core.HistoryRead} },
 		"duplicate": func(c *Config) {
 			c.Listeners[0].MQTT.Routes = append(c.Listeners[0].MQTT.Routes, c.Listeners[0].MQTT.Routes[0])
 		},

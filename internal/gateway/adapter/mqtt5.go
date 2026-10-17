@@ -401,7 +401,6 @@ func (c *mqtt5Conn) readLoop(idle time.Duration, expiring bool) {
 			}
 			return
 		}
-		last = time.Now()
 		switch packet.Kind {
 		case mqttwire.Ping:
 			if c.write([]byte{0xd0, 0}) != nil {
@@ -436,6 +435,9 @@ func (c *mqtt5Conn) readLoop(idle time.Duration, expiring bool) {
 			c.disconnect(mqttProtocolError, "")
 			return
 		}
+		// Time spent on a request or subscription is the gateway's, not
+		// the client's idleness.
+		last = time.Now()
 	}
 }
 
