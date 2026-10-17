@@ -62,6 +62,7 @@ Commands:
   airc agents [--json]         airc names #room [--json]
   airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight
   airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check
+  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] | --clear]   signed notices while offline
   airc skill show|reference|path|install [--dir DIR|--project]   the agent skill for this version
   airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
                                                              live stream for a human monitor

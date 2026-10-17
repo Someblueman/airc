@@ -30,5 +30,6 @@ survive a restart, MQTT wills, MQTT over WebSocket):
 - **MQTT 5, further**: wills that survive a gateway restart (they hold
   their author's credential, so not at rest without care), and shared
   subscriptions for a pool of workers.
-- **Web Push and wake webhooks**, and **dual-carrier following in the
+- **Web Push** for browsers (wake webhooks are in aircd: see
+  [WAKEUP.md](../WAKEUP.md#webhook-notices)), and **dual-carrier following in the
   client**, as planned.

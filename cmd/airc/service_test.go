@@ -142,7 +142,11 @@ func TestServiceInstallHistoryOptions(t *testing.T) {
 	if joined := strings.Join(args, " "); err != nil || !strings.Contains(joined, "--history-memory 4GiB") || !strings.Contains(joined, "--history-retain 7d") || !strings.Contains(joined, "--history-retain-size 0") {
 		t.Fatalf("explicit args: %v %v", args, err)
 	}
-	for _, bad := range [][]string{{"--history-memory", "lots"}, {"--history-retain", "5m"}, {"--history-retain-size", "1MiB"}} {
+	args, err = install("--wake-allow", "https://ntfy.sh/,https://hooks.example/airc/")
+	if joined := strings.Join(args, " "); err != nil || !strings.Contains(joined, "--wake-allow https://ntfy.sh/,https://hooks.example/airc/") {
+		t.Fatalf("wake args: %v %v", args, err)
+	}
+	for _, bad := range [][]string{{"--history-memory", "lots"}, {"--history-retain", "5m"}, {"--history-retain-size", "1MiB"}, {"--wake-allow", "https://ntfy.sh"}, {"--wake-allow", "ftp://x/"}} {
 		if _, err := install(bad...); err == nil {
 			t.Errorf("accepted %v", bad)
 		}

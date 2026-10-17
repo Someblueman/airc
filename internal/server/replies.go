@@ -112,4 +112,5 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 		}
 		reader.enqueue(line)
 	}
+	s.noteInboxLocked(message, mentions)
 }

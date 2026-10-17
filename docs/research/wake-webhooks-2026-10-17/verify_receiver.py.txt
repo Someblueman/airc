@@ -1,0 +1,22 @@
+# A webhook receiver written independently of aircd: it verifies each wake
+# notice's AIRC-Signature (HMAC-SHA256 over "timestamp.body") with the
+# secret in argv[2] and appends what it saw to argv[3].
+import hashlib, hmac, http.server, json, sys, time
+
+port, secret, out = int(sys.argv[1]), bytes.fromhex(open(sys.argv[2]).read().strip()), sys.argv[3]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        stamp = self.headers["AIRC-Timestamp"]
+        want = "sha256=" + hmac.new(secret, (stamp + ".").encode() + body, hashlib.sha256).hexdigest()
+        ok = hmac.compare_digest(want, self.headers["AIRC-Signature"] or "")
+        fresh = abs(time.time() - int(stamp)) < 300
+        with open(out, "a") as f:
+            f.write(json.dumps({"signature_valid": ok, "fresh": fresh, "path": self.path, "notice": json.loads(body)}) + "\n")
+        self.send_response(204 if ok and fresh else 401)
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+
+http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()

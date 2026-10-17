@@ -202,6 +202,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.agentsLocked(client)
 	case "STATUS":
 		s.statusLocked(client)
+	case "WAKE":
+		s.wakeLocked(client, command)
 	default:
 		s.numericLocked(client, "421", []string{command.Name}, "Unknown command")
 	}

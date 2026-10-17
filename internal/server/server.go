@@ -219,6 +219,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		close(s.histStop) // the janitor stops between segments
 		s.histStop = nil
 	}
+	if s.wake != nil && s.wake.stop != nil {
+		close(s.wake.stop) // in-flight notices are cancelled
+		s.wake.stop = nil
+	}
 	s.mu.Unlock()
 	if ordered {
 		s.messageMu.Unlock()

@@ -112,6 +112,7 @@ type Server struct {
 	moderationAt     string
 	accounts         map[string]account
 	accountsAt       string
+	wake             *wakes                 // nil unless EnableWake
 	pending          map[string]int         // unregistered connections by remote address
 	registrations    map[string][]time.Time // recent account creations by remote address
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
