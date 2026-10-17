@@ -16,12 +16,12 @@ page.on('websocket', (ws) => {
 await page.goto(url);
 if (password) {
   await page.fill('input[name="password"]', password);
-  await page.click('button[type="submit"]');
+  await page.press('input[name="password"]', 'Enter');
 }
-await page.waitForSelector('#composer', { timeout: 15000 });
-await page.waitForFunction(() => document.body.innerText.includes('Welcome to airc'), null, { timeout: 15000 });
-await page.fill('#composer', text);
-await page.press('#composer', 'Enter');
+await page.waitForFunction(() => document.body.innerText.includes('#lobby') && document.querySelector('input[name="text"]'), null, { timeout: 20000 });
+await page.waitForTimeout(500);
+await page.fill('input[name="text"]', text);
+await page.press('input[name="text"]', 'Enter');
 await page.waitForFunction((t) => document.body.innerText.includes(t), text, { timeout: 10000 });
 await page.waitForTimeout(500);
 const body = await page.evaluate(() => document.body.innerText);

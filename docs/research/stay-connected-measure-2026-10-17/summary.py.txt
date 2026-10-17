@@ -1,0 +1,9 @@
+import json,sys
+print(f"{'mode':8}{'agents':>7}{'post':>6}{'reqs/s':>8}{'frames/s':>9}{'keep/s':>7}{'deliver p50':>12}{'p99':>8}{'post p50':>9}{'aircd':>7}{'gw':>7}  errors")
+for l in open(sys.argv[1]):
+    r=json.loads(l)
+    mode='follow' if r.get('follow') else ('check' if r.get('check') else r['mode'])
+    reqs=sum(r.get(k,{}).get('per_s',0) for k in ('read','check','follow','post') if isinstance(r.get(k),dict))
+    dl=r.get('deliver',{}); po=r.get('post',{})
+    errs='; '.join(f"{op}:{n}x {m[:40]}" for op,v in r.get('errors',{}).items() for m,n in sorted(v.items(),key=lambda x:-x[1])[:1])
+    print(f"{mode:8}{r['agents']:>7}{r['post_ms']//1000:>5}s{reqs:>8.1f}{r.get('frame',{}).get('per_s',0):>9.1f}{r.get('keepalive',{}).get('per_s',0):>7.1f}{dl.get('p50',0):>12.1f}{dl.get('p99',0):>8.1f}{po.get('p50',0):>9.2f}{r['aircd_cpu_pct']:>6.1f}%{r.get('gateway_cpu_pct',0):>6.1f}%  {errs}")

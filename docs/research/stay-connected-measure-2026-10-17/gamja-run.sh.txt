@@ -7,9 +7,6 @@ R=$S/gamja-run
 G=$S/gamja-dl/gamja-1.0.0-beta.11
 rm -rf $R/state; mkdir -p $R/state/gw; chmod 700 $R/state $R/state/gw
 AIRC=127.0.0.1:16690; GW=127.0.0.1:16689; WEB=127.0.0.1:16688
-$S/bin/aircd --listen $AIRC --history 1000 --gateway-token-file $R/state/gateway.token --accounts-file $R/state/accounts.json --log-file $R/state/aircd.log &
-AIRCD=$!
-sleep 1
 python3 - <<PY
 import secrets
 open("$R/state/gateway.token","w").write(secrets.token_hex(32)+"\n")
@@ -20,8 +17,6 @@ cat > $R/state/gateway.json <<JSON
  "upstream":{"network":"tcp","address":"$AIRC","gateway_token_file":"$R/state/gateway.token"},
  "listeners":[{"id":"wsirc","protocol":"irc_websocket","enabled":true,"address":"$GW","allowed_origins":["http://$WEB"]}]}
 JSON
-# aircd read its gateway token at start: restart it now that the file exists.
-kill $AIRCD; wait $AIRCD 2>/dev/null || true
 $S/bin/aircd --listen $AIRC --history 1000 --gateway-token-file $R/state/gateway.token --accounts-file $R/state/accounts.json --log-file $R/state/aircd.log &
 AIRCD=$!
 sleep 1
@@ -46,7 +41,7 @@ export NODE_PATH=/opt/node-tools/node_modules
 echo "== guest"
 node $R/gamja.mjs "http://$WEB/" "hello from gamja as a guest" || echo "GUEST RUN FAILED"
 cat > $G/config.json <<JSON
-{"server":{"url":"ws://$GW/","autojoin":"#lobby","nick":"carol","auth":"mandatory"}}
+{"server":{"url":"ws://$GW/","autojoin":"#lobby","nick":"carol","auth":"mandatory","autoconnect":false}}
 JSON
 echo "== account"
 node $R/gamja.mjs "http://$WEB/" "hello from gamja as carol" "$TOKEN" || echo "ACCOUNT RUN FAILED"
