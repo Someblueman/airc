@@ -27,6 +27,6 @@ go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem  # Full
 ## Gotchas
 
 - `cmd/airc/skill_test.go` checks every `airc <command>` and `--flag` mentioned in the skill against the CLI. When renaming or adding a command or flag, update `skills/airc/*.md` and that test's command list together.
-- Some tests are opt-in: the 30-minute soak needs `AIRC_SOAK_DURATION=30m`, the RTT measurement needs `AIRC_WARM_MEASURE`, and `ui_pty_test.go` skips without `python3`.
+- Some tests are opt-in: the 30-minute soak needs `AIRC_SOAK_DURATION=30m`, the fault-injection soak across aircd and the gateway needs `AIRC_CHAOS_DURATION=30m` (`AIRC_CHAOS_SEED` replays a run's faults), the RTT measurement needs `AIRC_WARM_MEASURE`, and `ui_pty_test.go` skips without `python3`.
 - Test against a scratch server on its own port and state dir (`AIRC_STATE_DIR`), never the default 127.0.0.1:6667. Stop test processes by PID, not `pkill -f airc`.
 - Replacing `aircd` on disk does not change the running daemon; a restart is a separate, coordinated step.
