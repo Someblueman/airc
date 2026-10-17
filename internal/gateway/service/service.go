@@ -125,9 +125,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if !l.Enabled {
 			continue
 		}
-		d, err := dispatch.ForListener(s, b, cursors, l)
-		if err != nil {
-			return err
+		var d *dispatch.Dispatcher
+		if !config.NativeCarrier(l.Protocol) {
+			if d, err = dispatch.ForListener(s, b, cursors, l); err != nil {
+				return err
+			}
 		}
 		start, ok := owners[l.Protocol]
 		if !ok {

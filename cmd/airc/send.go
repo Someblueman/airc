@@ -134,6 +134,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 	}
 	var client *irc.Client
+	nativeCarrier := "" // the gateway tunnel native IRC came through, if one
 	if *replyTo == "" || conversation != "" {
 		// Race native IRC against the server's other carriers, and post over
 		// whichever connects first. A reply or reaction needs its
@@ -154,6 +155,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
 		}
 		client = r.native
+		nativeCarrier = carrierName(*opt, r.endpoint)
 	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return failure(err, "login")
 	}
@@ -253,6 +255,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 				return e
 			}
 		}
+	}
+	if result != nil && nativeCarrier != "" {
+		result.Carrier = nativeCarrier
 	}
 	if err := outputSend(ctx, *opt, result, *check, settings, *maxBytes, checkClient, stdout, stderr); err != nil {
 		return acceptedFailure(err, result)

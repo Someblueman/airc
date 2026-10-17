@@ -172,15 +172,50 @@ func fallbackClient(opt options, cfg irc.Config, endpoints []fallback.Endpoint) 
 	return c
 }
 
+// nativeTunnels are the gateway carriers that carry native IRC itself, so a
+// one-shot command can race them beside aircd's own port.
+func nativeTunnels(opt options) []fallback.Endpoint {
+	endpoints, err := fallbackEndpoints(opt)
+	if err != nil {
+		return nil
+	}
+	return slices.DeleteFunc(endpoints, func(e fallback.Endpoint) bool { return !fallback.NativeCarrier(e.Name) })
+}
+
+// dialNativeRacing registers an ephemeral native session over aircd's own
+// port or a gateway tunnel, whichever connects first (the tunnel that last
+// answered in native IRC's place leads), and remembers which answered.
+func dialNativeRacing(ctx context.Context, opt options, cfg irc.Config, tunnels []fallback.Endpoint) (*irc.Client, error) {
+	endpoints := append([]fallback.Endpoint{primaryEndpoint(opt)}, tunnels...)
+	last := loadLastCarrier(opt)
+	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == last }); i > 0 {
+		endpoints = slices.Concat(endpoints[i:i+1], endpoints[:i], endpoints[i+1:])
+	}
+	fb := fallbackClient(opt, cfg, endpoints)
+	fb.NativeConnectTimeout = nativeDialBudget
+	conn, err := fb.Connect(ctx)
+	if err != nil {
+		return nil, raceError(opt, err)
+	}
+	answeredBy(opt, reached{last: last}, conn.Endpoint)
+	return conn.Native(), nil
+}
+
 // fallbackFor reports whether a failed native connection may fall back, and
 // the client to do it with. Only connection-level failures fall back; a
-// definite refusal (a rejected nickname or token) is the answer.
+// definite refusal (a rejected nickname or token) is the answer. The native
+// tunnels were raced with aircd's port already, so only the gateway's
+// request carriers remain.
 func fallbackFor(opt options, dialErr error) (*fallback.Client, bool) {
 	if !fallback.Unreachable(dialErr) {
 		return nil, false
 	}
 	endpoints, err := fallbackEndpoints(opt)
-	if err != nil || len(endpoints) == 0 {
+	if err != nil {
+		return nil, false
+	}
+	endpoints = slices.DeleteFunc(endpoints, func(e fallback.Endpoint) bool { return fallback.NativeCarrier(e.Name) })
+	if len(endpoints) == 0 {
 		return nil, false
 	}
 	cfg, err := dialConfig(opt)
@@ -221,6 +256,9 @@ type reached struct {
 	native *irc.Client
 	conn   *fallback.Conn
 	fb     *fallback.Client
+	// endpoint is the carrier whose connection won: aircd's own port, a
+	// native tunnel (native is set) or a request carrier (conn is set).
+	endpoint fallback.Endpoint
 	// last is the carrier remembered as the last to answer, when one was.
 	last string
 }
@@ -269,10 +307,13 @@ func connectRacing(ctx context.Context, opt options, mode raceMode) (reached, er
 	if err != nil {
 		return r, raceError(opt, err)
 	}
-	if conn.Endpoint != primaryEndpoint(opt) {
+	r.endpoint = conn.Endpoint
+	if conn.Endpoint != primaryEndpoint(opt) && !fallback.NativeCarrier(conn.Endpoint.Name) {
 		r.conn, r.fb = conn, fb
 		return r, nil
 	}
+	// Native IRC, at aircd's own port or through a gateway tunnel: the
+	// command runs as it always has.
 	r.native = conn.Native()
 	learnCarriers(opt, r.native)
 	if opt.session != nil {

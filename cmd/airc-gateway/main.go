@@ -166,6 +166,9 @@ func listenerStatus(l config.Listener, cursors bool) (string, []core.Operation) 
 	switch {
 	case !ok:
 		return "disabled_unimplemented", []core.Operation{}
+	case l.Enabled && config.NativeCarrier(l.Protocol):
+		// A tunnel to AIRC's own protocol: every AIRC command, no contract operations.
+		return "enabled_" + l.Protocol + "_native", []core.Operation{}
 	case l.Enabled:
 		return "enabled_" + l.Protocol + "_partial", append([]core.Operation{}, dispatch.ListenerOperations(l, cursors)...)
 	case !t.Available():

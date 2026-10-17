@@ -54,7 +54,7 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	for spec, message := range map[string]string{
-		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, grpc, mqtt, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp`,
+		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, irc_websocket, irc_connect, grpc, mqtt, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp, http3`,
 		"http,http=81":      "listed twice",
 		"http=0":            "port 1-65535",
 		"http=70000":        "port 1-65535",

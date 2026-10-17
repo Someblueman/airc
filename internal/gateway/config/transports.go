@@ -78,6 +78,11 @@ const (
 	// RouteAuthors: the provider protocol verifies the sender, and requests
 	// post as the route's configured or provider-derived author.
 	RouteAuthors
+	// NativeAuthors: the carrier tunnels AIRC's own protocol to the upstream,
+	// byte for byte, after asserting the client's source with WEBIRC. AIRC
+	// itself admits the client (its PASS, nickname and account), so the
+	// listener has no author policy, only connection limits.
+	NativeAuthors
 )
 
 // soleGroup is a family of Process carriers that must be the only enabled
@@ -154,6 +159,8 @@ var transports = []Transport{
 	{Name: "http3", Kind: Stream, Network: "udp", Address: HostPort, TLS: TLSRequired, Origins: true, Authors: RequestAuthors},
 	{Name: "webtransport", Kind: Stream, Network: "udp", Address: HostPort, TLS: TLSRequired, Origins: true, Authors: RequestAuthors},
 	{Name: "framed", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors},
+	{Name: "irc_websocket", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Origins: true, Authors: NativeAuthors},
+	{Name: "irc_connect", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: NativeAuthors},
 	{Name: "unix", Kind: Stream, Network: "unix", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, checkAddress: unixStreamPath},
 	{Name: "unixpacket", Kind: Stream, Network: "unixpacket", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: []string{"linux"}, checkAddress: unixPacketPath},
 	{Name: "unixgram", Kind: Packet, Network: "unixgram", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, checkAddress: unixgramPath},
@@ -257,6 +264,15 @@ func (t Transport) ServeRefusal() error { return errors.New(t.title + " requires
 func AuthorCarrier(protocol string) bool {
 	t, _ := Lookup(protocol)
 	return t.Authors == RequestAuthors
+}
+
+// NativeCarrier reports listeners that tunnel AIRC's own protocol to the
+// upstream (IRC over WebSocket, IRC through HTTP CONNECT). They need the
+// upstream, take no operations or author policy, and bound only their
+// connections.
+func NativeCarrier(protocol string) bool {
+	t, _ := Lookup(protocol)
+	return t.Authors == NativeAuthors
 }
 
 // RouteCarrier reports listeners whose sender is verified by the provider

@@ -41,11 +41,13 @@ type carrierSpec struct {
 
 // carrierSpecs are the carriers install can configure with no settings beyond
 // an address. A carrier is offered only while the gateway accepts plain author
-// requests on it (gwconfig.AuthorCarrier). MQTT, AMQP and STOMP take requests
-// on their default topic (airc/requests) or addresses (airc.requests, with
-// results on airc.responses).
+// requests on it (gwconfig.AuthorCarrier) or tunnels aircd's own protocol
+// (gwconfig.NativeCarrier). MQTT, AMQP and STOMP take requests on their
+// default topic (airc/requests) or addresses (airc.requests, with results on
+// airc.responses).
 var carrierSpecs = []carrierSpec{
 	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
+	{"irc_websocket", 6689}, {"irc_connect", 6690},
 	{"grpc", 6684}, {"mqtt", 1883}, {"amqp", 5672}, {"stomp", 61613},
 	{"coap_udp", 5683}, {"coap_tcp", 6685}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
 	{"http3", 6680}, // UDP, so it shares http's port number
@@ -80,7 +82,7 @@ func CarrierNetwork(name string) string {
 func SupportedCarriers() []string {
 	var names []string
 	for _, spec := range carrierSpecs {
-		if gwconfig.AuthorCarrier(spec.name) {
+		if gwconfig.AuthorCarrier(spec.name) || gwconfig.NativeCarrier(spec.name) {
 			names = append(names, spec.name)
 		}
 	}
@@ -115,7 +117,7 @@ func ParseCarriers(spec, host, dir string) ([]Carrier, error) {
 	for item := range strings.SplitSeq(spec, ",") {
 		name, value, explicit := strings.Cut(strings.TrimSpace(item), "=")
 		index := slices.IndexFunc(carrierSpecs, func(s carrierSpec) bool { return s.name == name })
-		if index < 0 || !gwconfig.AuthorCarrier(name) {
+		if index < 0 || !gwconfig.AuthorCarrier(name) && !gwconfig.NativeCarrier(name) {
 			if index >= 0 {
 				return nil, fmt.Errorf("gateway carrier %q does not take plain author requests in this build; supported: %s", name, strings.Join(SupportedCarriers(), ", "))
 			}

@@ -310,6 +310,9 @@ func (c *Config) Validate() error {
 			if !known {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
+			if t.Authors == NativeAuthors && c.Upstream == nil {
+				return fmt.Errorf("listener %s: %s requires an upstream to tunnel to", l.ID, l.Protocol)
+			}
 			if t.unixSocket() && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}

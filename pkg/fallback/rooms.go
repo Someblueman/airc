@@ -15,7 +15,7 @@ func (c *Client) Gateways() *Client {
 	gateways := *c
 	gateways.Endpoints = nil
 	for _, e := range c.Endpoints {
-		if e.Name != "irc" {
+		if !NativeCarrier(e.Name) {
 			gateways.Endpoints = append(gateways.Endpoints, e)
 		}
 	}

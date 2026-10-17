@@ -63,6 +63,8 @@ var owners = map[string]owner{
 	"rawquic":           quicListener(rawQUICOwner(false)),
 	"rawquic_datagrams": quicListener(rawQUICOwner(true)),
 	"framed":            stream{serve: serveFramed}.start,
+	"irc_websocket":     stream{http: httpServer(ircWebSocketServer), native: true}.start,
+	"irc_connect":       stream{http: httpServer(ircConnectServer), native: true}.start,
 	"unix":              stream{serve: serveFramed}.start,
 	"unixpacket":        stream{serve: serveUnixPacket}.start,
 	"sctp":              stream{sctp: adapter.SCTPOrdered, serve: serveSCTP}.start,
@@ -257,6 +259,9 @@ type stream struct {
 	// selfBounded listeners take global session slots themselves.
 	selfBounded bool
 	sctp        adapter.SCTPMode
+	// native listeners tunnel AIRC's protocol and bound their connections
+	// as author carriers do, without a dispatcher.
+	native bool
 }
 
 // served is what a connection listener's serve function uses.
@@ -318,6 +323,47 @@ func plainHTTPServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*ht
 
 func webSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {
 	return adapter.WebSocketServer(d, o.requests, l.AllowedOrigins)
+}
+
+// nativeUpstream is the AIRC endpoint a native tunnel relays to, dialled as
+// the author sessions dial it, with the gateway credential for WEBIRC.
+func nativeUpstream(o *startup, l config.Listener) (adapter.IRCUpstream, error) {
+	entry, ok := o.c.AuthorUpstream()
+	if !ok {
+		return adapter.IRCUpstream{}, errors.New(l.Protocol + " listener requires an upstream")
+	}
+	u := adapter.IRCUpstream{Network: entry.Network, Address: entry.Address, Listener: l.ID}
+	var err error
+	if entry.GatewayTokenFile != "" {
+		if u.GatewayToken, err = auth.ReadToken(entry.GatewayTokenFile); err != nil {
+			return adapter.IRCUpstream{}, auth.ErrCredential
+		}
+	}
+	if entry.TLSServerName != "" {
+		u.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ServerName: entry.TLSServerName}
+		if entry.TLSCAFile != "" {
+			if u.TLS.RootCAs, err = auth.ReadTrustRoots(entry.TLSCAFile); err != nil {
+				return adapter.IRCUpstream{}, auth.ErrCredential
+			}
+		}
+	}
+	return u, nil
+}
+
+func ircWebSocketServer(o *startup, l config.Listener, _ *dispatch.Dispatcher) (*http.Server, error) {
+	u, err := nativeUpstream(o, l)
+	if err != nil {
+		return nil, err
+	}
+	return adapter.IRCWebSocketServer(u, l.AllowedOrigins)
+}
+
+func ircConnectServer(o *startup, l config.Listener, _ *dispatch.Dispatcher) (*http.Server, error) {
+	u, err := nativeUpstream(o, l)
+	if err != nil {
+		return nil, err
+	}
+	return adapter.IRCConnectServer(u)
 }
 
 func grpcServer(o *startup, _ config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {
@@ -399,7 +445,7 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 			return instance{}, err
 		}
 	}
-	if config.AuthorCarrier(l.Protocol) {
+	if config.AuthorCarrier(l.Protocol) || s.native {
 		limits := l.AccessLimits()
 		listener = adapter.LimitConnections(listener, limits.Connections, limits.ConnectionsPerSource)
 	}

@@ -89,7 +89,8 @@ none. Enabled listeners may not share an address.
 
 Every listener that carries author requests takes this access policy, all
 optional; the empty policy admits guests from anywhere the listener is
-reachable:
+reachable. The [native tunnels](native.md) (`irc_websocket`, `irc_connect`)
+take only the two connection limits: AIRC admits their clients itself.
 
 | Key | Default | Meaning |
 |---|---|---|
