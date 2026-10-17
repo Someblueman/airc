@@ -28,7 +28,9 @@ type websocketFixture struct {
 	stop         func()
 }
 
-func websocketGatewayFixture(t *testing.T, secure bool, address string, origins []string) websocketFixture {
+// websocketGatewayFixture starts a gateway with one WebSocket listener;
+// options adjust that listener.
+func websocketGatewayFixture(t *testing.T, secure bool, address string, origins []string, options ...func(*config.Listener)) websocketFixture {
 	t.Helper()
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -47,6 +49,9 @@ func websocketGatewayFixture(t *testing.T, secure bool, address string, origins 
 	if secure {
 		listener.TLSCertFile, listener.TLSKeyFile = certificate.CertPath, certificate.KeyPath
 		scheme = "wss"
+	}
+	for _, option := range options {
+		option(&listener)
 	}
 	c.Listeners = []config.Listener{listener}
 	p := startGateway(t, gatewayBinary(t), c)
