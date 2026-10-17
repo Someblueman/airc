@@ -272,7 +272,10 @@ with `"stream": true` is a *follow*: one stream that carries its rooms,
 threads and inbox for the gateway's follow lease (`limits.follow_seconds`,
 default five minutes) instead of a check every few seconds. The first
 frame is the snapshot at the requested positions, news or not; then a frame
-arrives for each batch of live news, and while nothing happens an empty
+arrives for each batch of live news (the first news after a quiet spell at
+once, then at most one frame every `limits.follow_batch_ms`, default
+250 ms, so a busy room costs a frame per interval rather than one per
+message), and while nothing happens an empty
 frame every `limits.follow_keepalive_seconds` (default 20) holds the
 connection and proves the stream is alive. Every frame is a whole `check`
 result whose page cursors are the positions the next frame continues
@@ -282,8 +285,8 @@ check again from those positions and sees nothing twice. `wait_seconds` is
 ignored. A follow holds its author's session and a wait slot
 (`limits.waits`) for the lease, and a session slot only while it reads;
 the lease also bounds how long a revoked token or a new ban can keep a
-follow alive. `capabilities.get` reports `follow_seconds` and
-`follow_keepalive_seconds`; a gateway without them refuses the stream with
+follow alive. `capabilities.get` reports `follow_seconds`,
+`follow_keepalive_seconds` and `follow_batch_ms`; a gateway without them refuses the stream with
 `invalid_request`, and the client polls with `check` instead.
 
 ## Identity hashes

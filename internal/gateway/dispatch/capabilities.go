@@ -54,15 +54,16 @@ type Capabilities struct {
 	// FollowSeconds and FollowKeepAliveSeconds describe a followed check
 	// (check with stream: true on a connection carrier): its lease, and how
 	// often a quiet follow sends an empty result.
-	FollowSeconds          int           `json:"follow_seconds,omitempty"`
-	FollowKeepAliveSeconds int           `json:"follow_keepalive_seconds,omitempty"`
-	PollTargets            []core.Target `json:"poll_targets,omitempty"`
-	MaxPollBytes           int           `json:"max_poll_bytes,omitempty"`
-	TopicTargets           []core.Target `json:"topic_targets,omitempty"`
-	MaxTopicBytes          int           `json:"max_topic_bytes,omitempty"`
-	MembersTargets         []core.Target `json:"members_targets,omitempty"`
-	MaxMembers             int           `json:"max_members,omitempty"`
-	MaxMembersBytes        int           `json:"max_members_bytes,omitempty"`
+	FollowSeconds           int           `json:"follow_seconds,omitempty"`
+	FollowKeepAliveSeconds  int           `json:"follow_keepalive_seconds,omitempty"`
+	FollowBatchMilliseconds int           `json:"follow_batch_ms,omitempty"`
+	PollTargets             []core.Target `json:"poll_targets,omitempty"`
+	MaxPollBytes            int           `json:"max_poll_bytes,omitempty"`
+	TopicTargets            []core.Target `json:"topic_targets,omitempty"`
+	MaxTopicBytes           int           `json:"max_topic_bytes,omitempty"`
+	MembersTargets          []core.Target `json:"members_targets,omitempty"`
+	MaxMembers              int           `json:"max_members,omitempty"`
+	MaxMembersBytes         int           `json:"max_members_bytes,omitempty"`
 	// Listener describes author access on this listener.
 	Listener *ListenerCapabilities `json:"listener,omitempty"`
 	// Carriers lists the ordered ways to reach this AIRC service, the same
@@ -144,6 +145,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities,
 		if lease := d.backend.FollowLease(); lease > 0 {
 			result.FollowSeconds = int(lease / time.Second)
 			result.FollowKeepAliveSeconds = int(d.backend.FollowKeepAlive() / time.Second)
+			result.FollowBatchMilliseconds = int(d.backend.FollowBatch() / time.Millisecond)
 		}
 	}
 	if slices.Contains(access.Operations, core.PollResults) {

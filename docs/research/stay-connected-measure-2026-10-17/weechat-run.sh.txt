@@ -1,0 +1,47 @@
+#!/bin/sh
+# Runs aircd and a gateway with irc_connect, then WeeChat (headless) through
+# the gateway as its HTTP proxy, as a guest and as a registered account with
+# SASL, and reads the room natively. The server address WeeChat names is not
+# aircd's: the tunnel ends at the gateway's upstream whatever is asked.
+S=/tmp/claude-0/-home-user-airc/0a4aefa4-1663-5a9b-a7a2-dede8ffcec4b/scratchpad
+R=$S/weechat-run
+rm -rf $R/state; mkdir -p $R/state/gw; chmod 700 $R/state $R/state/gw
+AIRC=127.0.0.1:16692; TUNNEL_PORT=16693
+python3 -c "import secrets; open('$R/state/gateway.token','w').write(secrets.token_hex(32)+'\n')"
+chmod 600 $R/state/gateway.token
+cat > $R/state/gateway.json <<JSON
+{"version":1,"realm":"weechat","state_dir":"$R/state/gw",
+ "upstream":{"network":"tcp","address":"$AIRC","gateway_token_file":"$R/state/gateway.token"},
+ "listeners":[{"id":"tunnel","protocol":"irc_connect","enabled":true,"address":"127.0.0.1:$TUNNEL_PORT"}]}
+JSON
+$S/bin/aircd --listen $AIRC --history 1000 --accounts-file $R/state/accounts.json --gateway-token-file $R/state/gateway.token --log-file $R/state/aircd.log &
+AIRCD=$!
+sleep 1
+$S/bin/airc-gateway serve --file $R/state/gateway.json > $R/state/gateway.log 2>&1 &
+GATEWAY=$!
+sleep 1
+head -c 200 $R/state/gateway.log; echo
+TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+python3 - <<PY
+import socket,time
+s=socket.create_connection(("127.0.0.1",16692)); s.sendall(b"REGISTER carol :$TOKEN\r\n"); time.sleep(0.5); print(s.recv(4096).decode().strip()[:80]); s.close()
+PY
+wee() { # name nick text [sasl options]
+  name=$1; nick=$2; text=$3; shift 3
+  mkdir -p $R/state/$name
+  timeout 40 weechat-headless -d $R/state/$name -r "/set irc.server_default.tls off;/set logger.file.auto_log on;/set logger.level.irc 9;/proxy add gw http 127.0.0.1 $TUNNEL_PORT;/server add airc irc.invalid/6667 -proxy=gw -notls -nicks=$nick -autojoin=#lobby $*;/connect airc;/wait 4s /msg -server airc #lobby $text;/wait 7s /quit" > $R/state/$name.out 2>&1
+  echo "== $name: weechat exited $?"
+  find $R/state/$name/logs -name "*.log" 2>/dev/null | while read f; do echo "-- $(basename $f)"; tail -12 "$f" | cut -c1-200; done
+}
+wee guest wee-guest "hello from weechat as a guest"
+wee account carol "hello from weechat as carol" "-sasl_mechanism=plain -sasl_username=carol -sasl_password=$TOKEN"
+echo "== native history"
+python3 - <<PY
+import socket,time
+s=socket.create_connection(("127.0.0.1",16692)); s.sendall(b"EPHEMERAL\r\nNICK auditor\r\nUSER u 0 * :u\r\n"); time.sleep(0.5); s.recv(65536)
+s.sendall(b"HISTORY #lobby 10\r\n"); time.sleep(0.5)
+for line in s.recv(65536).decode().split("\r\n"):
+    if " 760 " in line or " 761 " in line: print(line[:300])
+PY
+grep -c "client_registered" $R/state/aircd.log; grep "client_registered\|source" $R/state/aircd.log | grep -v auditor | cut -c1-200 | head -6
+kill $GATEWAY $AIRCD 2>/dev/null; wait 2>/dev/null

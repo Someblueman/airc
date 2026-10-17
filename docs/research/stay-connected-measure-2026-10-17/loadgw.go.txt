@@ -107,6 +107,7 @@ func main() {
 	flag.IntVar(&perMinute, "per-minute", 0, "unix listener requests_per_minute (0: default 2400)")
 	flag.IntVar(&procs, "procs", 1, "agent processes (gateway mode), so each has its own peer PID")
 	flag.BoolVar(&useCheck, "check", false, "gateway mode: follow rooms with one waiting check, not a read per room each poll")
+	flag.IntVar(&followBatch, "follow-batch-ms", -1, "gateway limits.follow_batch_ms (-1: default)")
 	flag.BoolVar(&useFollow, "follow", false, "gateway mode: follow rooms with one followed check (stream), resumed when its lease ends")
 	child := flag.String("child", "", "internal: run agents FIRST:COUNT against SOCKET and print samples")
 	childSock := flag.String("sock", "", "internal")
@@ -172,6 +173,14 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 		}
 		if sessions > 0 {
 			cfg["limits"] = map[string]any{"sessions": sessions, "sessions_per_author": 4, "watches": 8, "watches_per_author": 2, "workers": max(workers, 8), "pending": 4096, "pending_per_author": 128}
+		}
+		if followBatch >= 0 {
+			limits, _ := cfg["limits"].(map[string]any)
+			if limits == nil {
+				limits = map[string]any{}
+			}
+			limits["follow_batch_ms"] = followBatch
+			cfg["limits"] = limits
 		}
 		data, _ := json.Marshal(cfg)
 		file := filepath.Join(dir, "gateway.json")
@@ -273,7 +282,7 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 	}
 	wg.Wait()
 
-	result := map[string]any{"check": useCheck, "follow": useFollow, "procs": procs, "per_minute": perMinute, "sessions": sessions, "workers": workers, "mode": mode, "agents": agents, "rooms": rooms, "poll_ms": poll.Milliseconds(), "post_ms": post.Milliseconds(), "duration_s": duration.Seconds()}
+	result := map[string]any{"check": useCheck, "follow": useFollow, "follow_batch_ms": followBatch, "procs": procs, "per_minute": perMinute, "sessions": sessions, "workers": workers, "mode": mode, "agents": agents, "rooms": rooms, "poll_ms": poll.Milliseconds(), "post_ms": post.Milliseconds(), "duration_s": duration.Seconds()}
 	for name := range pids {
 		result[name+"_cpu_pct"] = (after[name].cpu - before[name].cpu) / duration.Seconds() * 100
 		result[name+"_rss_mib"] = float64(after[name].rss) / 1024
@@ -308,7 +317,7 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 	return nil
 }
 
-var sessions, workers, perMinute, procs int
+var sessions, workers, perMinute, procs, followBatch int
 
 // useCheck follows rooms with one waiting gateway check instead of a read
 // per room every poll; useFollow with one followed check (a stream).

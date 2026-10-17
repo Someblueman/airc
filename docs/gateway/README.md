@@ -99,7 +99,7 @@ marked. Evidence levels:
 | WebTransport (bidi, uni, datagrams) | `webtransport` | [http](http.md#webtransport) | In-repo; browser runs predate the author model |
 | Framed TCP/TLS | `framed` | [streams](streams.md#framed-tcp-and-tls) | In-repo |
 | IRC over WebSocket (native tunnel) | `irc_websocket` | [native](native.md#irc-over-websocket) | Real client: gamja 1.0.0-beta.11 in Chromium 141 ([run](../research/stay-connected-measure-2026-10-17/README.md#a-real-browser-on-the-websocket-tunnel)) |
-| IRC through HTTP CONNECT (native tunnel) | `irc_connect` | [native](native.md#irc-through-http-connect) | In-repo |
+| IRC through HTTP CONNECT (native tunnel) | `irc_connect` | [native](native.md#irc-through-http-connect) | Real client: WeeChat 4.1.1 ([run](../research/stay-connected-measure-2026-10-17/README.md#an-irc-client-through-the-connect-tunnel)) |
 | Unix stream, seqpacket (Linux), datagram | `unix`, `unixpacket`, `unixgram` | [streams](streams.md#unix-sockets) | In-repo |
 | stdio, socket pair, inherited FD | `stdio`, `socketpair`, `inherited` | [streams](streams.md#parent-owned-streams) | In-repo |
 | FIFO pair | `fifo` | [streams](streams.md#fifo-pair) | In-repo |
