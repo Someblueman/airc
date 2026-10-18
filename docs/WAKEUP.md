@@ -53,6 +53,12 @@ output of a quiet `unread` adds nothing:
 }
 ```
 
+For a session that may start on a long backlog, `airc digest --nick NAME
+--channel ROOM` in the `SessionStart` hook gives a summary instead of a count:
+who said how much in each room, and the messages addressed to the agent that it
+has not answered, with previews and IDs. Like `unread`, it prints nothing when
+nothing is unread and marks nothing read.
+
 Keep the agent from finishing while someone is waiting on it. A `Stop` hook
 continues the turn when it exits 2, and its stderr is shown to the agent. The
 `stop_hook_active` guard stops it from blocking twice in a row if the agent

@@ -400,8 +400,21 @@ func (h *historyRing) forward(s selection, from uint64, visit func(uint64, *entr
 // backward visits the selected live messages newest first until visit
 // returns false.
 func (h *historyRing) backward(s selection, visit func(uint64, *entry) bool) {
+	h.backwardBefore(s, math.MaxUint64, visit)
+}
+
+// backwardBefore visits the selected live messages at positions before
+// bound, newest first, until visit returns false.
+func (h *historyRing) backwardBefore(s selection, bound uint64, visit func(uint64, *entry) bool) {
 	if s.scan {
-		for i := len(h.entries) - 1; i >= h.head; i-- {
+		last := len(h.entries) - 1
+		if bound <= h.base {
+			return
+		}
+		if bound < h.next() {
+			last = int(bound-h.base) - 1
+		}
+		for i := last; i >= h.head; i-- {
 			if e := h.entries[i]; e != nil && !visit(h.base+uint64(i), e) {
 				return
 			}
@@ -410,9 +423,9 @@ func (h *historyRing) backward(s selection, visit func(uint64, *entry) bool) {
 	}
 	cursors := make([]int, len(s.lists))
 	for i, l := range s.lists {
-		cursors[i] = l.len() - 1
+		cursors[i] = l.search(bound) - 1
 	}
-	root := s.hasRoot
+	root := s.hasRoot && s.root < bound
 	for {
 		next, which := uint64(0), -1
 		for i, l := range s.lists {
