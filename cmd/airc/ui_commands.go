@@ -79,7 +79,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 		}
 		return []uiCmd{{kind: kind, target: b.name}}, false
 	case "/help", "/?":
-		m.setStatus("Shift/Option/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /next · /first · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
+		m.showHelp()
 	case "/topic":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("/topic works in a channel", true)
@@ -111,7 +111,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 		m.ensureChannel(channel)
 		return append(m.switchTo(channel), uiCmd{kind: "observe", target: channel}), false
 	case "/close":
-		if b == nil || b.kind != bufChannel && b.kind != bufQuery {
+		if b == nil || b.kind != bufChannel && b.kind != bufQuery && b.kind != bufHelp {
 			m.setStatus("Only channels can be closed", true)
 			break
 		}
@@ -122,7 +122,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 			}
 		}
 		next := m.firstName()
-		if b.kind == bufQuery && m.find(b.returnTo) != nil {
+		if (b.kind == bufQuery || b.kind == bufHelp) && m.find(b.returnTo) != nil {
 			next = b.returnTo
 		}
 		cmds := m.switchTo(next)

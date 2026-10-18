@@ -12,6 +12,7 @@ GOTOOLCHAIN=go1.27.0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...  # @
 go test -race -count=1 -timeout 120m ./...  # full suite (~25 min); there is no CI, so run it before pushing
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem  # FullWindow fills 1 GiB
+scripts/githooks/install.sh             # git hooks: gofmt and vet on commit; gofmt, vet, staticcheck and the skill test on push
 ```
 
 ## Layout

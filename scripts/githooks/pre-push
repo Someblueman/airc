@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Runs the repository's fast checks before anything leaves this machine: gofmt
+# over every file, go vet, staticcheck, and the skill/CLI consistency test. The
+# full test suite takes about 25 minutes, so it is not run here; see CLAUDE.md.
+# AIRC_HOOKS_FAST=1 skips staticcheck; `git push --no-verify` skips the hook.
+set -euo pipefail
+cd -- "$(git rev-parse --show-toplevel)"
+
+step() {
+	printf 'pre-push: %s\n' "$1" >&2
+}
+
+step 'gofmt'
+unformatted=$(gofmt -l .)
+if [[ -n "$unformatted" ]]; then
+	printf 'pre-push: not gofmt-clean:\n%s\n' "$unformatted" >&2
+	exit 1
+fi
+
+step 'go vet ./...'
+go vet ./...
+
+if [[ "${AIRC_HOOKS_FAST:-}" != 1 ]]; then
+	step 'staticcheck (AIRC_HOOKS_FAST=1 skips this)'
+	GOTOOLCHAIN=go1.27.0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+fi
+
+step 'skill and CLI agree (cmd/airc TestSkill)'
+go test -count=1 -run '^TestSkill' ./cmd/airc

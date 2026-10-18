@@ -90,7 +90,7 @@ try:
     read_until("Use 30 seconds.", start)
     read_until("Deploy only after the maintenance window.", start)
     write(b"\x12")  # action 2: Ctrl-R, reply to the selected question
-    read_until("Replying to " + question, start)
+    read_until("Reply to " + question, start)
     answer = "Use 30 seconds. Deploy only after the maintenance window."
     write(answer.encode())
     write(b"\r")  # action 3: submit

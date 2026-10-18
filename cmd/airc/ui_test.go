@@ -249,3 +249,210 @@ func TestStartingWithoutAChannelOpensTheFirstOneUnlessTheUserMoved(t *testing.T)
 		t.Fatalf("discovery must not move a user who picked a view, got %s", m.current)
 	}
 }
+
+func typeKeys(m *uiModel, text string) {
+	for _, r := range text {
+		m.update(keyIn{kind: keyRune, r: r})
+	}
+}
+
+func TestTabCompletesNicksMostRecentSpeakerFirstAndCycles(t *testing.T) {
+	m := newTestModel("#a")
+	m.update(msgIn{event: uiMessage("1", "builder", "#a", "first", 0), history: true})
+	m.update(msgIn{event: uiMessage("2", "bob", "#a", "second", time.Second), history: true})
+	m.update(msgIn{event: uiMessage("3", "me", "#a", "mine", 2*time.Second), history: true})
+	m.update(namesIn{channel: "#a", nicks: []string{"bart", "me"}})
+
+	typeKeys(m, "b")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "bob: " || m.cursor != len(m.input) {
+		t.Fatalf("first Tab = %q (cursor %d), want the newest speaker addressed", got, m.cursor)
+	}
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "builder: " {
+		t.Fatalf("second Tab = %q, want the next speaker", got)
+	}
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "bart: " {
+		t.Fatalf("third Tab = %q, want the connected session", got)
+	}
+	m.update(keyIn{kind: keyBackTab})
+	if got := string(m.input); got != "builder: " {
+		t.Fatalf("Shift-Tab = %q, want the previous candidate", got)
+	}
+	if m.current != "#a" {
+		t.Fatalf("completing must not switch views, now on %s", m.current)
+	}
+
+	// Mid-line, a nick gets a plain space; after @, it keeps the tag.
+	typeKeys(m, "see @bo")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "builder: see @bob " {
+		t.Fatalf("tag completion = %q", got)
+	}
+	m.update(keyIn{kind: keyEsc})
+	typeKeys(m, "ask bu")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "ask builder " {
+		t.Fatalf("mid-line completion = %q", got)
+	}
+}
+
+func TestTabWithNothingTypedStillSwitchesViews(t *testing.T) {
+	m := newTestModel("#a", "#b")
+	m.update(keyIn{kind: keyTab})
+	if m.current != "#b" {
+		t.Fatalf("Tab on an empty line should switch views, now on %s", m.current)
+	}
+	m.update(keyIn{kind: keyBackTab})
+	if m.current != "#a" {
+		t.Fatalf("Shift-Tab on an empty line should switch back, now on %s", m.current)
+	}
+	typeKeys(m, "zzz")
+	m.update(keyIn{kind: keyTab})
+	if m.current != "#a" || string(m.input) != "zzz" {
+		t.Fatalf("a word nothing completes must stay put: view %s input %q", m.current, string(m.input))
+	}
+	if status, isError := m.activeStatus(); !isError || !strings.Contains(status, "zzz") {
+		t.Fatalf("status = %q, want a note that zzz completes to nothing", status)
+	}
+}
+
+func TestTabCompletesCommandsChannelsAndMessageIDs(t *testing.T) {
+	m := newTestModel("#alpha", "#beta")
+	m.update(msgIn{event: uiMessage("m1", "bob", "#alpha", "hi", 0), history: true})
+	typeKeys(m, "/th")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "/thread " {
+		t.Fatalf("command completion = %q", got)
+	}
+	m.update(keyIn{kind: keyTab}) // a command that takes an ID offers "last"
+	if got := string(m.input); got != "/thread last " {
+		t.Fatalf("ID completion without a selection = %q", got)
+	}
+	m.update(keyIn{kind: keyEsc})
+	m.find("#alpha").selectedID = "m1"
+	typeKeys(m, "/react ")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "/react m1 " {
+		t.Fatalf("ID completion with a selection = %q", got)
+	}
+	m.update(keyIn{kind: keyEsc})
+	typeKeys(m, "/join #b")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "/join #beta " {
+		t.Fatalf("channel completion = %q", got)
+	}
+	m.update(keyIn{kind: keyEsc})
+	typeKeys(m, "/msg b")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != "/msg bob " {
+		t.Fatalf("nick completion after a command = %q", got)
+	}
+	m.update(keyIn{kind: keyEsc})
+	typeKeys(m, "/")
+	m.update(keyIn{kind: keyTab})
+	if got := string(m.input); got != uiCommands[0].name+" " {
+		t.Fatalf("a bare slash offers every command, got %q", got)
+	}
+}
+
+func TestReplyTargetIsPreviewedInTheStatusBar(t *testing.T) {
+	m := newTestModel("#a")
+	m.update(resizeIn{120, 30})
+	m.update(msgIn{event: uiMessage("q1", "planner", "#a", "What timeout\nshould we use?", 0), history: true})
+	m.update(keyIn{kind: keySelectPrev})
+	m.update(keyIn{kind: keyCtrl, r: 'r'})
+	bar := m.statusBar(m.cur(), 120)
+	for _, want := range []string{"Reply to q1", "planner: What timeout should we use?", "Esc: cancel"} {
+		if !strings.Contains(bar, want) {
+			t.Errorf("status bar %q lacks %q", bar, want)
+		}
+	}
+	m.update(keyIn{kind: keyEsc})
+	if m.replyTo != "" || strings.Contains(m.statusBar(m.cur(), 120), "Reply to") {
+		t.Fatalf("Esc must clear the reply target: %q", m.statusBar(m.cur(), 120))
+	}
+
+	// A thread view answers its newest message; say so before Enter.
+	m.update(queryIn{name: "thread:q1", page: &uiQuery{Kind: "thread", Target: "q1"}, thread: true,
+		messages: []*irc.HistoryEvent{{ID: "q1", From: "planner", Target: "#a", Message: "What timeout", Timestamp: uiBase}, {ID: "r1", From: "bob", Target: "#a", Message: "30s", ThreadID: "q1", ReplyTo: "q1", Timestamp: uiBase.Add(time.Second)}}})
+	bar = m.statusBar(m.cur(), 120)
+	if !strings.Contains(bar, "Enter replies to r1") || !strings.Contains(bar, "bob: 30s") {
+		t.Fatalf("thread status bar = %q", bar)
+	}
+}
+
+func TestCtrlYInsertsTheSelectedIDAndOffersItToTheClipboard(t *testing.T) {
+	m := newTestModel("#a")
+	m.update(msgIn{event: uiMessage("m1", "bob", "#a", "hi", 0), history: true})
+	typeKeys(m, "/pin ")
+	m.update(keyIn{kind: keyCtrl, r: 'y'})
+	if string(m.input) != "/pin " || m.clipboard != "" {
+		t.Fatalf("without a selection nothing is inserted: %q", string(m.input))
+	}
+	m.update(keyIn{kind: keySelectPrev})
+	m.update(keyIn{kind: keyCtrl, r: 'y'})
+	if string(m.input) != "/pin m1" || m.cursor != len(m.input) || m.clipboard != "m1" {
+		t.Fatalf("input %q cursor %d clipboard %q", string(m.input), m.cursor, m.clipboard)
+	}
+	cmds, _ := m.update(keyIn{kind: keyCtrl, r: 't'})
+	if len(cmds) != 1 || cmds[0].kind != "thread" || cmds[0].target != "m1" {
+		t.Fatalf("Ctrl-T = %+v, want the selected message's thread", cmds)
+	}
+}
+
+func TestHelpViewReflectsDaemonCapabilities(t *testing.T) {
+	m := newTestModel("#a")
+	m.update(resizeIn{120, 40})
+	typeText(m, "/help")
+	help := m.find("help")
+	if help == nil || m.current != "help" || help.kind != bufHelp {
+		t.Fatalf("/help should open a help view, current %s", m.current)
+	}
+	text := helpText(help.help)
+	if !strings.Contains(text, "Not connected yet") || strings.Contains(text, "unavailable") {
+		t.Fatalf("before the daemon speaks nothing is unavailable:\n%s", text)
+	}
+	for _, c := range uiCommands {
+		if !strings.Contains(text, "\n"+c.name+" ") && !strings.Contains(text, "\n"+c.name+"\n") {
+			t.Errorf("help lacks %s", c.name)
+		}
+	}
+	m.update(capabilitiesIn{features: map[string]string{"CHAT": "1", "REPLIES": "1", "SEARCH": "1", "TOPIC": "1"}})
+	text = helpText(m.find("help").help)
+	if strings.Contains(text, "Not connected") {
+		t.Fatalf("the daemon has spoken:\n%s", text)
+	}
+	for line := range strings.SplitSeq(text, "\n") {
+		switch {
+		case strings.HasPrefix(line, "/pin "), strings.HasPrefix(line, "/thread "), strings.HasPrefix(line, "/quit"):
+			if strings.Contains(line, "unavailable") {
+				t.Errorf("supported command marked unavailable: %s", line)
+			}
+		case strings.HasPrefix(line, "/context "), strings.HasPrefix(line, "/mute "), strings.HasPrefix(line, "/op "):
+			if !strings.Contains(line, "unavailable") {
+				t.Errorf("unsupported command not marked: %s", line)
+			}
+		}
+	}
+	for _, width := range []int{120, 70, 30} {
+		m.update(resizeIn{width, 40})
+		for _, row := range m.view() {
+			if visibleWidth(row) != width {
+				t.Fatalf("help row is %d wide at %d columns: %q", visibleWidth(row), width, row)
+			}
+		}
+	}
+	m.update(resizeIn{120, 40})
+	if rendered := strings.Join(m.logLines(m.find("help"), 100), "\n"); !strings.Contains(rendered, "/thread ID") || !strings.Contains(rendered, "Conversations") {
+		t.Fatalf("rendered help:\n%s", rendered)
+	}
+	if cmds, _ := typeText(m, "hello"); len(cmds) != 0 {
+		t.Fatalf("typing in help must not send: %+v", cmds)
+	}
+	typeText(m, "/close")
+	if m.current != "#a" || m.find("help") != nil {
+		t.Fatalf("/close should return to #a, current %s", m.current)
+	}
+}

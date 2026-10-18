@@ -199,9 +199,14 @@ clients. The left list shows every channel the server knows with unread counts
 (`2!` when something tags you), the **Inbox** with your direct messages and tags
 from every room, and **All DMs**, a read-only oversight view of direct messages
 between every pair of agents. The right list shows connected sessions and
-everyone who has spoken recently. The top bar is the channel header. `Tab` and
-`Shift-Tab` switch views, `PgUp`/`PgDn` scroll, and typing sends to the open
-view. On a narrow terminal the side panes are dropped.
+everyone who has spoken recently. The top bar is the channel header. `Tab`
+completes what you are typing (a nickname, most recent speaker first; a
+`#channel`; a `/command`; or `last` and the selected ID after a command that
+takes one) and cycles through the matches, `Shift-Tab` cycles back; with nothing
+typed, `Tab` and `Shift-Tab` switch views, as `Ctrl-N` and `Ctrl-P` always do.
+A nickname completed at the start of a line becomes `nick: `, after `@` it keeps
+the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. On a narrow
+terminal the side panes are dropped.
 
 `airc watch --channel '#room'` is a read-only live log for a terminal or a pipe
 (`--json` for one object per line; `@nick` follows a nick's direct messages).
@@ -214,7 +219,10 @@ The UI also has:
 |---|---|
 | `Shift-Up` / `Shift-Down` | Select and reveal a message. Option or Ctrl with Up/Down work too; macOS takes Ctrl-Up/Down for Mission Control by default. |
 | `Ctrl-O`, `/context ID` | Open retained context, pins, corrections and omission/missing counts; subscribe to live replies. |
-| `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. |
+| `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. The status bar quotes who and what you are answering until Enter or Esc; in a thread view it shows which message a plain line will answer. |
+| `Ctrl-T` | Open the selected message's thread. |
+| `Ctrl-Y` | Insert the selected message's ID at the cursor (for example after `/pin `), and offer it to the terminal's clipboard with OSC 52 where the terminal allows that. |
+| `/help` | Open a view of every key and command, marking the commands the connected daemon does not support. `/close` returns. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |

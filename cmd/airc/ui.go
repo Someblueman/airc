@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -108,6 +109,11 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 		}
 		row, col := model.cursorPosition()
 		fmt.Fprintf(&frame, "\x1b[%d;%dH%s", row, col, showCursor)
+		if model.clipboard != "" {
+			// OSC 52: terminals that allow it set the clipboard; the rest ignore it.
+			fmt.Fprintf(&frame, "\x1b]52;c;%s\a", base64.StdEncoding.EncodeToString([]byte(model.clipboard)))
+			model.clipboard = ""
+		}
 		_, _ = io.WriteString(out, frame.String())
 	}
 	draw(true)
