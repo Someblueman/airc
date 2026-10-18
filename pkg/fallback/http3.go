@@ -90,6 +90,29 @@ func (h *http3Conn) call(ctx context.Context, r request) (detached, error) {
 		}
 		h.use(q)
 	}
+	q := h.q
+	h.mu.Unlock()
+	d, err := h.httpConn.call(ctx, r)
+	if !errors.Is(err, quic.Err0RTTRejected) {
+		return d, err
+	}
+	// The gateway refused the resumed session's 0-RTT (it restarted, and
+	// its ticket keys with it): nothing sent early reached it. The
+	// connection carries on after its full handshake, under a new HTTP/3
+	// client, and the request is sent again.
+	h.mu.Lock()
+	if h.err != nil {
+		h.mu.Unlock()
+		return detached{}, h.err
+	}
+	if h.q == q {
+		next, err := q.conn.NextConnection(ctx)
+		if err != nil {
+			h.mu.Unlock()
+			return detached{}, err
+		}
+		h.use(&quicConn{conn: next, transport: q.transport})
+	}
 	h.mu.Unlock()
 	return h.httpConn.call(ctx, r)
 }
