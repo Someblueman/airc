@@ -44,7 +44,7 @@ func TestSkillHasValidFrontmatter(t *testing.T) {
 func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	skillText := skills.Airc + "\n" + skills.Reference
 	usage := map[string]string{}
-	for _, sub := range []string{"unread", "channels", "context", "bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "wake", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
+	for _, sub := range []string{"unread", "digest", "channels", "context", "bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "wake", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
 		var stderr bytes.Buffer
 		args := []string{sub, "-h"}
 		if sub == "user" {

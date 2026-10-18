@@ -226,7 +226,7 @@ The UI also has:
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
-| `/search text` | Open a read-only search view of the current room. |
+| `/search words` | Open a read-only search view of the current room: every word must occur, `"quoted phrases"` stay together, `-word` excludes. |
 | `/next`, `/first` | Continue a thread/search or restart from the oldest retained results. |
 | `/pin ID`, `/unpin ID`, `/pins` | Share/read room pins. |
 | `/correct ID text`, `/retract ID reason` | Publish a correction or retraction. |

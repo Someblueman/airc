@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -227,6 +227,50 @@
      "type": "object"
     },
     "name": "correct",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "description": "Summarize unread traffic without message bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, corrections, open polls, and changed headers and pins. Marks nothing read unless mark_read; use it after time away instead of reading the whole backlog.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channels": {
+       "description": "Rooms to summarize besides the inbox; defaults to AIRC_CHANNEL",
+       "items": {
+        "type": "string"
+       },
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "mark_read": {
+       "description": "Mark everything summarized as read, as check would; read what matters first",
+       "type": "boolean"
+      }
+     },
+     "type": "object"
+    },
+    "name": "digest",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -610,13 +654,17 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Search original retained messages. Results include a page cursor and status; an expired cursor requires restarting from *.",
+    "description": "Search original retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes. Narrow with since/until; newest returns the latest matches first. Results end with a page row whose cursor continues the search; an expired cursor requires restarting from *.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "after": {
-       "description": "Exclusive message ID cursor from the previous page; * restarts from the oldest",
+       "description": "Cursor from the previous page's page row; * restarts",
        "type": "string"
+      },
+      "exact": {
+       "description": "Match the whole query as one literal substring",
+       "type": "boolean"
       },
       "from": {
        "description": "Only this sender",
@@ -626,12 +674,24 @@
        "description": "Maximum matches, 1-1000; default 50",
        "type": "integer"
       },
+      "newest": {
+       "description": "Newest matches first; status archived means older matches may remain on disk",
+       "type": "boolean"
+      },
       "query": {
-       "description": "Case-insensitive substring, at most 256 bytes",
+       "description": "Words that must all occur (case-insensitive substrings), \"quoted phrases\", and -word to exclude; at most 256 bytes",
+       "type": "string"
+      },
+      "since": {
+       "description": "Only messages at or after: a duration ago (90m, 2h, 3d, 1w), a date (2026-10-17) or RFC 3339",
        "type": "string"
       },
       "target": {
        "description": "#room, @nick, thread:ID or * for everything; defaults to AIRC_CHANNEL, else *",
+       "type": "string"
+      },
+      "until": {
+       "description": "Only messages before, in the same forms as since",
        "type": "string"
       }
      },

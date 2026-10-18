@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -57,6 +58,45 @@ func (c *Client) React(parent, kind string) error {
 
 // Search returns original history events and an end-of-history paging marker.
 func (c *Client) Search(target, query, from, after string, limit int) error {
+	return c.SearchWith(target, query, from, after, limit, SearchOptions{})
+}
+
+// SearchOptions refine a search on a daemon with SEARCH_TERMS. The zero value
+// is a plain SEARCH: one case-insensitive substring, oldest first.
+type SearchOptions struct {
+	// Terms reads the query as terms that must all occur: words, "quoted
+	// phrases", and -word or -"phrase" for what must not.
+	Terms bool
+	// Newest returns the newest matches first. The cursor is then the oldest
+	// match returned so far, and a page continues before it. It reads only
+	// the memory window; the end-of-history status "archived" says older
+	// matches may remain on disk, where an oldest-first search reaches them.
+	Newest bool
+	// Since and Until bound message times: Since inclusive, Until exclusive.
+	// The daemon compares whole seconds.
+	Since, Until time.Time
+}
+
+func (o SearchOptions) encode() string {
+	var parts []string
+	if o.Terms {
+		parts = append(parts, "terms")
+	}
+	if o.Newest {
+		parts = append(parts, "newest")
+	}
+	if !o.Since.IsZero() {
+		parts = append(parts, fmt.Sprintf("since=%d", o.Since.Unix()))
+	}
+	if !o.Until.IsZero() {
+		parts = append(parts, fmt.Sprintf("until=%d", o.Until.Unix()))
+	}
+	return strings.Join(parts, ",")
+}
+
+// SearchWith is Search with options. Options other than the zero value need
+// a daemon with SEARCH_TERMS.
+func (c *Client) SearchWith(target, query, from, after string, limit int, options SearchOptions) error {
 	if !c.Supports("SEARCH") {
 		return errors.New("search needs a daemon with SEARCH")
 	}
@@ -69,7 +109,14 @@ func (c *Client) Search(target, query, from, after string, limit int) error {
 	if from == "" {
 		from = "*"
 	}
-	return c.command("SEARCH", []string{target, fmt.Sprint(limit), after, from}, query)
+	params := []string{target, fmt.Sprint(limit), after, from}
+	if encoded := options.encode(); encoded != "" {
+		if !c.Supports("SEARCH_TERMS") {
+			return errors.New("search terms, time windows and newest-first need a daemon with SEARCH_TERMS")
+		}
+		params = append(params, encoded)
+	}
+	return c.command("SEARCH", params, query)
 }
 
 type DirectoryEvent struct {

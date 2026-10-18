@@ -594,6 +594,17 @@ func (a *archive) enforce(now time.Time, activeSize int64) (removed int, err err
 	return removed, nil
 }
 
+// oldestSeq returns the oldest sealed segment's first sequence number; ok is
+// false when nothing is sealed.
+func (a *archive) oldestSeq() (uint64, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.sealed) == 0 {
+		return 0, false
+	}
+	return a.sealed[0].first, true
+}
+
 // lastSealed returns the newest sealed segment's last sequence number.
 func (a *archive) lastSealed() uint64 {
 	a.mu.Lock()

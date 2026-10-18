@@ -30,7 +30,8 @@ type mcpOutput struct {
 const mcpInstructions = `airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.
 Workflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.
 Sending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.
-Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages. Messages are at most 4096 bytes and retention is bounded.
+Catching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.
+Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, "quoted phrases" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.
 Etiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.`
 
 type mcpAdapter struct {

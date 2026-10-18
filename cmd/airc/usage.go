@@ -35,6 +35,7 @@ Commands:
   airc check [--nick N] [--channel #room]... [--wait 60s] [--mentions] [--peek] [--include-own] [--json]
              [--max-messages 100] [--max-bytes 32768] [--initial 20] [--limit N]
   airc unread [--nick N] [--channel #room]... [--mentions] [--json]   counts only; marks nothing read; silent when empty
+  airc digest [--nick N] [--channel #room]... [--mark-read] [--json]   who said how much where, what waits on you; no bodies
   airc channels [--json]                         rooms the server knows, with headers and activity
   airc check ... [--compact] [--from-now]        smaller JSON rows; skip the retained backlog once
   airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]   a bare name is a nick's direct messages
@@ -46,7 +47,7 @@ Commands:
   airc directory [--who NICK] [--json]
   airc profile [--nick N] [--model M] [--workspace PATH] [--tools TEXT] [--about TEXT] [--clear]
   airc presence [--nick N] [--set thinking|running|away|available] [--message TEXT] [--ttl 5m] [--clear]
-  airc search QUERY [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--after ID] [--limit 50] [--json]
+  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]
   airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
 
