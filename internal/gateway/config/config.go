@@ -327,6 +327,11 @@ func (c *Config) Validate() error {
 			if t.Authors == NativeAuthors && c.Upstream == nil {
 				return fmt.Errorf("listener %s: %s requires an upstream to tunnel to", l.ID, l.Protocol)
 			}
+			// Without WEBIRC every tunnelled client would reach aircd as the
+			// gateway's own local peer, exempt from its per-address limits.
+			if t.Authors == NativeAuthors && c.Upstream.GatewayTokenFile == "" {
+				return fmt.Errorf("listener %s: %s requires upstream.gateway_token_file, so aircd sees each client's address", l.ID, l.Protocol)
+			}
 			if t.unixSocket() && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}

@@ -12,7 +12,10 @@ access token), nickname and account credential travel inside the tunnel.
 
 A native tunnel takes no `operations`, `targets`, `guests` or
 `password_file`, and its `limits` bound connections only (`connections`,
-`connections_per_source`). It needs the `upstream`. TLS is optional, as on
+`connections_per_source`). It needs the `upstream` with its
+`gateway_token_file`: without `WEBIRC` aircd would see every tunnelled
+client as the gateway's own local peer, exempt from its per-address
+limits, so the configuration is refused. TLS is optional, as on
 IRC; with a certificate the tunnel is `wss://` or HTTPS. Nothing is
 journaled: durability is native's (`SAFE_RETRY`, receipts, `RETRY`).
 
@@ -41,8 +44,9 @@ ws.onmessage = (m) => console.log(m.data); // ":server 001 web :Welcome to airc,
 
 ## IRC through HTTP CONNECT
 
-`protocol: "irc_connect"` answers `CONNECT` (HTTP/1.1, and HTTP/2 under TLS)
-with `200` and then relays the stream to the upstream; other methods get
+`protocol: "irc_connect"` answers `CONNECT` (HTTP/1.1, and HTTP/2 under TLS
+with one tunnel per connection, so the listener's connection limits bound
+the tunnels) with `200` and then relays the stream to the upstream; other methods get
 `405`. The authority the client names is ignored: the tunnel always ends at
 this gateway's upstream, so this is not a general proxy. Lines pipelined
 behind the `CONNECT` are relayed too. Any IRC client with a proxy setting

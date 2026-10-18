@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
@@ -35,10 +37,26 @@ func newTunnelFixture(t *testing.T) *tunnelFixture {
 		carriers = append(carriers, protocol.Carrier{Name: name, Port: f.ports[name]})
 		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(f.ports[name]), Enabled: true})
 	}
-	accounts := filepath.Join(t.TempDir(), "accounts")
-	f.daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64, Carriers: carriers}, func(s *server.Server) error { return s.RestoreAccounts(accounts) })
+	dir := t.TempDir()
+	accounts, tokenFile := filepath.Join(dir, "accounts"), filepath.Join(dir, "gateway.token")
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.CreateCredential(tokenFile); err != nil {
+		t.Fatal(err)
+	}
+	token, err := os.ReadFile(tokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64, Carriers: carriers}, func(s *server.Server) error {
+		if err := s.EnableGateway(strings.TrimSpace(string(token))); err != nil {
+			return err
+		}
+		return s.RestoreAccounts(accounts)
+	})
 	f.proxy = startNativeProxy(t, "127.0.0.1:"+strconv.Itoa(native), f.daemon)
-	startGatewayListeners(t, f.daemon, listeners, carriers)
+	startGatewayUpstream(t, gwconfig.Upstream{Network: "tcp", Address: f.daemon, GatewayTokenFile: tokenFile}, listeners, carriers)
 	return f
 }
 
