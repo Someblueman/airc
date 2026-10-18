@@ -40,9 +40,19 @@ import (
 	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
+	"github.com/coder/websocket"
 )
 
 var chaosRooms = []string{"#chaos-a", "#chaos-b", "#chaos-c"}
+
+// chaosInbox is the account whose inbox one reader follows; the posters
+// send it direct messages.
+const chaosInbox = "inbox-reader"
+
+// chaosWakeBound is how long after its acknowledgement a direct message to
+// the sleeper may wait for a notice that covers it: the 10 s quiet period,
+// an aircd pause or restart, and one failed notice's backoff.
+const chaosWakeBound = 90 * time.Second
 
 // chaosLog is the run's event record: faults, client errors, recoveries.
 type chaosLog struct {
@@ -69,12 +79,13 @@ type chaosSeen struct {
 	name  string
 	ids   map[string]map[string]int // room -> message ID -> deliveries
 	last  map[string]string         // room -> the newest message ID seen
+	seeds map[string]string         // room -> the message reading starts after
 	gaps  int
 	dupes int
 }
 
 func newChaosSeen(name string, seeds map[string]string) *chaosSeen {
-	s := &chaosSeen{name: name, ids: map[string]map[string]int{}, last: map[string]string{}}
+	s := &chaosSeen{name: name, ids: map[string]map[string]int{}, last: map[string]string{}, seeds: seeds}
 	for room, seed := range seeds {
 		s.ids[room] = map[string]int{}
 		s.last[room] = seed
@@ -112,6 +123,7 @@ func (s *chaosSeen) has(room, id string) bool {
 type chaosPost struct {
 	RequestID, Target, Body, MessageID string
 	Attempts                           int
+	AckedAt                            time.Time
 }
 
 type chaosReport struct {
@@ -127,6 +139,8 @@ type chaosReport struct {
 	Clients        []chaosClient  `json:"clients"`
 	WakeNotices    int            `json:"wake_notices"`
 	DirectMessages int            `json:"direct_messages"`
+	WakeLate       int            `json:"direct_messages_woken_late"`
+	WakeExcused    int            `json:"direct_messages_excused_by_sigkill"`
 	FinalWake      bool           `json:"final_direct_message_woke"`
 	Failures       []string       `json:"failures,omitempty"`
 }
@@ -165,16 +179,18 @@ func TestChaosSoak(t *testing.T) {
 		}
 		_ = os.RemoveAll(root)
 	})
-	ports := freePorts(t, 4)
+	ports := freePorts(t, 5)
 	aircAddress := "127.0.0.1:" + strconv.Itoa(ports[0])
 	framedAddress := "127.0.0.1:" + strconv.Itoa(ports[1])
 	websocketAddress := "127.0.0.1:" + strconv.Itoa(ports[2])
 	mqttAddress := "127.0.0.1:" + strconv.Itoa(ports[3])
+	mqttWebSocketAddress := "127.0.0.1:" + strconv.Itoa(ports[4])
 
 	// Wake notices go straight to an in-process receiver.
 	var notices struct {
 		sync.Mutex
 		latest []string
+		at     []time.Time
 	}
 	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var n struct {
@@ -183,6 +199,7 @@ func TestChaosSoak(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&n)
 		notices.Lock()
 		notices.latest = append(notices.latest, n.Latest)
+		notices.at = append(notices.at, time.Now())
 		notices.Unlock()
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -211,7 +228,7 @@ func TestChaosSoak(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Upstream = &config.Upstream{Network: "tcp", Address: aircAddress, GatewayTokenFile: gatewayToken}
-	for _, l := range []config.Listener{{ID: "framed", Protocol: "framed", Address: framedAddress}, {ID: "websocket", Protocol: "websocket", Address: websocketAddress}, {ID: "mqtt", Protocol: "mqtt", Address: mqttAddress}} {
+	for _, l := range []config.Listener{{ID: "framed", Protocol: "framed", Address: framedAddress}, {ID: "websocket", Protocol: "websocket", Address: websocketAddress}, {ID: "mqtt", Protocol: "mqtt", Address: mqttAddress}, {ID: "mqtt-ws", Protocol: "mqtt_websocket", Address: mqttWebSocketAddress}} {
 		l.Enabled, l.Limits, l.Operations = true, fixtureListenerLimits(), dispatch.ImplementedOperations()
 		c.Listeners = append(c.Listeners, l)
 	}
@@ -223,7 +240,7 @@ func TestChaosSoak(t *testing.T) {
 	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gateway := &chaosProcess{name: "gateway", logPath: filepath.Join(root, "gateway.log"), env: env, ready: dialReady(framedAddress, websocketAddress, mqttAddress),
+	gateway := &chaosProcess{name: "gateway", logPath: filepath.Join(root, "gateway.log"), env: env, ready: dialReady(framedAddress, websocketAddress, mqttAddress, mqttWebSocketAddress),
 		args: []string{gatewayBinary(t), "serve", "--file", configPath}}
 	if err := gateway.start(); err != nil {
 		t.Fatal(err)
@@ -236,6 +253,7 @@ func TestChaosSoak(t *testing.T) {
 		"framed":    newChaosProxy(t, "framed", framedAddress),
 		"websocket": newChaosProxy(t, "websocket", websocketAddress),
 		"mqtt":      newChaosProxy(t, "mqtt", mqttAddress),
+		"mqtt-ws":   newChaosProxy(t, "mqtt-ws", mqttWebSocketAddress),
 	}
 	endpoint := func(name string) fallback.Endpoint {
 		return fallback.Endpoint{Carrier: protocol.Carrier{Name: name, Port: proxies[name].port()}}
@@ -244,7 +262,7 @@ func TestChaosSoak(t *testing.T) {
 	// Accounts for the posters and the account wake notices are for, and a
 	// seed message per room that every reader starts after.
 	tokens := map[string]string{}
-	for _, nick := range []string{"poster-native", "poster-gateway", "sleeper"} {
+	for _, nick := range []string{"poster-native", "poster-gateway", "sleeper", chaosInbox} {
 		key := make([]byte, 32)
 		_, _ = rand.Read(key)
 		tokens[nick] = hex.EncodeToString(key)
@@ -270,6 +288,10 @@ func TestChaosSoak(t *testing.T) {
 		}
 		seeds[room] = next(t, seeder, func(e *irc.SendReceiptEvent) bool { return e.Message == "seed "+room }).ID
 	}
+	if err := seeder.Send(chaosInbox, "seed inbox"); err != nil {
+		t.Fatal(err)
+	}
+	inboxSeed := map[string]string{chaosInbox: next(t, seeder, func(e *irc.SendReceiptEvent) bool { return e.Message == "seed inbox" }).ID}
 	_ = seeder.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -285,16 +307,44 @@ func TestChaosSoak(t *testing.T) {
 		clients.Add(1)
 		go func() {
 			defer clients.Done()
-			chaosFollow(ctx, log, seen, &fallback.Client{Host: "127.0.0.1", Nick: seen.name, Endpoints: []fallback.Endpoint{endpoint(carrier)}})
+			chaosFollow(ctx, log, seen, &fallback.Client{Host: "127.0.0.1", Nick: seen.name, Endpoints: []fallback.Endpoint{endpoint(carrier)}}, false)
 		}()
 	}
-	for i := range 2 {
-		seen := newChaosSeen(fmt.Sprintf("mqtt-%d", i), seeds)
+	// One account follows its inbox, which the posters' direct messages
+	// fill.
+	inbox := newChaosSeen("follow-inbox", inboxSeed)
+	readers = append(readers, inbox)
+	clients.Add(1)
+	go func() {
+		defer clients.Done()
+		chaosFollow(ctx, log, inbox, &fallback.Client{Host: "127.0.0.1", Nick: chaosInbox, Token: tokens[chaosInbox], Endpoints: []fallback.Endpoint{endpoint("framed")}}, true)
+	}()
+	mqttTCP := func(ctx context.Context) (net.Conn, error) {
+		var d net.Dialer
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return d.DialContext(ctx, "tcp", "127.0.0.1:"+strconv.Itoa(proxies["mqtt"].port()))
+	}
+	mqttWebSocket := func(ctx context.Context) (net.Conn, error) {
+		dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		ws, _, err := websocket.Dial(dialCtx, "ws://127.0.0.1:"+strconv.Itoa(proxies["mqtt-ws"].port())+"/mqtt", &websocket.DialOptions{Subprotocols: []string{"mqtt"}})
+		if err != nil {
+			return nil, err
+		}
+		return websocket.NetConn(ctx, ws, websocket.MessageBinary), nil
+	}
+	for i, dial := range []func(context.Context) (net.Conn, error){mqttTCP, mqttTCP, mqttWebSocket} {
+		name := fmt.Sprintf("mqtt-%d", i)
+		if i == 2 {
+			name = "mqtt-ws-2"
+		}
+		seen := newChaosSeen(name, seeds)
 		readers = append(readers, seen)
 		clients.Add(1)
 		go func() {
 			defer clients.Done()
-			chaosMQTT(ctx, log, seen, "127.0.0.1:"+strconv.Itoa(proxies["mqtt"].port()))
+			chaosMQTT(ctx, log, seen, dial)
 		}()
 	}
 	time.Sleep(2 * time.Second) // let the readers start following
@@ -322,9 +372,12 @@ func TestChaosSoak(t *testing.T) {
 			defer posters.Done()
 			for seq := 1; postCtx.Err() == nil; seq++ {
 				post := &chaosPost{RequestID: fmt.Sprintf("%s-%d", p.nick, seq), Target: chaosRooms[seq%len(chaosRooms)], Body: fmt.Sprintf("%s #%d", p.nick, seq)}
-				if seq%25 == 0 {
+				switch {
+				case seq%25 == 0:
 					post.Target, post.Body = "sleeper", "dm "+post.Body
 					dms.Add(1)
+				case seq%10 == 5:
+					post.Target, post.Body = chaosInbox, "inbox "+post.Body
 				}
 				posts.Lock()
 				posts.all = append(posts.all, post)
@@ -339,41 +392,51 @@ func TestChaosSoak(t *testing.T) {
 	}
 
 	// Faults, one at a time, until the duration is spent.
+	var kills []time.Time // aircd SIGKILLs: unsaved wake news may be lost
 	deadline := time.Now().Add(duration)
 	for time.Now().Before(deadline) {
 		time.Sleep(time.Duration(10+rng.IntN(30)) * time.Second)
 		if !time.Now().Before(deadline) {
 			break
 		}
-		names := []string{"irc", "framed", "websocket", "mqtt"}
+		names := []string{"irc", "framed", "websocket", "mqtt", "mqtt-ws"}
 		switch roll := rng.IntN(100); {
-		case roll < 30:
+		case roll < 25:
 			name := names[rng.IntN(len(names))]
 			log.add("fault-cut", "%s: %d connections", name, proxies[name].cut())
-		case roll < 50:
+		case roll < 40:
 			name := names[rng.IntN(len(names))]
 			hold := time.Duration(5+rng.IntN(36)) * time.Second
 			log.add("fault-freeze", "%s for %v", name, hold)
 			proxies[name].freeze()
 			time.Sleep(hold)
 			proxies[name].thaw()
-		case roll < 65:
+		case roll < 55:
+			name := names[rng.IntN(len(names))]
+			link := chaosLink{delay: time.Duration(20+rng.IntN(181)) * time.Millisecond, chunk: 256 << rng.IntN(5)}
+			hold := time.Duration(10+rng.IntN(31)) * time.Second
+			log.add("fault-slow", "%s: %d bytes per %v for %v", name, link.chunk, link.delay, hold)
+			proxies[name].slow(link)
+			time.Sleep(hold)
+			proxies[name].fast()
+		case roll < 67:
 			log.add("fault-gateway", "SIGTERM and restart")
 			chaosRestart(t, log, gateway, syscall.SIGTERM)
 		case roll < 75:
 			log.add("fault-gateway", "SIGKILL and restart")
 			chaosRestart(t, log, gateway, syscall.SIGKILL)
-		case roll < 85:
+		case roll < 83:
 			hold := time.Duration(3+rng.IntN(13)) * time.Second
 			log.add("fault-aircd-pause", "SIGSTOP for %v", hold)
 			aircd.signal(syscall.SIGSTOP)
 			time.Sleep(hold)
 			aircd.signal(syscall.SIGCONT)
-		case roll < 95:
+		case roll < 93:
 			log.add("fault-aircd", "SIGTERM and restart")
 			chaosRestart(t, log, aircd, syscall.SIGTERM)
 		default:
 			log.add("fault-aircd", "SIGKILL and restart")
+			kills = append(kills, time.Now())
 			chaosRestart(t, log, aircd, syscall.SIGKILL)
 		}
 	}
@@ -398,7 +461,7 @@ func TestChaosSoak(t *testing.T) {
 	newest := map[string]string{}
 	posts.Lock()
 	for _, p := range posts.all {
-		if p.MessageID != "" && strings.HasPrefix(p.Target, "#") {
+		if p.MessageID != "" && (strings.HasPrefix(p.Target, "#") || p.Target == chaosInbox) {
 			newest[p.Target] = p.MessageID
 		}
 	}
@@ -406,6 +469,9 @@ func TestChaosSoak(t *testing.T) {
 	caughtUp := time.Now().Add(3 * time.Minute)
 	for _, r := range readers {
 		for room, id := range newest {
+			if r.ids[room] == nil {
+				continue
+			}
 			for !r.has(room, id) && time.Now().Before(caughtUp) {
 				time.Sleep(200 * time.Millisecond)
 			}
@@ -459,7 +525,7 @@ func TestChaosSoak(t *testing.T) {
 		client := chaosClient{Name: r.name, Duplicates: r.dupes, Gaps: r.gaps}
 		var missing []string
 		for _, m := range history {
-			if _, followed := r.ids[m.Target]; !followed || m.ID == seeds[m.Target] {
+			if _, followed := r.ids[m.Target]; !followed || m.ID == r.seeds[m.Target] {
 				continue
 			}
 			if r.ids[m.Target][m.ID] == 0 {
@@ -480,8 +546,42 @@ func TestChaosSoak(t *testing.T) {
 			report.Failures = append(report.Failures, fmt.Sprintf("%s saw %d messages twice; a follow resumes after its last position", r.name, r.dupes))
 		}
 	}
+	// Every direct message to the sleeper is covered, within
+	// chaosWakeBound of its acknowledgement, by a notice whose latest is it
+	// or a later one; news counted less than two seconds before an aircd
+	// SIGKILL may not have been saved, and waits for the next message.
+	order := map[string]int{}
+	for _, m := range history {
+		if m.Target == "sleeper" {
+			order[m.ID] = len(order)
+		}
+	}
 	notices.Lock()
 	report.WakeNotices, report.DirectMessages, report.FinalWake = len(notices.latest), int(dms.Load()), woke
+	for _, p := range posts.all {
+		i, ok := order[p.MessageID]
+		if p.Target != "sleeper" || !ok {
+			continue
+		}
+		covered := false
+		for n, latest := range notices.latest {
+			if j, ok := order[latest]; ok && j >= i && !notices.at[n].Before(p.AckedAt.Add(-chaosWakeBound)) && notices.at[n].Before(p.AckedAt.Add(chaosWakeBound)) {
+				covered = true
+				break
+			}
+		}
+		if covered {
+			continue
+		}
+		if slices.ContainsFunc(kills, func(k time.Time) bool {
+			return !k.Before(p.AckedAt.Add(-time.Second)) && k.Before(p.AckedAt.Add(2*time.Second))
+		}) {
+			report.WakeExcused++
+			continue
+		}
+		report.WakeLate++
+		report.Failures = append(report.Failures, fmt.Sprintf("%s (%s) had no wake notice within %v", p.RequestID, p.MessageID, chaosWakeBound))
+	}
 	notices.Unlock()
 	if !woke {
 		report.Failures = append(report.Failures, "the last direct message to the sleeper sent no wake notice")
@@ -538,7 +638,7 @@ func chaosSend(log *chaosLog, client *fallback.Client, post *chaosPost, stop con
 		receipt, err := client.Post(ctx, fallback.Message{Target: post.Target, Body: post.Body, RequestID: post.RequestID})
 		cancel()
 		if err == nil {
-			post.MessageID = receipt.MessageID
+			post.MessageID, post.AckedAt = receipt.MessageID, time.Now()
 			if post.Attempts > 1 {
 				log.add("post-recovered", "%s after %d attempts via %s", post.RequestID, post.Attempts, receipt.Endpoint.Name)
 			}
@@ -563,9 +663,10 @@ func chaosSend(log *chaosLog, client *fallback.Client, post *chaosPost, stop con
 	}
 }
 
-// chaosFollow follows the rooms over one gateway carrier, resuming from the
-// last message it saw whenever the follow ends.
-func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fallback.Client) {
+// chaosFollow follows the rooms, or with inbox the client's inbox, over
+// one gateway carrier, resuming from the last message it saw whenever the
+// follow ends.
+func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fallback.Client, inbox bool) {
 	for ctx.Err() == nil {
 		reader, err := client.ReadRooms(ctx)
 		if err != nil {
@@ -574,10 +675,25 @@ func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fa
 		}
 		for ctx.Err() == nil {
 			set := fallback.CheckSet{Limit: 200}
-			for _, room := range chaosRooms {
-				set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: seen.after(room)})
+			if inbox {
+				after := seen.after(chaosInbox)
+				set.Inbox = &after
+			} else {
+				for _, room := range chaosRooms {
+					set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: seen.after(room)})
+				}
 			}
 			err = reader.Follow(ctx, set, 45*time.Second, func(checked fallback.Checked) error {
+				if page := checked.Inbox; inbox && page != nil {
+					if page.Gap {
+						seen.mu.Lock()
+						seen.gaps++
+						seen.mu.Unlock()
+					}
+					for _, m := range page.Messages {
+						seen.record(chaosInbox, m.ID)
+					}
+				}
 				for i, page := range checked.Rooms {
 					if page.Gap {
 						seen.mu.Lock()
@@ -606,11 +722,11 @@ func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fa
 // reconnecting with Clean Start 0 after every failure. A lost session is
 // subscribed again after the last message seen, with airc-after, as a
 // client that keeps its own positions would.
-func chaosMQTT(ctx context.Context, log *chaosLog, seen *chaosSeen, address string) {
+func chaosMQTT(ctx context.Context, log *chaosLog, seen *chaosSeen, dial func(context.Context) (net.Conn, error)) {
 	clientID := seen.name
 	first := true
 	for ctx.Err() == nil {
-		err := chaosMQTTSession(ctx, seen, address, clientID, first)
+		err := chaosMQTTSession(ctx, seen, dial, clientID, first)
 		first = false
 		if ctx.Err() == nil {
 			log.add("mqtt-reconnect", "%s: %v", seen.name, err)
@@ -619,8 +735,8 @@ func chaosMQTT(ctx context.Context, log *chaosLog, seen *chaosSeen, address stri
 	}
 }
 
-func chaosMQTTSession(ctx context.Context, seen *chaosSeen, address, clientID string, clean bool) error {
-	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+func chaosMQTTSession(ctx context.Context, seen *chaosSeen, dial func(context.Context) (net.Conn, error), clientID string, clean bool) error {
+	conn, err := dial(ctx)
 	if err != nil {
 		return err
 	}

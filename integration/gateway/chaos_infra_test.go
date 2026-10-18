@@ -15,17 +15,27 @@ import (
 )
 
 // chaosProxy forwards TCP connections to target and injects link faults:
-// cut closes every connection at once, as a reset link does, and freeze
-// stops forwarding in both directions without closing anything, as a dead
-// NAT path or a stalled network does, until thaw. A connection accepted
-// while frozen is held, not dialled, until thaw.
+// cut closes every connection at once, as a reset link does; freeze stops
+// forwarding in both directions without closing anything, as a dead NAT
+// path or a stalled network does, until thaw; and slow forwards in small
+// chunks with a delay before each, as a congested or lossy path does (TCP
+// turns loss into delay), until fast. A connection accepted while frozen
+// is held, not dialled, until thaw.
 type chaosProxy struct {
 	name, target string
 	listener     net.Listener
 	mu           sync.Mutex
 	conns        map[net.Conn]struct{}
 	thawed       chan struct{} // closed while traffic flows
+	link         chaosLink
 	wg           sync.WaitGroup
+}
+
+// chaosLink is a slow link: each chunk bytes wait delay. The zero value
+// forwards at once.
+type chaosLink struct {
+	delay time.Duration
+	chunk int
 }
 
 func newChaosProxy(t *testing.T, name, target string) *chaosProxy {
@@ -60,6 +70,12 @@ func (p *chaosProxy) gate() chan struct{} {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.thawed
+}
+
+func (p *chaosProxy) slowness() chaosLink {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.link
 }
 
 func (p *chaosProxy) track(conns ...net.Conn) bool {
@@ -105,7 +121,7 @@ func (p *chaosProxy) serve(client net.Conn) {
 			n, err := src.Read(buf)
 			if n > 0 {
 				<-p.gate()
-				if _, werr := dst.Write(buf[:n]); werr != nil {
+				if p.forward(dst, buf[:n]) != nil {
 					break
 				}
 			}
@@ -121,6 +137,31 @@ func (p *chaosProxy) serve(client net.Conn) {
 	p.untrack(client, upstream)
 	<-done
 }
+
+// forward writes data to dst at the link's current speed.
+func (p *chaosProxy) forward(dst net.Conn, data []byte) error {
+	for len(data) > 0 {
+		link := p.slowness()
+		n := len(data)
+		if link.chunk > 0 {
+			n = min(n, link.chunk)
+			time.Sleep(link.delay)
+		}
+		if _, err := dst.Write(data[:n]); err != nil {
+			return err
+		}
+		data = data[n:]
+	}
+	return nil
+}
+
+func (p *chaosProxy) slow(link chaosLink) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.link = link
+}
+
+func (p *chaosProxy) fast() { p.slow(chaosLink{}) }
 
 // cut closes every connection through the proxy.
 func (p *chaosProxy) cut() int {
