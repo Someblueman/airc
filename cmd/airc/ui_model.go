@@ -22,6 +22,7 @@ const (
 	bufInbox                     // direct messages and tags addressed to this user, from every channel
 	bufDirectMessages            // human oversight of every direct message
 	bufQuery
+	bufHelp // keys and commands, from the uiCommands table
 )
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
@@ -33,6 +34,7 @@ type uiBuffer struct {
 	kind       bufferKind
 	returnTo   string      // query views return to the view they opened from
 	items      []irc.Event // messages and notices, oldest first
+	help       []helpLine  // the content of a help view
 	seen       map[string]struct{}
 	unread     int
 	mention    bool // an unread item is addressed to this user
@@ -60,9 +62,10 @@ type (
 		channel string
 		nicks   []string
 	}
-	channelsIn struct{ list []irc.ChannelInfo }
-	auditIn    struct{ available bool }
-	statusIn   struct {
+	channelsIn     struct{ list []irc.ChannelInfo }
+	auditIn        struct{ available bool }
+	capabilitiesIn struct{ features map[string]string } // the daemon's 005 tokens
+	statusIn       struct {
 		text      string
 		isError   bool
 		connected *bool
@@ -93,6 +96,9 @@ type uiModel struct {
 	replyTo         string
 	input           []rune
 	cursor          int
+	complete        completion
+	features        map[string]string // nil until the daemon has advertised its capabilities
+	clipboard       string            // text to offer the terminal's clipboard on the next draw
 	width, height   int
 	connected       bool
 	status          string
@@ -338,6 +344,12 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			m.switchTo(m.buffers[0].name)
 			cmds = append(cmds, uiCmd{kind: "names", target: m.current})
 		}
+	case capabilitiesIn:
+		m.features = v.features
+		if help := m.find("help"); help != nil && help.kind == bufHelp {
+			help.help = m.helpLines()
+			help.version++
+		}
 	case auditIn:
 		b := m.find(irc.AllDirectMessages)
 		b.topic = "all direct messages · human oversight · read-only"
@@ -386,6 +398,9 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		return nil, false
 	}
 	page := max(m.height-4, 1)
+	if k.kind != keyTab && k.kind != keyBackTab {
+		m.complete = completion{}
+	}
 	switch k.kind {
 	case keyRune, keyPasteRune:
 		if len(m.input) >= 16384 {
@@ -417,9 +432,13 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		m.replyTo = ""
 		m.input, m.cursor = nil, 0
 	case keyTab:
-		return m.step(1), false
+		if !m.completeWord(1) {
+			return m.step(1), false
+		}
 	case keyBackTab:
-		return m.step(-1), false
+		if !m.completeWord(-1) {
+			return m.step(-1), false
+		}
 	case keySelectPrev:
 		m.selectMessage(-1)
 	case keySelectNext:
@@ -443,7 +462,19 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		case 'r':
 			if id := m.selectedMessage(); id != "" {
 				m.replyTo = id
-				m.setStatus("Replying to "+id, false)
+				m.status = "" // the status bar now shows the reply target
+			}
+		case 't':
+			if id := m.selectedMessage(); id != "" {
+				return []uiCmd{{kind: "thread", target: id}}, false
+			}
+		case 'y':
+			if id := m.selectedMessage(); id != "" {
+				text := []rune(id)
+				m.input = append(append(append([]rune{}, m.input[:m.cursor]...), text...), m.input[m.cursor:]...)
+				m.cursor += len(text)
+				m.clipboard = id
+				m.setStatus("Inserted "+id+" at the cursor and offered it to the clipboard", false)
 			}
 		case 'c':
 			return nil, true

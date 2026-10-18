@@ -73,6 +73,7 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	translate := func(event irc.Event) { b.translate(ctx, event) }
 	audit := client.Supports("DM_AUDIT")
 	b.emit(ctx, auditIn{available: audit})
+	b.emit(ctx, capabilitiesIn{features: client.Features()})
 
 	list, err := fetchChannels(client, translate)
 	if err != nil {

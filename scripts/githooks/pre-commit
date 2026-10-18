@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Checks the Go files staged for this commit: gofmt on the staged content, and
+# go vet on their packages. Install with scripts/githooks/install.sh;
+# bypass once with `git commit --no-verify`.
+set -euo pipefail
+cd -- "$(git rev-parse --show-toplevel)"
+
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACMR -- '*.go')
+if (( ${#files[@]} == 0 )); then
+	exit 0
+fi
+
+bad=()
+for file in "${files[@]}"; do
+	# The staged content, which may differ from the working tree.
+	if [[ -n "$(git show ":$file" | gofmt -l 2>&1)" ]]; then
+		bad+=("$file")
+	fi
+done
+if (( ${#bad[@]} > 0 )); then
+	printf 'pre-commit: not gofmt-clean (run gofmt -w and stage again):\n' >&2
+	printf '  %s\n' "${bad[@]}" >&2
+	exit 1
+fi
+
+declare -A dirs=()
+for file in "${files[@]}"; do
+	dirs["./$(dirname -- "$file")"]=1
+done
+if ! go vet "${!dirs[@]}"; then
+	printf 'pre-commit: go vet failed (it checks the working tree, so stage the fix too)\n' >&2
+	exit 1
+fi

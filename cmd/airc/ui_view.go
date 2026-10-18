@@ -113,15 +113,26 @@ func (m *uiModel) statusBar(b *uiBuffer, width int) string {
 		return sty(codes, fitPlain(" "+text, width))
 	}
 	if m.replyTo != "" {
-		return sty("2", fitPlain(" Reply to "+m.replyTo+" · Enter: send · Esc: cancel", width))
+		return sty("38;5;75", fitPlain(" Reply to "+m.replyTo+quoted(m.messagePreview(m.replyTo))+" · Enter: send · Esc: cancel", width))
 	}
 	if b.selectedID != "" {
-		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Shift/Ctrl-Up/Down: select", width))
+		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Ctrl-T: thread · Ctrl-Y: copy ID · Shift/Ctrl-Up/Down: select", width))
 	}
 	if b.scroll > 0 {
 		return sty("38;5;221", fitPlain(fmt.Sprintf(" ↑ scrolled back %d lines · PgDn for the newest", b.scroll), width))
 	}
-	return sty("2", fitPlain(" Tab: channel · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
+	if id := threadReplyTarget(b); id != "" {
+		return sty("2", fitPlain(" Enter replies to "+id+quoted(m.messagePreview(id))+" · Ctrl-R on a selected message answers that one instead", width))
+	}
+	return sty("2", fitPlain(" Tab: complete, or next view · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
+}
+
+// quoted sets a message preview off from the hint around it.
+func quoted(preview string) string {
+	if preview == "" {
+		return ""
+	}
+	return " “" + preview + "”"
 }
 
 // inputRow draws the prompt and typed text, scrolled so the cursor stays visible,
@@ -144,6 +155,14 @@ func (m *uiModel) cursorPosition() (row, col int) {
 func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	if b.cacheLines != nil && b.cacheWidth == width && b.cacheVersion == b.version {
 		return b.cacheLines
+	}
+	if b.kind == bufHelp {
+		lines := renderHelp(b.help, max(width-1, 10))
+		for i := range lines {
+			lines[i] = " " + lines[i]
+		}
+		b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
+		return lines
 	}
 	view := newRenderer(true, width, b.kind != bufChannel)
 	for _, event := range b.items {
