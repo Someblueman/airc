@@ -128,8 +128,9 @@ func newQUICOwner(parent context.Context, tlsConfig *tls.Config, quicConfig *qui
 		})
 		return ctx, nil
 	}
-	// Early: a resumed client's first flight (0-RTT) is served before its
-	// handshake completes. The contract is replay-safe (see HTTP3Server).
+	// Early: a resumed client may send its first flight (0-RTT). HTTP/3
+	// answers early requests 425 and raw QUIC holds them until the
+	// handshake completes, so none runs on replayable data.
 	listener, err := transport.ListenEarly(tlsConfig, quicConfig)
 	if err != nil {
 		_ = transport.Close()

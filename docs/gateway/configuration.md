@@ -75,7 +75,7 @@ client: its IP address, `listener:<id>:pid:<pid>` for a Unix socket
 client process, `listener:<id>` for other carriers without addresses,
 `route:<id>` for route-owned ingress, or `bridge:<id>:<nick>` for a bridged
 user. Sources live only in memory; after a restart a pending job uses its
-listener's source.
+listener's source. The [native tunnels](native.md) require it.
 
 ## Listeners
 

@@ -230,8 +230,8 @@ func serveIRCWebSocket(parent context.Context, conn *websocket.Conn, u IRCUpstre
 // IRCConnectServer constructs the HTTP CONNECT tunnel: a CONNECT request,
 // whatever authority it names, is answered 200 and then relays bytes to
 // the upstream, after WEBIRC. HTTP/1.1 tunnels hijack the connection;
-// HTTP/2 (under TLS) streams the request body and response. The server's
-// BaseContext ends every tunnel.
+// HTTP/2 (under TLS, one stream per connection) streams the request body
+// and response. The server's BaseContext ends every tunnel.
 func IRCConnectServer(u IRCUpstream) (*http.Server, error) {
 	if u.Address == "" {
 		return nil, store.ErrInvalid
@@ -278,8 +278,11 @@ func IRCConnectServer(u IRCUpstream) (*http.Server, error) {
 		relayBytes(ctx, reader, client, upstream)
 	})
 	return &http.Server{
-		Handler:           h,
-		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h2", "http/1.1"}},
+		Handler:   h,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h2", "http/1.1"}},
+		// One tunnel per HTTP/2 connection, as over HTTP/1.1, so the
+		// listener's connection limits bound the upstream connections.
+		HTTP2:             &http.HTTP2Config{MaxConcurrentStreams: 1},
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       30 * time.Second,
 		MaxHeaderBytes:    16 << 10,

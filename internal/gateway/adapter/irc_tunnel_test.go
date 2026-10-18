@@ -7,7 +7,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -204,5 +206,52 @@ func TestIRCConnectTunnelRefusesOtherMethods(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed || resp.Header.Get("Allow") != http.MethodConnect {
 		t.Fatalf("GET: %d %q", resp.StatusCode, resp.Header.Get("Allow"))
+	}
+}
+
+// An HTTP/2 connection carries one tunnel at a time, so the listener's
+// connection limits also bound the tunnels and their upstream connections:
+// a second tunnel takes a second connection.
+func TestIRCConnectTunnelOneStreamPerHTTP2Connection(t *testing.T) {
+	server, err := IRCConnectServer(tunnelUpstream(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var conns atomic.Int32
+	server.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			conns.Add(1)
+		}
+	}
+	ts := httptest.NewUnstartedServer(server.Handler)
+	ts.Config = server
+	ts.EnableHTTP2 = true
+	ts.StartTLS()
+	t.Cleanup(ts.Close) // after the tunnels close
+	client := ts.Client()
+	target, _ := url.Parse(ts.URL)
+	open := func(nick string) {
+		t.Helper()
+		in, out := io.Pipe()
+		req := (&http.Request{Method: http.MethodConnect, URL: target, Host: "airc:6667", Header: http.Header{}, Body: in}).WithContext(t.Context())
+		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK || resp.ProtoMajor != 2 {
+			t.Fatalf("CONNECT: %+v %v", resp, err)
+		}
+		t.Cleanup(func() { _ = out.Close(); _ = resp.Body.Close() })
+		reader := bufio.NewReader(resp.Body)
+		if _, err := io.WriteString(out, "NICK "+nick+"\r\n"); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"echo WEBIRC", "echo NICK " + nick} {
+			if line, err := reader.ReadString('\n'); err != nil || !strings.HasPrefix(line, want) {
+				t.Fatalf("tunnel %s: %q %v", nick, line, err)
+			}
+		}
+	}
+	open("first")
+	open("second")
+	if n := conns.Load(); n != 2 {
+		t.Fatalf("two tunnels used %d connections", n)
 	}
 }

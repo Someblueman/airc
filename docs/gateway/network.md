@@ -77,7 +77,9 @@ association.
 
 `rawquic` (streams) and `rawquic_datagrams` (streams plus QUIC datagrams)
 listen on UDP with TLS 1.3 and ALPN `airc-gateway-quic/1`; a certificate
-is required, and 0-RTT is accepted as on [HTTP/3](http.md#http3). Bidirectional streams carry length-prefixed
+is required. A resumed client may send 0-RTT, but nothing it sends is served
+until the handshake completes: early data can be replayed and its source
+address is unproven, so it would bypass the per-source limits. Bidirectional streams carry length-prefixed
 frames; a client unidirectional stream gets responses on a server
 unidirectional stream; datagrams carry fragments. Correlation IDs are
 unique per stream or per datagram channel; match responses by them, not by
