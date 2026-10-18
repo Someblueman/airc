@@ -133,7 +133,10 @@ After a notice, more news waits for the quiet period (`--quiet`, 10s to 1h,
 default 1m) and goes in one notice. A refused or unreachable URL is retried
 with backoff up to an hour, and `airc wake` shows the last error: the
 receiver's HTTP status or the kind of failure (timed out, name lookup,
-connection refused, TLS); the daemon's log has the full error.
+connection refused, TLS); the daemon's log has the full error. News still
+waiting for its notice is saved with the registration within a second, so
+a notice owed when aircd stops or restarts goes once it is back, still no
+sooner than the quiet period allows.
 
 The notice says whose inbox has news, never what:
 

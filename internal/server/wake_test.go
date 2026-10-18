@@ -258,3 +258,58 @@ func TestWakeFailureIsCoarse(t *testing.T) {
 		}
 	}
 }
+
+// News that has not been announced when aircd stops (here, held by the
+// quiet period) is announced after it starts again, no earlier than the
+// quiet period allows.
+func TestWakeNewsOutlivesARestart(t *testing.T) {
+	const secret = "00112233445566778899aabbccddeeff"
+	key, _ := hex.DecodeString(secret)
+	receiver := &wakeReceiver{t: t, secret: key, notices: make(chan wakeNotice, 16)}
+	hook := httptest.NewServer(receiver)
+	defer hook.Close()
+	dir := t.TempDir()
+	start := func() (string, *Server) {
+		return startServer(t, Config{HistoryLimit: 64, PingInterval: time.Hour, ReadTimeout: time.Hour}, func(s *Server) error {
+			if err := s.RestoreAccounts(filepath.Join(dir, "accounts")); err != nil {
+				return err
+			}
+			return s.EnableWake([]string{hook.URL + "/hooks/"}, filepath.Join(dir, "wakes"), hook.Client())
+		})
+	}
+	address, srv := start()
+	carol, carolReader := rawConn(t, address)
+	_, _ = io.WriteString(carol, "REGISTER carol :"+testAdminToken+"\r\nNICK carol\r\nUSER u 0 * :u\r\nWAKE SET "+hook.URL+"/hooks/carol "+secret+" 10\r\nQUIT\r\n")
+	readUntilClosed(t, carol, carolReader)
+	bob, bobReader := rawConn(t, address)
+	_, _ = io.WriteString(bob, "NICK bob\r\nUSER u 0 * :u\r\nPRIVMSG carol :first\r\n")
+	expectLine(t, bobReader, bob, " 001 ")
+	first := receiver.next(t, 3*time.Second)
+	sentAt := time.Now()
+	_, _ = io.WriteString(bob, "PRIVMSG carol :held by the quiet period\r\n")
+	eventually(t, "the held message counted", func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		for _, state := range srv.wake.byAccount {
+			if state.pending == 1 && state.latest != first.Latest && !state.sending {
+				return true
+			}
+		}
+		return false
+	})
+	_ = bob.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	start()
+	second := receiver.next(t, 15*time.Second)
+	if second.Messages != 1 || second.Latest == first.Latest || second.Latest == "" {
+		t.Fatalf("notice after the restart %+v", second)
+	}
+	if early := time.Since(sentAt); early < 9*time.Second {
+		t.Fatalf("the restart cut the quiet period short: %v after the first notice", early)
+	}
+}

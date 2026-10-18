@@ -37,6 +37,7 @@ const (
 	wakeMaxQuiet     = time.Hour
 	wakeDefaultQuiet = time.Minute
 	wakeMaxBackoff   = time.Hour
+	wakeSaveEvery    = time.Second
 	// wakeSenders bounds the notices in flight at once.
 	wakeSenders = 16
 )
@@ -49,6 +50,16 @@ type wakeRegistration struct {
 	Secret       string    `json:"secret"`
 	QuietSeconds int       `json:"quiet_seconds"`
 	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// savedWake is a registration as the wakes file keeps it, with the news
+// not yet announced, so a notice owed when aircd stops is sent after it
+// starts again.
+type savedWake struct {
+	wakeRegistration
+	Pending int       `json:"pending,omitempty"`
+	Latest  string    `json:"latest,omitempty"`
+	NextAt  time.Time `json:"next_at,omitzero"`
 }
 
 type wakeState struct {
@@ -74,6 +85,10 @@ type wakes struct {
 	// pruned is when expired registrations and those of deleted accounts
 	// were last dropped: once a minute, not on every inbox message.
 	pruned time.Time
+	// dirty marks news not yet in the file; it is saved at most once per
+	// wakeSaveEvery, and when the server stops.
+	dirty bool
+	saved time.Time
 }
 
 // wakeNotice is the body aircd POSTs. It says whose inbox has news and how
@@ -109,7 +124,7 @@ func (s *Server) EnableWake(allow []string, path string, client *http.Client) er
 		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	w := &wakes{allow: allow, path: path, byAccount: map[string]*wakeState{}, kick: make(chan struct{}, 1), stop: make(chan struct{}), client: client}
-	saved := map[string]wakeRegistration{}
+	saved := map[string]savedWake{}
 	if err := readState(path, &saved); err != nil {
 		return err
 	}
@@ -118,12 +133,13 @@ func (s *Server) EnableWake(allow []string, path string, client *http.Client) er
 	// dropped, not fatal: starting must not depend on what an account
 	// registered.
 	now := s.now()
-	for id, reg := range saved {
+	for id, entry := range saved {
+		reg := entry.wakeRegistration
 		if id != reg.Account || !s.wakeValidLocked(w, reg) || !now.Before(reg.ExpiresAt) {
 			s.logger.Warn("wake_registration_dropped", "account_id", reg.Account, "nick", reg.Nick)
 			continue
 		}
-		w.byAccount[id] = &wakeState{reg: reg}
+		w.byAccount[id] = &wakeState{reg: reg, pending: max(entry.Pending, 0), latest: entry.Latest, nextAt: entry.NextAt}
 	}
 	if len(w.byAccount) != len(saved) {
 		if err := s.saveWakesLocked(w, w.byAccount); err != nil {
@@ -173,11 +189,26 @@ func validWakeSecret(secret string) bool {
 }
 
 func (s *Server) saveWakesLocked(w *wakes, next map[string]*wakeState) error {
-	saved := make(map[string]wakeRegistration, len(next))
+	saved := make(map[string]savedWake, len(next))
 	for id, state := range next {
-		saved[id] = state.reg
+		saved[id] = savedWake{wakeRegistration: state.reg, Pending: state.pending, Latest: state.latest, NextAt: state.nextAt}
 	}
-	return writeState(w.path, saved, s.softSync())
+	if err := writeState(w.path, saved, s.softSync()); err != nil {
+		return err
+	}
+	w.dirty, w.saved = false, s.now()
+	return nil
+}
+
+// flushWakesLocked saves news not yet in the file.
+func (s *Server) flushWakesLocked(w *wakes) {
+	if !w.dirty {
+		return
+	}
+	if err := s.saveWakesLocked(w, w.byAccount); err != nil {
+		w.saved = s.now() // try again after wakeSaveEvery, not at once
+		s.logger.Error("wake_save_failed", "error", err.Error())
+	}
 }
 
 // wakeLocked serves WAKE [STATUS], WAKE SET url secret [quiet-seconds] and
@@ -316,6 +347,7 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 		state.pending++
 		state.latest = message.ID
 		woke = true
+		w.dirty = true
 	}
 	if woke {
 		select {
@@ -361,6 +393,9 @@ func (s *Server) runWakes(w *wakes, stop <-chan struct{}) {
 		timer.Reset(wait)
 		select {
 		case <-stop:
+			s.mu.Lock()
+			s.flushWakesLocked(w)
+			s.mu.Unlock()
 			return
 		case <-w.kick:
 		case <-done:
@@ -393,9 +428,14 @@ func (s *Server) dueWakesLocked(w *wakes, now time.Time, room int) ([]dueWake, t
 			}
 		}
 		if expired {
-			if err := s.saveWakesLocked(w, w.byAccount); err != nil {
-				s.logger.Error("wake_save_failed", "error", err.Error())
-			}
+			w.dirty = true
+		}
+	}
+	if w.dirty {
+		if until := w.saved.Add(wakeSaveEvery).Sub(s.now()); until > 0 {
+			wait = min(wait, until)
+		} else {
+			s.flushWakesLocked(w)
 		}
 	}
 	var due []dueWake
@@ -424,6 +464,7 @@ func (s *Server) wakeSentLocked(w *wakes, d dueWake, err error, now time.Time) {
 	if w.byAccount[d.reg.Account] != state {
 		return // cleared or replaced meanwhile
 	}
+	w.dirty = true
 	if err != nil {
 		state.failures++
 		state.lastError = wakeFailure(err)
