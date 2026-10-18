@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/mqttwire"
 )
 
@@ -54,5 +55,35 @@ func TestMQTT5SendEndsAStalledClient(t *testing.T) {
 	}
 	if len(c.slots) != 1 || len(c.state.inflight) != 1 {
 		t.Fatalf("slots %d inflight %d: the unacknowledged message must stay for a resume", len(c.slots), len(c.state.inflight))
+	}
+}
+
+// A reply to a request made as the session's author is kept until
+// acknowledged (QoS 1); one made as another author goes at QoS 0, so a
+// resumed session never replays it.
+func TestMQTT5ReplyAsAnotherAuthorIsNotKept(t *testing.T) {
+	server, client := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	c := &mqtt5Conn{ctx: t.Context(), conn: server, state: &mqtt5State{owner: "g:bob", subs: map[string]*mqtt5Sub{"replies/bob": {filter: "replies/bob", kind: mqtt5Reply, target: "replies/bob", qos: 1}}}, slots: make(chan struct{}, 4), acked: make(chan struct{}), maxPacket: 1 << 20}
+	packets := make(chan mqttwire.Packet, 4)
+	go func() {
+		reader := bufio.NewReader(client)
+		for {
+			p, err := mqttwire.ReadV5(reader)
+			if err != nil {
+				close(packets)
+				return
+			}
+			packets <- p
+		}
+	}()
+	c.reply("replies/bob", []byte("own"), dispatch.DetachedResult{}, nil, true)
+	if p := <-packets; p.QoS != 1 || len(c.state.inflight) != 1 {
+		t.Fatalf("own reply QoS %d, %d kept", p.QoS, len(c.state.inflight))
+	}
+	c.reply("replies/bob", []byte("other"), dispatch.DetachedResult{}, nil, false)
+	if p := <-packets; p.QoS != 0 || len(c.state.inflight) != 1 {
+		t.Fatalf("another author's reply QoS %d, %d kept", p.QoS, len(c.state.inflight))
 	}
 }
