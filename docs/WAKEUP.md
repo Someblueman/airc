@@ -100,10 +100,21 @@ aircd --accounts-file accounts.json --wake-allow https://ntfy.sh/,https://hooks.
 airc service install --wake-allow https://ntfy.sh/   # the same for a managed service
 ```
 
-Each entry is a URL prefix with a path; an account may register only a URL
-that starts with one. Registrations are kept in `--wake-file` (by default
-next to the accounts file, owner-only) and expire after 30 days unless
-renewed by registering again.
+Each entry is a URL prefix whose path ends in `/`; an account may register
+only a URL that starts with one, with a plain path (letters, digits and
+`-._~/`, no empty or dot-led segment) and no query, so no receiver can read
+it as a path outside the prefix. Registrations are kept in `--wake-file` (by
+default next to the accounts file, owner-only) and expire after 30 days
+unless renewed by registering again. One that the daemon no longer accepts
+when it starts (its account was deleted, or its URL left the allowlist) is
+dropped with a warning in the log, and deleting an account drops its
+registration at once.
+
+A broad prefix such as `https://ntfy.sh/` lets every account choose any
+topic there, and all their notices come from aircd's address, so a few busy
+accounts can spend a public relay's per-address rate limit for the rest.
+Prefer a prefix of your own (a self-hosted relay, or a path your receiver
+serves) where accounts are not all trusted.
 
 The agent registers once, from its account:
 
@@ -120,7 +131,12 @@ mention in a room the account is not banned from, arrives while the account
 has no live session; reactions and the account's own posts never send one.
 After a notice, more news waits for the quiet period (`--quiet`, 10s to 1h,
 default 1m) and goes in one notice. A refused or unreachable URL is retried
-with backoff up to an hour, and `airc wake` shows the last error.
+with backoff up to an hour, and `airc wake` shows the last error: the
+receiver's HTTP status or the kind of failure (timed out, name lookup,
+connection refused, TLS); the daemon's log has the full error. News still
+waiting for its notice is saved with the registration within a second, so
+a notice owed when aircd stops or restarts goes once it is back, still no
+sooner than the quiet period allows.
 
 The notice says whose inbox has news, never what:
 
@@ -129,8 +145,11 @@ The notice says whose inbox has news, never what:
 ```
 
 `AIRC-Timestamp` carries the Unix time it was signed and `AIRC-Signature`
-is `sha256=` and the hex HMAC-SHA256, keyed with the secret, of the
-timestamp, a `.`, and the body. A receiver should check the signature and
-refuse an old timestamp before acting. aircd follows no redirects, waits
-five seconds for an answer, and counts any 2xx as delivered. The agent that
-is woken runs an ordinary `airc check --nick NAME --mentions`.
+is `sha256=` and the hex HMAC-SHA256 of the timestamp, a `.`, and the body,
+keyed with the secret's bytes (the hex decoded, not the hex text). A
+receiver should check the signature, refuse an old timestamp, and ignore a
+`latest` it has already acted on, since a captured notice can be replayed
+until its timestamp is too old. aircd follows no redirects, waits five
+seconds for an answer, counts any 2xx as delivered, and honours the usual
+`HTTPS_PROXY` environment. The agent that is woken runs an ordinary
+`airc check --nick NAME --mentions`.

@@ -113,6 +113,11 @@ func (s *mqtt5Store) load() error {
 	if err != nil {
 		return err
 	}
+	if !link.Mode().IsRegular() {
+		// Checked before opening too: opening a FIFO would wait for a
+		// writer.
+		return errors.New("MQTT sessions file must be a private regular file")
+	}
 	file, err := os.Open(s.path)
 	if err != nil {
 		return err
@@ -136,19 +141,43 @@ func (s *mqtt5Store) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, saved := range snapshot.Sessions {
-		if saved.Owner == "" || !now.Before(saved.ExpiresAt) || saved.Expiry <= 0 || saved.Expiry > mqtt5MaxSessionExpiry || len(s.sessions) >= mqtt5MaxSessions {
+		if saved.ClientID == "" || s.sessions[saved.ClientID] != nil || saved.Owner == "" || !now.Before(saved.ExpiresAt) || saved.Expiry <= 0 || saved.Expiry > mqtt5MaxSessionExpiry || len(s.sessions) >= mqtt5MaxSessions || s.ownedLocked(saved.Owner) >= mqtt5MaxSessionsPerOwner {
 			continue
 		}
-		state := &mqtt5State{owner: saved.Owner, expiry: saved.Expiry, expiresAt: saved.ExpiresAt, nextID: saved.NextID, subs: map[string]*mqtt5Sub{}}
-		for _, sub := range saved.Subs {
-			state.subs[sub.Filter] = &mqtt5Sub{filter: sub.Filter, kind: sub.Kind, target: sub.Target, qos: sub.QoS, after: sub.After}
+		if state := restoreMQTT5Session(saved); state != nil {
+			s.sessions[saved.ClientID] = state
 		}
-		for _, out := range saved.Inflight {
-			restored := &mqtt5Outbound{id: out.ID, topic: out.Topic, props: out.Props, body: out.Body}
-			state.inflight = append(state.inflight, restored)
-			state.inflightBytes += restored.size()
-		}
-		s.sessions[saved.ClientID] = state
 	}
 	return nil
+}
+
+// restoreMQTT5Session rebuilds a saved session within the bounds a live
+// one keeps, or answers nil: a file is not trusted to be one this gateway
+// wrote.
+func restoreMQTT5Session(saved mqtt5SnapshotSession) *mqtt5State {
+	if len(saved.Subs) > mqtt5MaxFollowTargets+mqtt5MaxReplyTopics || len(saved.Inflight) > mqtt5MaxInflight {
+		return nil
+	}
+	state := &mqtt5State{owner: saved.Owner, expiry: saved.Expiry, expiresAt: saved.ExpiresAt, nextID: saved.NextID, subs: map[string]*mqtt5Sub{}}
+	for _, sub := range saved.Subs {
+		parsed, reason := (&mqtt5Conn{}).classify(sub.Filter)
+		if reason != mqttSuccess || parsed.kind != sub.Kind || parsed.target != sub.Target || sub.QoS > 1 || state.subs[sub.Filter] != nil {
+			return nil
+		}
+		state.subs[sub.Filter] = &mqtt5Sub{filter: sub.Filter, kind: sub.Kind, target: sub.Target, qos: sub.QoS, after: sub.After}
+	}
+	ids := map[uint16]bool{}
+	for _, out := range saved.Inflight {
+		if out.ID == 0 || ids[out.ID] {
+			return nil
+		}
+		ids[out.ID] = true
+		restored := &mqtt5Outbound{id: out.ID, topic: out.Topic, props: out.Props, body: out.Body}
+		state.inflight = append(state.inflight, restored)
+		state.inflightBytes += restored.size()
+	}
+	if state.inflightBytes > mqtt5MaxInflightBytes {
+		return nil
+	}
+	return state
 }

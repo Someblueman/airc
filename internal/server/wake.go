@@ -5,14 +5,18 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -33,6 +37,7 @@ const (
 	wakeMaxQuiet     = time.Hour
 	wakeDefaultQuiet = time.Minute
 	wakeMaxBackoff   = time.Hour
+	wakeSaveEvery    = time.Second
 	// wakeSenders bounds the notices in flight at once.
 	wakeSenders = 16
 )
@@ -45,6 +50,16 @@ type wakeRegistration struct {
 	Secret       string    `json:"secret"`
 	QuietSeconds int       `json:"quiet_seconds"`
 	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// savedWake is a registration as the wakes file keeps it, with the news
+// not yet announced, so a notice owed when aircd stops is sent after it
+// starts again.
+type savedWake struct {
+	wakeRegistration
+	Pending int       `json:"pending,omitempty"`
+	Latest  string    `json:"latest,omitempty"`
+	NextAt  time.Time `json:"next_at,omitzero"`
 }
 
 type wakeState struct {
@@ -67,6 +82,13 @@ type wakes struct {
 	kick      chan struct{}
 	stop      chan struct{}
 	client    *http.Client
+	// pruned is when expired registrations and those of deleted accounts
+	// were last dropped: once a minute, not on every inbox message.
+	pruned time.Time
+	// dirty marks news not yet in the file; it is saved at most once per
+	// wakeSaveEvery, and when the server stops.
+	dirty bool
+	saved time.Time
 }
 
 // wakeNotice is the body aircd POSTs. It says whose inbox has news and how
@@ -95,24 +117,33 @@ func (s *Server) EnableWake(allow []string, path string, client *http.Client) er
 	}
 	for _, prefix := range allow {
 		if !protocol.ValidWakePrefix(prefix) {
-			return errors.New("each wake allowlist entry must be an http or https URL with a path, such as https://ntfy.sh/")
+			return errors.New("each wake allowlist entry must be an http or https URL whose path ends in /, such as https://ntfy.sh/")
 		}
 	}
 	if client == nil {
 		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	w := &wakes{allow: allow, path: path, byAccount: map[string]*wakeState{}, kick: make(chan struct{}, 1), stop: make(chan struct{}), client: client}
-	saved := map[string]wakeRegistration{}
+	saved := map[string]savedWake{}
 	if err := readState(path, &saved); err != nil {
 		return err
 	}
+	// A registration the daemon would no longer accept (its account was
+	// deleted or changed, its URL left the allowlist, or it expired) is
+	// dropped, not fatal: starting must not depend on what an account
+	// registered.
 	now := s.now()
-	for id, reg := range saved {
-		if id != reg.Account || !s.wakeValidLocked(w, reg) {
-			return errors.New("invalid saved wake registration")
+	for id, entry := range saved {
+		reg := entry.wakeRegistration
+		if id != reg.Account || !s.wakeValidLocked(w, reg) || !now.Before(reg.ExpiresAt) {
+			s.logger.Warn("wake_registration_dropped", "account_id", reg.Account, "nick", reg.Nick)
+			continue
 		}
-		if now.Before(reg.ExpiresAt) {
-			w.byAccount[id] = &wakeState{reg: reg}
+		w.byAccount[id] = &wakeState{reg: reg, pending: max(entry.Pending, 0), latest: entry.Latest, nextAt: entry.NextAt}
+	}
+	if len(w.byAccount) != len(saved) {
+		if err := s.saveWakesLocked(w, w.byAccount); err != nil {
+			return err
 		}
 	}
 	s.wake = w
@@ -128,21 +159,17 @@ func (s *Server) wakeValidLocked(w *wakes, reg wakeRegistration) bool {
 	return ok && a.ID == reg.Account && w.allowed(reg.URL) && validWakeSecret(reg.Secret) && reg.QuietSeconds >= int(wakeMinQuiet/time.Second) && reg.QuietSeconds <= int(wakeMaxQuiet/time.Second)
 }
 
-// allowed reports a URL under an allowlist prefix. Dot segments and
-// percent-encoded paths are refused, since the receiving server may
-// resolve them to a path outside the prefix.
+// allowed reports a URL under an allowlist prefix. Its path must be plain
+// (protocol.PlainWakePath) and it takes no query, since the receiving
+// server may read dot segments, parameters or escapes as a path outside
+// the prefix, or a query as options the operator never allowed.
 func (w *wakes) allowed(target string) bool {
 	if len(target) > maxWakeURLBytes {
 		return false
 	}
 	u, err := url.Parse(target)
-	if err != nil || u.Scheme != "https" && u.Scheme != "http" || u.Host == "" || u.User != nil || u.Fragment != "" || u.String() != target || u.RawPath != "" || strings.Contains(u.Path, "%") {
+	if err != nil || u.Scheme != "https" && u.Scheme != "http" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.String() != target || !protocol.PlainWakePath(u.Path) {
 		return false
-	}
-	for segment := range strings.SplitSeq(u.Path, "/") {
-		if segment == "." || segment == ".." {
-			return false
-		}
 	}
 	for _, prefix := range w.allow {
 		if strings.HasPrefix(target, prefix) {
@@ -162,11 +189,26 @@ func validWakeSecret(secret string) bool {
 }
 
 func (s *Server) saveWakesLocked(w *wakes, next map[string]*wakeState) error {
-	saved := make(map[string]wakeRegistration, len(next))
+	saved := make(map[string]savedWake, len(next))
 	for id, state := range next {
-		saved[id] = state.reg
+		saved[id] = savedWake{wakeRegistration: state.reg, Pending: state.pending, Latest: state.latest, NextAt: state.nextAt}
 	}
-	return writeState(w.path, saved, s.softSync())
+	if err := writeState(w.path, saved, s.softSync()); err != nil {
+		return err
+	}
+	w.dirty, w.saved = false, s.now()
+	return nil
+}
+
+// flushWakesLocked saves news not yet in the file.
+func (s *Server) flushWakesLocked(w *wakes) {
+	if !w.dirty {
+		return
+	}
+	if err := s.saveWakesLocked(w, w.byAccount); err != nil {
+		w.saved = s.now() // try again after wakeSaveEvery, not at once
+		s.logger.Error("wake_save_failed", "error", err.Error())
+	}
 }
 
 // wakeLocked serves WAKE [STATUS], WAKE SET url secret [quiet-seconds] and
@@ -177,7 +219,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "437", nil, "Wake notices are not enabled on this daemon")
 		return
 	}
-	if client.accountID == "" {
+	if a, ok := s.accounts[client.authNick]; client.accountID == "" || !ok || a.ID != client.accountID {
 		s.numericLocked(client, "481", nil, "WAKE needs an authenticated account")
 		return
 	}
@@ -305,6 +347,7 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 		state.pending++
 		state.latest = message.ID
 		woke = true
+		w.dirty = true
 	}
 	if woke {
 		select {
@@ -350,6 +393,9 @@ func (s *Server) runWakes(w *wakes, stop <-chan struct{}) {
 		timer.Reset(wait)
 		select {
 		case <-stop:
+			s.mu.Lock()
+			s.flushWakesLocked(w)
+			s.mu.Unlock()
 			return
 		case <-w.kick:
 		case <-done:
@@ -368,20 +414,28 @@ type dueWake struct {
 }
 
 // dueWakesLocked drops expired registrations and those whose account is
-// gone, and returns up to room notices that may go now, with how long to
+// gone (at most once a minute), and returns up to room notices that may go now, with how long to
 // wait before looking again.
 func (s *Server) dueWakesLocked(w *wakes, now time.Time, room int) ([]dueWake, time.Duration) {
 	wait := time.Minute
-	expired := false
-	for id, state := range w.byAccount {
-		if !s.now().Before(state.reg.ExpiresAt) || !s.wakeValidLocked(w, state.reg) {
-			delete(w.byAccount, id)
-			expired = true
+	if now.Sub(w.pruned) >= time.Minute {
+		w.pruned = now
+		expired := false
+		for id, state := range w.byAccount {
+			if !s.now().Before(state.reg.ExpiresAt) || !s.wakeValidLocked(w, state.reg) {
+				delete(w.byAccount, id)
+				expired = true
+			}
+		}
+		if expired {
+			w.dirty = true
 		}
 	}
-	if expired {
-		if err := s.saveWakesLocked(w, w.byAccount); err != nil {
-			s.logger.Error("wake_save_failed", "error", err.Error())
+	if w.dirty {
+		if until := w.saved.Add(wakeSaveEvery).Sub(s.now()); until > 0 {
+			wait = min(wait, until)
+		} else {
+			s.flushWakesLocked(w)
 		}
 	}
 	var due []dueWake
@@ -410,11 +464,12 @@ func (s *Server) wakeSentLocked(w *wakes, d dueWake, err error, now time.Time) {
 	if w.byAccount[d.reg.Account] != state {
 		return // cleared or replaced meanwhile
 	}
+	w.dirty = true
 	if err != nil {
 		state.failures++
-		state.lastError = err.Error()
+		state.lastError = wakeFailure(err)
 		state.nextAt = now.Add(min(30*time.Second<<min(state.failures-1, 7), wakeMaxBackoff))
-		s.logger.Warn("wake_failed", "account_id", d.reg.Account, "error", state.lastError)
+		s.logger.Warn("wake_failed", "account_id", d.reg.Account, "error", err.Error())
 		return
 	}
 	state.failures, state.lastError, state.lastNotice = 0, "", now
@@ -447,12 +502,42 @@ func (w *wakes) send(ctx context.Context, d dueWake) error {
 	request.Header.Set("AIRC-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
 	response, err := w.client.Do(request)
 	if err != nil {
-		return errors.New("notice not delivered: " + strings.TrimPrefix(err.Error(), "Post \""+d.reg.URL+"\": "))
+		return err
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
 	_ = response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return errors.New("notice refused: HTTP " + strconv.Itoa(response.StatusCode))
+		return wakeRefused(response.StatusCode)
 	}
 	return nil
+}
+
+// wakeRefused is a receiver's non-2xx answer.
+type wakeRefused int
+
+func (code wakeRefused) Error() string { return "notice refused: HTTP " + strconv.Itoa(int(code)) }
+
+// wakeFailure is what WAKE STATUS says of a failed notice: the receiver's
+// HTTP status or the kind of network failure, never the error text, which
+// names addresses, resolvers, proxies and certificates of hosts the
+// account cannot otherwise see. The log keeps the full error.
+func wakeFailure(err error) string {
+	var refused wakeRefused
+	var dns *net.DNSError
+	var certificate *tls.CertificateVerificationError
+	var record tls.RecordHeaderError
+	switch {
+	case errors.As(err, &refused):
+		return refused.Error()
+	case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded):
+		return "notice not delivered: timed out"
+	case errors.As(err, &dns):
+		return "notice not delivered: name lookup failed"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "notice not delivered: connection refused"
+	case errors.As(err, &certificate) || errors.As(err, &record):
+		return "notice not delivered: TLS failed"
+	default:
+		return "notice not delivered"
+	}
 }

@@ -1,0 +1,3 @@
+module mqttload
+
+go 1.27

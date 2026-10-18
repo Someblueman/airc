@@ -35,6 +35,17 @@ func (q *QUIC) ServeConn(parent context.Context, conn *quic.Conn) error {
 	if q.datagrams && !conn.ConnectionState().SupportsDatagrams.Remote {
 		return errors.New("QUIC datagrams not negotiated")
 	}
+	// The listener accepts 0-RTT so a resumed client's handshake is quick,
+	// but nothing it sent runs until the handshake completes: early data
+	// can be replayed, and its source address is unproven, so it would
+	// slip past the per-source and per-address limits.
+	select {
+	case <-conn.HandshakeComplete():
+	case <-conn.Context().Done():
+		return nil
+	case <-parent.Done():
+		return nil
+	}
 	ctx, cancel := context.WithCancel(parent)
 	connDone := make(chan struct{})
 	stopConn := context.AfterFunc(conn.Context(), func() { cancel(); close(connDone) })

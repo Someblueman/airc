@@ -47,8 +47,11 @@ import (
 const (
 	// mqtt5MaxSessionExpiry caps a session's life after its connection ends.
 	mqtt5MaxSessionExpiry = time.Hour
-	// mqtt5MaxSessions caps the sessions the listener remembers.
-	mqtt5MaxSessions = 1024
+	// mqtt5MaxSessions caps the sessions the listener remembers, and
+	// mqtt5MaxSessionsPerOwner those of one author, so no author can take
+	// them all.
+	mqtt5MaxSessions         = 1024
+	mqtt5MaxSessionsPerOwner = 16
 	// mqtt5MaxInflight caps unacknowledged QoS 1 messages to one client,
 	// and mqtt5MaxInflightBytes their size, so the sessions the listener
 	// keeps hold at most 256 MiB.
@@ -65,6 +68,13 @@ const (
 	mqtt5RequestTimeout = 4 * time.Second
 	mqtt5FollowLimit    = 200
 )
+
+// mqtt5AckWait is how long a follow waits for the client to acknowledge a
+// message and free a slot under its Receive Maximum before the connection
+// ends: a follow that waits holds the gateway's session and lookup slots,
+// which a client must not keep by never acknowledging. A variable for
+// tests.
+var mqtt5AckWait = 30 * time.Second
 
 // MQTT 5 reason codes used here.
 const (
@@ -167,30 +177,63 @@ func newMQTT5Store(ctx context.Context) *mqtt5Store {
 // one when resume asks for it and owner owns it, else a fresh one. present
 // reports a resumed session. A session without an author is never
 // resumed: a client ID alone proves nothing, and its pending replies
-// answer someone's reads. A will still waiting out its delay is dropped
-// when its session resumes and submitted now when the session ends.
-func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Duration) (state *mqtt5State, present, ok bool) {
+// answer someone's reads. Nor is an author's session ended by anyone else:
+// another author's connection with its client ID is refused until it
+// expires. A will still waiting out its delay is dropped when its session
+// resumes and submitted now when the session ends.
+func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Duration) (state *mqtt5State, present bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
 	if old := s.sessions[clientID]; old != nil {
-		if resume && owner != "" && old.owner == owner && (old.expiresAt.IsZero() || now.Before(old.expiresAt)) {
+		live := old.expiresAt.IsZero() || now.Before(old.expiresAt)
+		if live && old.owner != "" && old.owner != owner {
+			return nil, false, errMQTTClientIDHeld
+		}
+		if resume && live && owner != "" {
 			old.expiresAt, old.expiry = time.Time{}, expiry
 			s.endWillLocked(clientID, false)
-			return old, true, true
+			return old, true, nil
 		}
 		delete(s.sessions, clientID)
 	}
 	s.endWillLocked(clientID, true)
-	if len(s.sessions) >= mqtt5MaxSessions {
+	if len(s.sessions) >= mqtt5MaxSessions || owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
 		s.sweepLocked(now)
 		if len(s.sessions) >= mqtt5MaxSessions {
-			return nil, false, false
+			return nil, false, errMQTTSessions
+		}
+		if owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
+			return nil, false, errMQTTOwnerSessions
 		}
 	}
 	state = &mqtt5State{owner: owner, expiry: expiry, subs: map[string]*mqtt5Sub{}}
 	s.sessions[clientID] = state
-	return state, false, true
+	return state, false, nil
+}
+
+var (
+	errMQTTSessions      = errors.New("too many sessions")
+	errMQTTOwnerSessions = errors.New("too many sessions for this author")
+)
+
+// mqttReason is the CONNACK reason for a session take refused.
+func mqttReason(err error) byte {
+	if errors.Is(err, errMQTTClientIDHeld) {
+		return mqttNotAuthorized
+	}
+	return mqttQuotaExceeded
+}
+
+// ownedLocked counts owner's sessions, attached or not.
+func (s *mqtt5Store) ownedLocked(owner string) int {
+	n := 0
+	for _, state := range s.sessions {
+		if state.owner == owner {
+			n++
+		}
+	}
+	return n
 }
 
 // release ends a connection's hold on its session: it is forgotten now
@@ -324,6 +367,9 @@ type mqtt5Conn struct {
 	identified bool
 	// willless is set by a DISCONNECT that asks for no will.
 	willless bool
+	// owners and session are the connection's hold on its client ID.
+	owners  *mqttSessions
+	session *mqttSession
 }
 
 // serveMQTT5 runs an MQTT 5 connection after its CONNECT. It owns the
@@ -429,12 +475,16 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 		expiry = min(time.Duration(*p.SessionExpiry)*time.Second, mqtt5MaxSessionExpiry)
 	}
 	session.takeover = func() { c.disconnect(mqttSessionTakenOver, "") }
-	if !owners.claim(ctx, *clientID, session) {
+	if err := owners.claim(ctx, *clientID, owner, session); err != nil {
+		if errors.Is(err, errMQTTClientIDHeld) {
+			refuse(mqttNotAuthorized, err.Error())
+		}
 		return
 	}
-	state, present, ok := sessions.take(*clientID, owner, !connect.CleanSession, expiry)
-	if !ok {
-		refuse(mqttQuotaExceeded, "too many sessions")
+	c.owners, c.session = owners, session
+	state, present, err := sessions.take(*clientID, owner, !connect.CleanSession, expiry)
+	if err != nil {
+		refuse(mqttReason(err), err.Error())
 		return
 	}
 	c.state = state
@@ -482,6 +532,9 @@ func (c *mqtt5Conn) scheduleWill(sessions *mqtt5Store, clientID string, will cor
 	}
 	c.state.mu.Lock()
 	delay := c.state.expiry
+	if c.state.owner == "" {
+		delay = 0 // a session without an author never resumes to cancel it
+	}
 	c.state.mu.Unlock()
 	if willDelay == nil {
 		delay = 0
@@ -636,12 +689,20 @@ func (c *mqtt5Conn) resend() {
 // it can read. A message larger than the client's Maximum Packet Size is
 // dropped, as MQTT 5 directs.
 func (c *mqtt5Conn) send(ctx context.Context, topic string, qos byte, props mqttwire.Properties, body []byte, wait bool) error {
+	var stalled <-chan time.Time
+	if qos == 1 && wait {
+		timer := time.NewTimer(mqtt5AckWait)
+		defer timer.Stop()
+		stalled = timer.C
+	}
 	if qos == 1 {
 		if wait {
 			select {
 			case c.slots <- struct{}{}:
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-stalled:
+				return c.stalled()
 			}
 		} else {
 			select {
@@ -689,8 +750,19 @@ func (c *mqtt5Conn) send(ctx context.Context, topic string, qos byte, props mqtt
 		case <-ctx.Done():
 			<-c.slots
 			return ctx.Err()
+		case <-stalled:
+			<-c.slots
+			return c.stalled()
 		}
 	}
+}
+
+// stalled ends a connection that left a follow waiting mqtt5AckWait for
+// an acknowledgement. Its session keeps the unacknowledged messages.
+func (c *mqtt5Conn) stalled() error {
+	c.disconnect(mqttUnspecified, "messages not acknowledged")
+	closeMQTTConnection(c.conn)
+	return errors.New("MQTT client stopped acknowledging")
 }
 
 // size is the message's packet size, near enough: its topic, body and
@@ -784,10 +856,15 @@ func (c *mqtt5Conn) request(packet mqttwire.Packet) (byte, string) {
 		if c.state.owner == "" {
 			c.state.owner = sub.Author.Scope()
 		}
+		owner := c.state.owner
 		c.state.mu.Unlock()
+		c.owners.identify(c.session, owner)
 	}
 	if responseTopic != "" {
-		c.reply(responseTopic, packet.Props.CorrelationData, result, err)
+		c.state.mu.Lock()
+		own := sub.Author == nil || sub.Author.Scope() == c.state.owner
+		c.state.mu.Unlock()
+		c.reply(responseTopic, packet.Props.CorrelationData, result, err, own)
 	}
 	if err != nil {
 		return mqtt5Reason(err, false)
@@ -800,13 +877,19 @@ func (c *mqtt5Conn) request(packet mqttwire.Packet) (byte, string) {
 
 // reply publishes a request's result to its response topic when this
 // session subscribes to it; with no subscriber it goes nowhere, as on any
-// broker.
-func (c *mqtt5Conn) reply(topic string, correlation []byte, result dispatch.DetachedResult, err error) {
+// broker. The result of a request made as another author than the
+// session's (own false) goes at QoS 0: it is never kept for a resumed
+// session, which whoever next proves the session's author would read.
+func (c *mqtt5Conn) reply(topic string, correlation []byte, result dispatch.DetachedResult, err error, own bool) {
 	c.state.mu.Lock()
 	sub := c.state.subs[topic]
 	c.state.mu.Unlock()
 	if sub == nil || sub.kind != mqtt5Reply {
 		return
+	}
+	qos := sub.qos
+	if !own {
+		qos = 0
 	}
 	var body []byte
 	if err != nil {
@@ -820,7 +903,7 @@ func (c *mqtt5Conn) reply(topic string, correlation []byte, result dispatch.Deta
 	}
 	format := byte(1)
 	props := mqttwire.Properties{PayloadFormat: &format, ContentType: "application/json", CorrelationData: correlation}
-	_ = c.send(c.ctx, topic, sub.qos, props, body, false)
+	_ = c.send(c.ctx, topic, qos, props, body, false)
 }
 
 // mqtt5Reason maps a gateway refusal to an MQTT 5 reason code and the

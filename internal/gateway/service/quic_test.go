@@ -180,3 +180,165 @@ func TestRawQUICOwnerKeepalive(t *testing.T) {
 	case <-time.After(8 * time.Second):
 	}
 }
+
+// A resumed client's 0-RTT request waits for the handshake: through a path
+// that delivers only the client's Initial and 0-RTT packets, as a spoofed
+// source or a replayed first flight does, it is never answered; once the
+// handshake completes, it is.
+func TestRawQUICHoldsEarlyDataUntilHandshake(t *testing.T) {
+	cert := testtls.New(t)
+	pair, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	owner, err := newRawQUICOwner(ctx, testDispatcher(t), make(chan struct{}, 4), make(chan struct{}, 2), pair, "127.0.0.1:0", false, adapter.Keepalive{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := make(chan error, 1)
+	go func() { served <- owner.serve(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		shutdown, finish := context.WithTimeout(context.Background(), 2*time.Second)
+		defer finish()
+		_ = owner.close(shutdown)
+		<-served
+	})
+	clientTLS := cert.Client.Clone()
+	clientTLS.NextProtos = []string{adapter.QUICALPN}
+	clientTLS.ClientSessionCache = tls.NewLRUClientSessionCache(4)
+	dialCtx, finish := context.WithTimeout(ctx, 10*time.Second)
+	defer finish()
+	// A full handshake leaves a session ticket.
+	first, err := quic.DialAddr(dialCtx, owner.addr().String(), clientTLS, &quic.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	_ = first.CloseWithError(0, "")
+
+	// answered reports whether the server served the stream: it answers
+	// the empty request by ending the stream, or the read times out.
+	answered := func(address string) (*quic.Conn, bool) {
+		conn, err := quic.DialAddrEarly(dialCtx, address, clientTLS, &quic.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conn.CloseWithError(0, "") })
+		stream, err := conn.OpenStream()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stream.Write([]byte{0, 0, 0, 2, '{', '}'}); err != nil {
+			t.Fatal(err)
+		}
+		_ = stream.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, err = stream.Read(make([]byte, 1))
+		var timeout net.Error
+		return conn, !errors.As(err, &timeout) || !timeout.Timeout()
+	}
+	if conn, ok := answered(earlyOnlyPath(t, owner.addr().String())); ok || !conn.ConnectionState().Used0RTT {
+		t.Fatalf("an early-only path was answered: %v (0-RTT %v)", ok, conn.ConnectionState().Used0RTT)
+	}
+	if conn, ok := answered(owner.addr().String()); !ok || !conn.ConnectionState().Used0RTT {
+		t.Fatalf("a resumed 0-RTT request was answered: %v (0-RTT %v)", ok, conn.ConnectionState().Used0RTT)
+	}
+}
+
+// earlyOnlyPath relays UDP to target, passing from the client only
+// datagrams made of Initial and 0-RTT packets: the server's flight
+// arrives, but the client's handshake never completes.
+func earlyOnlyPath(t *testing.T, target string) string {
+	t.Helper()
+	front, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := net.ResolveUDPAddr("udp", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := net.DialUDP("udp", nil, server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = front.Close(); _ = back.Close() })
+	client := make(chan net.Addr, 1)
+	go func() {
+		buf := make([]byte, 2048)
+		var from net.Addr
+		for {
+			n, err := back.Read(buf)
+			if err != nil {
+				return
+			}
+			if from == nil {
+				from = <-client
+			}
+			_, _ = front.WriteTo(buf[:n], from)
+		}
+	}()
+	go func() {
+		buf := make([]byte, 2048)
+		sent := false
+		for {
+			n, from, err := front.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			if !sent {
+				client <- from
+				sent = true
+			}
+			if onlyEarlyPackets(buf[:n]) {
+				_, _ = back.Write(buf[:n])
+			}
+		}
+	}()
+	return front.LocalAddr().String()
+}
+
+// onlyEarlyPackets reports whether a QUIC v1 datagram holds only long
+// header Initial and 0-RTT packets.
+func onlyEarlyPackets(b []byte) bool {
+	varint := func(b []byte) (int, []byte, bool) {
+		if len(b) == 0 {
+			return 0, nil, false
+		}
+		n := 1 << (b[0] >> 6)
+		if len(b) < n {
+			return 0, nil, false
+		}
+		v := int(b[0] & 0x3f)
+		for _, c := range b[1:n] {
+			v = v<<8 | int(c)
+		}
+		return v, b[n:], true
+	}
+	for len(b) > 0 {
+		kind := b[0] >> 4 & 3
+		if b[0]&0x80 == 0 || kind > 1 || len(b) < 6 {
+			return false
+		}
+		rest := b[5:]
+		for range 2 { // destination and source connection IDs
+			if len(rest) < 1 || len(rest) < 1+int(rest[0]) {
+				return false
+			}
+			rest = rest[1+int(rest[0]):]
+		}
+		size, rest, ok := 0, rest, true
+		if kind == 0 { // an Initial carries a token
+			if size, rest, ok = varint(rest); !ok || len(rest) < size {
+				return false
+			}
+			rest = rest[size:]
+		}
+		if size, rest, ok = varint(rest); !ok || len(rest) < size {
+			return false
+		}
+		b = rest[size:]
+	}
+	return true
+}
