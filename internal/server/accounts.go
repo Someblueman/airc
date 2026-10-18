@@ -155,6 +155,12 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 			return
 		}
 		s.accounts = next
+		if w := s.wake; w != nil && w.byAccount[a.ID] != nil {
+			delete(w.byAccount, a.ID)
+			if err := s.saveWakesLocked(w, w.byAccount); err != nil {
+				s.logger.Error("wake_save_failed", "error", err.Error())
+			}
+		}
 		result.Nick, result.AccountID, result.Changed = a.Nick, a.ID, true
 	}
 	s.logger.Info("admin_action", "actor", client.client.Nick, "action", request.Action, "nick", request.Nick, "account_id", result.AccountID, "changed", result.Changed)

@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 // wakeReceiver collects signed notices, checking each signature.
@@ -96,7 +98,7 @@ func TestWakeNotices(t *testing.T) {
 	_, _ = io.WriteString(guest, "WAKE SET "+hook.URL+"/hooks/carol "+secret+"\r\n")
 	expectLine(t, guestReader, guest, " 481 ")
 	carol, carolReader := connect("REGISTER carol :" + testAdminToken + "\r\nNICK carol\r\nUSER u 0 * :u\r\n")
-	for _, outside := range []string{"https://elsewhere.example/", hook.URL + "/hooks/../admin", hook.URL + "/hooks/%2e%2e/admin", hook.URL + "/hooksx"} {
+	for _, outside := range []string{"https://elsewhere.example/", hook.URL + "/hooks/../admin", hook.URL + "/hooks/%2e%2e/admin", hook.URL + "/hooksx", hook.URL + "/hooks/..;/admin", hook.URL + "/hooks/x;..;/y", hook.URL + "/hooks//admin", hook.URL + "/hooks/x?email=a", hook.URL + "/hooks/.env"} {
 		_, _ = io.WriteString(carol, "WAKE SET "+outside+" "+secret+"\r\n")
 		expectLine(t, carolReader, carol, " 417 ")
 	}
@@ -173,4 +175,86 @@ func TestWakeRegistrationsPersist(t *testing.T) {
 	conn, reader = rawConn(t, plain)
 	_, _ = io.WriteString(conn, "NICK erin\r\nUSER u 0 * :u\r\nWAKE\r\n")
 	expectLine(t, reader, conn, " 437 ")
+}
+
+// What an account registered never stops the daemon starting: a deleted
+// account loses its registration and cannot make a new one, and saved
+// registrations the daemon no longer accepts are dropped on start.
+func TestWakeRegistrationsDropWithTheirAccount(t *testing.T) {
+	const secret = "00112233445566778899aabbccddeeff"
+	dir := t.TempDir()
+	enable := func(allow string) func(*Server) error {
+		return func(s *Server) error {
+			for _, err := range []error{s.EnableAdmin(testAdminToken), s.RestoreAccounts(filepath.Join(dir, "accounts"))} {
+				if err != nil {
+					return err
+				}
+			}
+			return s.EnableWake([]string{allow}, filepath.Join(dir, "wakes"), nil)
+		}
+	}
+	config := Config{HistoryLimit: 8, PingInterval: time.Hour, ReadTimeout: time.Hour}
+	address, srv := startServer(t, config, enable("https://hooks.example/"))
+	register := func(nick string) (net.Conn, *bufio.Reader) {
+		conn, reader := rawConn(t, address)
+		_, _ = io.WriteString(conn, "REGISTER "+nick+" :"+testAdminToken+"\r\nNICK "+nick+"\r\nUSER u 0 * :u\r\nWAKE SET https://hooks.example/"+nick+" "+secret+"\r\n")
+		expectLine(t, reader, conn, `"registered":true`)
+		return conn, reader
+	}
+	dave, daveReader := register("dave")
+	register("eve")
+	control, controlReader := rawConn(t, address)
+	_, _ = io.WriteString(control, "NICK op\r\nUSER u 0 * :u\r\nOPER :"+testAdminToken+"\r\n")
+	expectLine(t, controlReader, control, " 381 ")
+	if result := adminWire(t, control, controlReader, protocol.AdminRequest{Action: "account-delete", Nick: "dave"}); !result.Changed {
+		t.Fatalf("delete: %+v", result)
+	}
+	// dave's connection outlives his account but cannot register again.
+	_, _ = io.WriteString(dave, "WAKE SET https://hooks.example/dave "+secret+"\r\n")
+	expectLine(t, daveReader, dave, " 481 ")
+	srv.mu.Lock()
+	registered := len(srv.wake.byAccount)
+	srv.mu.Unlock()
+	if registered != 1 {
+		t.Fatalf("%d registrations after deleting dave, want eve's alone", registered)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// The operator narrows the allowlist: eve's registration is dropped,
+	// not fatal.
+	address, _ = startServer(t, config, enable("https://other.example/"))
+	conn, reader := rawConn(t, address)
+	_, _ = io.WriteString(conn, "AUTH eve :"+testAdminToken+"\r\nNICK eve\r\nUSER u 0 * :u\r\nWAKE\r\n")
+	expectLine(t, reader, conn, `"registered":false`)
+}
+
+// A failed notice's status names the kind of failure, not the addresses,
+// resolvers or certificates in the error.
+func TestWakeFailureIsCoarse(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := listener.Addr().String()
+	_ = listener.Close()
+	direct := &http.Client{Transport: &http.Transport{}} // no proxy from the environment
+	_, refused := direct.Post("http://"+closed+"/hooks/x", "application/json", nil)
+	_, missing := direct.Post("http://airc-wake-test.invalid/hooks/x", "application/json", nil)
+	for _, c := range []struct {
+		err  error
+		want string
+	}{
+		{refused, "notice not delivered: connection refused"},
+		{missing, "notice not delivered: name lookup failed"},
+		{wakeRefused(503), "notice refused: HTTP 503"},
+		{context.DeadlineExceeded, "notice not delivered: timed out"},
+	} {
+		if got := wakeFailure(c.err); got != c.want {
+			t.Errorf("wakeFailure(%v) = %q, want %q", c.err, got, c.want)
+		}
+	}
 }

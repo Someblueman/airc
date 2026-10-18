@@ -207,7 +207,7 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 	if o.wakeAllow != "" {
 		for _, prefix := range strings.Split(o.wakeAllow, ",") {
 			if !protocol.ValidWakePrefix(prefix) {
-				return c, errors.New("--wake-allow entries must be http or https URLs with a path, such as https://ntfy.sh/")
+				return c, errors.New("--wake-allow entries must be http or https URLs whose path ends in /, such as https://ntfy.sh/")
 			}
 		}
 	}
