@@ -1,0 +1,1297 @@
+    0.0s seed               8037704936111224335
+   15.1s fault-gateway      SIGKILL and restart
+   15.1s follow-resume      follow-framed-0: EOF
+   15.1s mqtt-reconnect     mqtt-1: EOF
+   15.1s mqtt-reconnect     mqtt-0: EOF
+   15.1s follow-resume      follow-inbox: EOF
+   15.1s follow-resume      follow-websocket-3: gateway follow went silent
+   15.1s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+   15.1s native-reconnect   native-tunnel: disconnected
+   15.1s follow-resume      follow-framed-1: EOF
+   15.1s follow-resume      follow-websocket-2: gateway follow went silent
+   21.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": context deadline exceeded
+   22.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   23.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   24.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   25.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   26.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   27.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   28.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   29.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   30.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   31.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   32.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   33.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   34.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   35.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   35.2s fault-slow         http3: 108ms per datagram for 29s
+   36.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   37.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   38.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   40.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   41.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   42.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   43.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   44.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   46.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   47.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   48.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   49.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   51.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   52.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   53.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   54.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   55.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   57.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   58.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   59.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   60.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   61.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   63.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   64.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   65.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   66.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   67.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   68.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   69.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   70.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   71.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   72.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   73.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   74.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   75.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   76.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   77.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   78.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   79.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   80.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   81.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   82.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   83.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   84.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   85.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   86.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   87.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   88.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   89.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   90.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   91.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   92.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   93.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   94.2s fault-aircd        SIGTERM and restart
+   94.2s follow-resume      follow-framed-1: gateway error upstream_unavailable
+   94.2s native-reconnect   native-tunnel: disconnected
+   94.2s follow-resume      follow-inbox: gateway error upstream_unavailable
+   94.2s follow-resume      follow-framed-0: gateway error upstream_unavailable
+   94.2s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+   94.2s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+   94.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   95.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   96.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   97.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   98.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+   99.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  100.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  101.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  102.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  103.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  104.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  105.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  106.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  107.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  108.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  109.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  110.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  111.2s fault-freeze       native for 35s
+  111.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  112.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  113.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  114.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  115.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  116.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  117.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  118.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  119.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  120.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  121.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  122.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  123.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  124.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  125.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  126.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  127.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  128.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  129.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  130.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  131.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  132.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  133.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  134.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  135.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  136.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  137.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  138.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  139.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  140.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  141.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  142.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  143.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  144.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  145.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  146.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  147.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  148.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  149.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  150.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  151.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  152.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  153.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  154.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  155.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  156.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  157.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  158.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  159.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  160.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  161.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  162.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  163.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  164.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  165.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  166.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  167.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  168.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  169.2s fault-slow         websocket: 256 bytes per 128ms for 19s
+  169.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  170.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  171.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  172.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  173.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  174.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  175.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  176.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  177.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  178.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  179.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  180.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  181.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  182.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  183.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  184.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  185.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  186.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  187.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  188.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  189.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  190.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  191.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  192.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  193.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  194.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  195.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  196.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  197.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  198.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  199.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  200.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  201.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  202.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  203.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  204.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  205.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  206.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  207.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  208.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  209.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  210.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  211.2s follow-resume      follow-inbox: EOF
+  211.2s follow-resume      follow-framed-1: EOF
+  211.2s follow-resume      follow-framed-0: EOF
+  211.2s fault-cut          framed: 3 connections
+  211.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  212.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  213.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  214.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  215.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  216.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  217.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  218.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  219.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  220.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  221.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  222.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  223.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  224.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  225.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  226.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  227.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  228.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  229.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  230.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  231.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  232.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  233.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  234.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  235.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  236.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  237.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  238.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  239.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  240.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  241.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  242.2s fault-aircd        SIGKILL and restart
+  242.2s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  242.2s follow-resume      follow-inbox: gateway error upstream_unavailable
+  242.2s native-reconnect   native-tunnel: disconnected
+  242.2s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  242.2s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  242.2s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  242.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  243.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  245.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  246.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  247.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  248.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  249.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  250.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  251.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  252.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  253.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  254.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  255.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  256.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  257.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  258.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  259.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  260.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  261.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  262.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  262.3s fault-cut          http3: 235 flows rebound
+  263.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  264.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  265.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  266.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  267.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  268.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  269.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  270.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  271.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  272.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  273.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  274.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  275.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  276.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  277.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  278.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  279.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  280.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  281.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  282.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  283.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  284.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  284.3s fault-gateway      SIGTERM and restart
+  284.3s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+  284.3s follow-resume      follow-websocket-3: gateway follow went silent
+  284.3s follow-resume      follow-websocket-2: gateway follow went silent
+  284.3s native-reconnect   native-tunnel: disconnected
+  284.3s mqtt-reconnect     mqtt-1: EOF
+  284.3s mqtt-reconnect     mqtt-0: EOF
+  284.3s follow-resume      follow-framed-1: EOF
+  284.3s follow-resume      follow-inbox: EOF
+  284.3s follow-resume      follow-framed-0: EOF
+  285.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  286.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  287.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  288.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  289.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  290.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  291.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  292.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  293.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  294.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  295.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  296.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  297.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  298.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  299.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  299.4s fault-slow         framed: 256 bytes per 62ms for 34s
+  300.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  301.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  302.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  303.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  304.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  305.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  306.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  307.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  308.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  309.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  310.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  311.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  312.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  313.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  314.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  315.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  316.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  317.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  318.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  319.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  320.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  321.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  322.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  323.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  324.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  325.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  326.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  327.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  328.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  329.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  370.4s fault-gateway      SIGTERM and restart
+  370.4s follow-resume      follow-framed-1: EOF
+  370.4s mqtt-reconnect     mqtt-0: EOF
+  370.4s follow-resume      follow-framed-0: EOF
+  370.4s mqtt-reconnect     mqtt-ws-2: EOF
+  370.4s mqtt-reconnect     mqtt-1: EOF
+  370.4s follow-resume      follow-inbox: EOF
+  370.4s native-reconnect   native-tunnel: disconnected
+  370.4s follow-resume      follow-websocket-2: gateway follow went silent
+  370.4s follow-resume      follow-websocket-3: gateway follow went silent
+  370.4s check-retry        check-http3: gateway error upstream_unavailable
+  371.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  372.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  373.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  374.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  375.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  376.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  377.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  378.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  379.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  380.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  381.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  382.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  383.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  384.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  385.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  386.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  387.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  388.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  389.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  390.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  391.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  392.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  393.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  394.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  395.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  396.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  397.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  398.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  399.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  400.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  401.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  402.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  403.4s fault-loss         http3: 18% of datagrams for 22s
+  403.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  404.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  405.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  406.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  407.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  408.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  410.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  411.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  412.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  413.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  414.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  415.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  416.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  417.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  418.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  419.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  420.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  422.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  423.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  424.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  425.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  426.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  427.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  428.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  429.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  430.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  431.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  432.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  433.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  434.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  435.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  436.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  437.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  438.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  439.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  440.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  441.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  442.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  443.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  444.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  445.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  446.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  447.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  448.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  449.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  450.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  451.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  452.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  453.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  454.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  455.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  456.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  457.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  458.4s fault-aircd        SIGTERM and restart
+  458.4s native-reconnect   native-tunnel: disconnected
+  458.4s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  458.4s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  458.4s follow-resume      follow-inbox: gateway error upstream_unavailable
+  458.4s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  458.4s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  458.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  459.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  460.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  461.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  462.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  463.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  464.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  465.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  466.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  467.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  468.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  469.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  470.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  471.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  472.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  473.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  474.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  475.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  476.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  477.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  478.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  479.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  480.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  481.5s fault-aircd        SIGTERM and restart
+  481.5s native-reconnect   native-tunnel: disconnected
+  481.5s follow-resume      follow-inbox: gateway error upstream_unavailable
+  481.5s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  481.5s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  481.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  481.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  481.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  482.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  483.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  484.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  485.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  486.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  487.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  488.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  489.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  490.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  491.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  492.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  493.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  494.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  495.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  496.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  497.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  498.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  499.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  500.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  501.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  502.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  503.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  504.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  505.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  506.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  507.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  508.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  509.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  510.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  511.5s fault-gateway      SIGTERM and restart
+  511.5s follow-resume      follow-inbox: EOF
+  511.5s follow-resume      follow-framed-1: EOF
+  511.5s follow-resume      follow-framed-0: EOF
+  511.5s follow-resume      follow-websocket-3: gateway follow went silent
+  511.5s mqtt-reconnect     mqtt-1: EOF
+  511.5s native-reconnect   native-tunnel: disconnected
+  511.5s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+  511.5s follow-resume      follow-websocket-2: gateway follow went silent
+  511.5s mqtt-reconnect     mqtt-0: EOF
+  511.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  512.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  513.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  514.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  515.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  516.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  517.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  518.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  519.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  520.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  521.6s fault-loss         http3: 32% of datagrams for 24s
+  521.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  522.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  523.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  524.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  525.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  526.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  528.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  530.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  531.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  533.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  534.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  535.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  536.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  537.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  538.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  539.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+  546.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": context deadline exceeded
+  575.6s fault-cut          native: 1 connections
+  575.6s native-reconnect   native-tunnel: disconnected
+  606.6s fault-freeze       native for 20s
+  649.6s fault-cut          native: 1 connections
+  649.6s native-reconnect   native-tunnel: disconnected
+  661.6s fault-cut          irc: 0 connections
+  695.6s fault-slow         native: 2048 bytes per 120ms for 24s
+  729.6s fault-freeze       native for 8s
+  773.6s fault-aircd        SIGKILL and restart
+  773.6s check-retry        check-http3: gateway error upstream_unavailable
+  773.6s native-reconnect   native-tunnel: disconnected
+  773.6s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  773.6s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  773.6s follow-resume      follow-inbox: gateway error upstream_unavailable
+  773.6s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  773.6s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  786.7s fault-cut          native: 1 connections
+  786.7s native-reconnect   native-tunnel: disconnected
+  811.7s fault-freeze       mqtt-ws for 34s
+  845.7s mqtt-reconnect     mqtt-ws-2: failed to write msg: failed to write frame: failed to flush: write tcp 127.0.0.1:53386->127.0.0.1:46413: write: connection reset by peer
+  863.7s fault-aircd        SIGTERM and restart
+  863.7s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  863.7s follow-resume      follow-inbox: gateway error upstream_unavailable
+  863.7s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  863.7s check-retry        check-http3: gateway error upstream_unavailable
+  863.7s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  863.7s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  863.7s native-reconnect   native-tunnel: disconnected
+  887.7s fault-aircd-pause  SIGSTOP for 8s
+  895.0s check-retry        check-http3: gateway error upstream_unavailable
+  895.3s follow-resume      follow-inbox: gateway error upstream_unavailable
+  931.7s fault-cut          http3: 233 flows rebound
+  937.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": context deadline exceeded
+  942.7s fault-aircd        SIGKILL and restart
+  942.7s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  942.7s native-reconnect   native-tunnel: disconnected
+  942.7s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  942.7s follow-resume      follow-inbox: gateway error upstream_unavailable
+  942.7s check-retry        check-http3: gateway error upstream_unavailable
+  942.7s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  942.7s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  975.8s fault-slow         framed: 1024 bytes per 179ms for 29s
+ 1018.8s fault-cut          mqtt-ws: 1 connections
+ 1018.8s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1053.8s fault-cut          irc: 0 connections
+ 1067.8s fault-cut          irc: 0 connections
+ 1089.8s fault-cut          native: 1 connections
+ 1089.8s native-reconnect   native-tunnel: disconnected
+ 1120.8s fault-cut          framed: 3 connections
+ 1120.8s follow-resume      follow-framed-0: EOF
+ 1120.8s follow-resume      follow-framed-1: EOF
+ 1120.8s follow-resume      follow-inbox: EOF
+ 1140.8s fault-gateway      SIGTERM and restart
+ 1140.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1140.8s native-reconnect   native-tunnel: disconnected
+ 1140.8s mqtt-reconnect     mqtt-0: EOF
+ 1140.8s mqtt-reconnect     mqtt-1: EOF
+ 1140.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1140.8s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1140.8s follow-resume      follow-framed-1: EOF
+ 1140.8s follow-resume      follow-inbox: EOF
+ 1140.8s follow-resume      follow-framed-0: EOF
+ 1140.8s check-retry        check-http3: gateway error upstream_unavailable
+ 1141.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1142.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1143.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1144.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1145.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1146.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1147.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1148.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1149.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1150.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1151.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1152.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1153.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1154.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1155.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1156.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1157.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1158.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1159.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1160.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1161.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1162.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1163.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1164.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1165.8s fault-cut          irc: 0 connections
+ 1165.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1166.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1167.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1168.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1169.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1170.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1171.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1172.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1173.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1174.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1175.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1176.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1177.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1178.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1179.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1180.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1181.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1182.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1183.8s fault-freeze       websocket for 26s
+ 1184.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1185.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1186.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1187.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1188.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1189.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1190.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1191.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1192.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1193.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1194.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1195.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1196.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1197.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1198.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1199.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1200.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1201.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1202.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1203.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1204.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1205.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1206.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1207.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1208.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1209.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1209.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1209.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1210.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1211.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1212.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1213.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1214.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1215.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1216.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1217.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1218.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1219.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1220.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1221.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1222.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1223.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1224.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1225.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1226.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1227.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1228.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1229.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1230.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1231.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1232.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1233.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1233.8s fault-gateway      SIGTERM and restart
+ 1233.8s mqtt-reconnect     mqtt-0: EOF
+ 1233.8s follow-resume      follow-framed-1: EOF
+ 1233.8s mqtt-reconnect     mqtt-1: EOF
+ 1233.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1233.8s follow-resume      follow-framed-0: EOF
+ 1233.8s native-reconnect   native-tunnel: disconnected
+ 1233.8s follow-resume      follow-inbox: EOF
+ 1233.8s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1233.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1234.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1235.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1236.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1237.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1238.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1239.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1240.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1241.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1242.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1243.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1244.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1258.9s fault-gateway      SIGKILL and restart
+ 1258.9s follow-resume      follow-inbox: EOF
+ 1258.9s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1258.9s mqtt-reconnect     mqtt-0: EOF
+ 1258.9s follow-resume      follow-framed-1: EOF
+ 1258.9s follow-resume      follow-framed-0: EOF
+ 1258.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1258.9s native-reconnect   native-tunnel: disconnected
+ 1258.9s mqtt-reconnect     mqtt-1: EOF
+ 1258.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1264.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": context deadline exceeded
+ 1265.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1266.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1267.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1268.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1269.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1270.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1271.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1272.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1273.0s fault-cut          websocket: 2 connections
+ 1273.0s follow-resume      follow-websocket-2: gateway follow went silent
+ 1273.0s follow-resume      follow-websocket-3: gateway follow went silent
+ 1273.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1274.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1275.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1276.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1277.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1278.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1279.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1280.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1281.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1282.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1283.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1284.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1285.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1287.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1288.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1289.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1290.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1291.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1292.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1293.0s fault-cut          mqtt: 2 connections
+ 1293.0s mqtt-reconnect     mqtt-0: EOF
+ 1293.0s mqtt-reconnect     mqtt-1: EOF
+ 1293.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1294.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1295.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1296.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1297.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1298.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1299.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1300.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1301.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1302.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1303.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1304.0s fault-aircd-pause  SIGSTOP for 3s
+ 1304.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1305.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1306.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1307.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1308.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1309.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1310.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1311.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1312.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1313.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1314.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1315.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1316.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1317.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1318.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1319.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1320.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1321.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1322.0s fault-cut          mqtt: 2 connections
+ 1322.0s mqtt-reconnect     mqtt-0: EOF
+ 1322.0s mqtt-reconnect     mqtt-1: EOF
+ 1322.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1323.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1324.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1325.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1326.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1327.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1328.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1329.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1330.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1331.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1332.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1333.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1334.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1335.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1336.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1337.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1338.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1339.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1340.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1341.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1342.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1343.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1344.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1345.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1346.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1347.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1348.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1349.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1350.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1351.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1352.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1353.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1354.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1355.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1356.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1357.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1358.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1359.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1360.0s fault-gateway      SIGKILL and restart
+ 1360.0s native-reconnect   native-tunnel: disconnected
+ 1360.0s follow-resume      follow-inbox: EOF
+ 1360.0s mqtt-reconnect     mqtt-1: EOF
+ 1360.0s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1360.0s mqtt-reconnect     mqtt-0: EOF
+ 1360.0s follow-resume      follow-framed-0: EOF
+ 1360.0s follow-resume      follow-websocket-3: gateway follow went silent
+ 1360.0s follow-resume      follow-websocket-2: gateway follow went silent
+ 1360.0s follow-resume      follow-framed-1: EOF
+ 1360.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1361.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1362.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1363.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1364.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1365.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1366.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1367.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1368.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1369.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1370.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1371.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1372.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1373.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1374.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1375.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1376.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1377.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1378.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1379.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1380.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1381.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1382.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1383.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1384.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1385.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1386.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1387.0s fault-slow         irc: 256 bytes per 101ms for 26s
+ 1387.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1388.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1389.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1390.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1391.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1392.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1393.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1394.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1395.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1396.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1397.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1398.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1399.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1400.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1401.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1402.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1403.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1404.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1405.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1406.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1407.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1408.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1409.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1410.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1411.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1412.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1413.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1414.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1415.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1416.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1417.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1418.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1419.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1420.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1421.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1422.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1423.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1424.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1425.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1426.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1427.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1428.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1429.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1430.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1431.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1432.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1433.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1434.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1435.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1436.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1437.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1438.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1439.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1440.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1441.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1442.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1443.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1444.0s fault-aircd        SIGKILL and restart
+ 1444.0s native-reconnect   native-tunnel: disconnected
+ 1444.0s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1444.0s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1444.0s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1444.0s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1444.0s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1444.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1445.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1446.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1447.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1448.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1449.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1450.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1451.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1452.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1453.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1454.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1455.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1456.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1457.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1458.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1459.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1460.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1461.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1462.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1463.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1464.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1465.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1466.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1467.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1468.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1469.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1470.1s fault-aircd        SIGKILL and restart
+ 1470.1s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1470.1s native-reconnect   native-tunnel: disconnected
+ 1470.1s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1470.1s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1470.1s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1470.1s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1470.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1471.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1472.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1473.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1474.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1475.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1476.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1477.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1478.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1479.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1480.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1481.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1482.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1483.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1484.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1485.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1486.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1487.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1488.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1489.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1490.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1491.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1492.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1493.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1494.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1495.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1496.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1497.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1498.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1499.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1500.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1501.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1502.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1503.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1504.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1505.1s fault-aircd        SIGTERM and restart
+ 1505.1s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1505.1s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1505.1s native-reconnect   native-tunnel: disconnected
+ 1505.1s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1505.1s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1505.1s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1505.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1506.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1507.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1508.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1509.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1510.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1511.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1512.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1513.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1514.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1515.2s fault-gateway      SIGKILL and restart
+ 1515.2s follow-resume      follow-inbox: EOF
+ 1515.2s follow-resume      follow-framed-0: EOF
+ 1515.2s follow-resume      follow-websocket-2: gateway follow went silent
+ 1515.2s mqtt-reconnect     mqtt-1: EOF
+ 1515.2s native-reconnect   native-tunnel: disconnected
+ 1515.2s follow-resume      follow-websocket-3: gateway follow went silent
+ 1515.2s mqtt-reconnect     mqtt-0: EOF
+ 1515.2s follow-resume      follow-framed-1: EOF
+ 1515.2s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1515.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1516.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1517.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1518.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1519.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1520.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1521.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1522.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1523.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1524.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1525.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1526.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1527.2s fault-freeze       mqtt-ws for 11s
+ 1527.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1528.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1529.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1530.8s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1531.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1532.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1533.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1534.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1535.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1536.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1537.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1538.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1539.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1540.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1541.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1542.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1543.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1544.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1545.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1546.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1547.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1548.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1549.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1550.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1551.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1552.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1553.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1554.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1555.9s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1557.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1558.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1559.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1560.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1561.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1562.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1563.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1564.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1565.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1566.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1567.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1568.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1569.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1570.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1570.2s fault-gateway      SIGTERM and restart
+ 1570.2s follow-resume      follow-websocket-3: gateway follow went silent
+ 1570.2s follow-resume      follow-websocket-2: gateway follow went silent
+ 1570.2s mqtt-reconnect     mqtt-0: EOF
+ 1570.2s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1570.2s native-reconnect   native-tunnel: disconnected
+ 1570.2s mqtt-reconnect     mqtt-1: EOF
+ 1570.2s follow-resume      follow-framed-1: EOF
+ 1570.2s follow-resume      follow-inbox: EOF
+ 1570.2s follow-resume      follow-framed-0: EOF
+ 1571.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1572.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1573.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1574.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1575.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1576.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1577.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1578.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1579.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1580.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1581.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1581.3s follow-resume      follow-websocket-3: gateway follow went silent
+ 1581.3s follow-resume      follow-websocket-2: gateway follow went silent
+ 1581.3s fault-cut          websocket: 2 connections
+ 1582.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1583.0s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1584.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1585.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1586.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1587.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1588.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1589.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1590.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1591.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1592.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1593.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1594.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1595.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1596.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1597.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1598.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1599.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1600.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1601.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1602.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1603.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1603.3s fault-freeze       framed for 13s
+ 1604.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1605.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1606.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1607.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1608.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1609.1s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1610.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1611.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1612.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1613.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1614.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1615.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1616.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1617.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1618.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1619.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1620.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1621.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1622.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1623.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1624.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1625.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1626.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1627.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1628.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1629.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1630.2s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1630.3s fault-loss         http3: 34% of datagrams for 38s
+ 1631.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1633.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1634.6s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1636.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1637.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1638.7s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1646.7s check-retry        check-http3: H3_REQUEST_CANCELLED (local)
+ 1657.6s check-retry        check-http3: H3_REQUEST_CANCELLED (local)
+ 1684.3s fault-cut          http3: 476 flows rebound
+ 1690.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": context deadline exceeded
+ 1701.3s fault-slow         mqtt-ws: 1024 bytes per 160ms for 17s
+ 1734.3s fault-gateway      SIGTERM and restart
+ 1734.3s mqtt-reconnect     mqtt-1: EOF
+ 1734.3s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1734.3s follow-resume      follow-websocket-2: gateway follow went silent
+ 1734.3s follow-resume      follow-websocket-3: gateway follow went silent
+ 1734.3s follow-resume      follow-framed-1: EOF
+ 1734.3s native-reconnect   native-tunnel: disconnected
+ 1734.3s mqtt-reconnect     mqtt-0: EOF
+ 1734.3s follow-resume      follow-framed-0: EOF
+ 1734.3s follow-resume      follow-inbox: EOF
+ 1734.3s check-retry        check-http3: gateway error upstream_unavailable
+ 1735.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1736.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1737.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1738.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1739.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1740.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1741.3s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1742.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1743.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1744.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1745.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1746.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1747.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1748.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1749.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1750.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1751.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1752.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1753.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1754.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1755.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1756.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1757.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1758.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1759.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1760.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1761.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1762.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1763.4s fault-cut          mqtt: 2 connections
+ 1763.4s mqtt-reconnect     mqtt-1: EOF
+ 1763.4s mqtt-reconnect     mqtt-0: EOF
+ 1763.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1764.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1765.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1766.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1767.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1768.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1769.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1770.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1771.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1772.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1773.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1774.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1775.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1776.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1777.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1778.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1779.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1780.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1800.4s fault-gateway      SIGTERM and restart
+ 1800.4s follow-resume      follow-websocket-3: gateway follow went silent
+ 1800.4s follow-resume      follow-websocket-2: gateway follow went silent
+ 1800.4s follow-resume      follow-framed-0: EOF
+ 1800.4s follow-resume      follow-framed-1: EOF
+ 1800.4s follow-resume      follow-inbox: EOF
+ 1800.4s mqtt-reconnect     mqtt-ws-2: EOF
+ 1800.4s native-reconnect   native-tunnel: disconnected
+ 1800.4s mqtt-reconnect     mqtt-1: EOF
+ 1800.4s mqtt-reconnect     mqtt-0: EOF
+ 1800.4s check-retry        check-http3: gateway error upstream_unavailable
+ 1801.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1802.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1803.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1804.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1805.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1806.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1807.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1808.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1809.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1810.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1811.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1812.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1813.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1814.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1815.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1816.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1817.4s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1818.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1819.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1820.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1821.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1822.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1823.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1824.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1825.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1826.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1827.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1828.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1829.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1830.4s calm               faults over; stopping posters
+ 1830.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1831.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1832.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1833.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1834.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1835.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1836.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1837.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1838.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1839.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1840.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1841.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected
+ 1842.5s check-retry        check-http3: Post "https://127.0.0.1:54423/v1/request": http3: conn unusable: 0-RTT rejected

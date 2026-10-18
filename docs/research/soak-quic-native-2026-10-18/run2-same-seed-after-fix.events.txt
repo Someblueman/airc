@@ -1,0 +1,282 @@
+    0.0s seed               8037704936111224335
+   17.4s fault-gateway      SIGKILL and restart
+   17.4s follow-resume      follow-framed-0: EOF
+   17.4s mqtt-reconnect     mqtt-0: EOF
+   17.4s follow-resume      follow-websocket-3: gateway follow went silent
+   17.4s follow-resume      follow-websocket-2: gateway follow went silent
+   17.4s mqtt-reconnect     mqtt-1: EOF
+   17.4s native-reconnect   native-tunnel: disconnected
+   17.4s follow-resume      follow-inbox: EOF
+   17.4s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+   17.4s follow-resume      follow-framed-1: EOF
+   23.3s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+   37.4s fault-slow         http3: 108ms per datagram for 29s
+   96.4s fault-aircd        SIGTERM and restart
+   96.4s follow-resume      follow-inbox: gateway error upstream_unavailable
+   96.4s follow-resume      follow-framed-0: gateway error upstream_unavailable
+   96.4s native-reconnect   native-tunnel: disconnected
+   96.4s check-retry        check-http3: gateway error upstream_unavailable
+   96.4s follow-resume      follow-framed-1: gateway error upstream_unavailable
+   96.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+   96.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  113.5s fault-freeze       native for 35s
+  171.5s fault-slow         websocket: 256 bytes per 128ms for 19s
+  213.5s fault-cut          framed: 3 connections
+  213.5s follow-resume      follow-inbox: EOF
+  213.5s follow-resume      follow-framed-1: EOF
+  213.5s follow-resume      follow-framed-0: EOF
+  244.5s fault-aircd        SIGKILL and restart
+  244.5s native-reconnect   native-tunnel: disconnected
+  244.5s follow-resume      follow-inbox: gateway error upstream_unavailable
+  244.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  244.5s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  244.5s check-retry        check-http3: gateway error upstream_unavailable
+  244.5s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  244.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  264.6s fault-cut          http3: 4 flows rebound
+  270.5s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+  286.6s fault-gateway      SIGTERM and restart
+  286.6s mqtt-reconnect     mqtt-1: EOF
+  286.6s follow-resume      follow-websocket-2: gateway follow went silent
+  286.6s mqtt-reconnect     mqtt-0: EOF
+  286.6s follow-resume      follow-inbox: EOF
+  286.6s follow-resume      follow-framed-1: EOF
+  286.6s follow-resume      follow-framed-0: EOF
+  286.6s follow-resume      follow-websocket-3: gateway follow went silent
+  286.6s check-retry        check-http3: gateway error upstream_unavailable
+  286.6s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+  286.6s native-reconnect   native-tunnel: disconnected
+  301.6s fault-slow         framed: 256 bytes per 62ms for 34s
+  372.6s fault-gateway      SIGTERM and restart
+  372.6s native-reconnect   native-tunnel: disconnected
+  372.6s mqtt-reconnect     mqtt-0: EOF
+  372.6s follow-resume      follow-inbox: EOF
+  372.6s mqtt-reconnect     mqtt-1: EOF
+  372.6s follow-resume      follow-framed-1: EOF
+  372.6s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+  372.6s follow-resume      follow-websocket-3: gateway follow went silent
+  372.6s follow-resume      follow-websocket-2: gateway follow went silent
+  372.6s follow-resume      follow-framed-0: EOF
+  372.6s check-retry        check-http3: gateway error upstream_unavailable
+  405.7s fault-loss         http3: 18% of datagrams for 22s
+  460.7s fault-aircd        SIGTERM and restart
+  460.7s follow-resume      follow-inbox: gateway error upstream_unavailable
+  460.7s native-reconnect   native-tunnel: disconnected
+  460.7s check-retry        check-http3: gateway error upstream_unavailable
+  460.7s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  460.7s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  460.7s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  460.7s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  483.7s fault-aircd        SIGTERM and restart
+  483.8s follow-resume      follow-inbox: gateway error upstream_unavailable
+  483.8s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  483.8s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  483.8s native-reconnect   native-tunnel: disconnected
+  483.8s check-retry        check-http3: gateway error upstream_unavailable
+  483.8s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  483.8s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  513.8s fault-gateway      SIGTERM and restart
+  513.8s follow-resume      follow-framed-0: EOF
+  513.8s mqtt-reconnect     mqtt-0: EOF
+  513.8s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+  513.8s follow-resume      follow-websocket-3: gateway follow went silent
+  513.8s follow-resume      follow-inbox: EOF
+  513.8s mqtt-reconnect     mqtt-1: EOF
+  513.8s follow-resume      follow-websocket-2: gateway follow went silent
+  513.8s native-reconnect   native-tunnel: disconnected
+  513.8s follow-resume      follow-framed-1: EOF
+  513.8s check-retry        check-http3: gateway error upstream_unavailable
+  523.9s fault-loss         http3: 32% of datagrams for 24s
+  577.9s fault-cut          native: 1 connections
+  577.9s native-reconnect   native-tunnel: disconnected
+  608.9s fault-freeze       native for 20s
+  651.9s fault-cut          native: 1 connections
+  651.9s native-reconnect   native-tunnel: disconnected
+  663.9s fault-cut          irc: 0 connections
+  697.9s fault-slow         native: 2048 bytes per 120ms for 24s
+  731.9s fault-freeze       native for 8s
+  775.9s fault-aircd        SIGKILL and restart
+  775.9s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  775.9s check-retry        check-http3: gateway error upstream_unavailable
+  775.9s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  775.9s native-reconnect   native-tunnel: disconnected
+  775.9s follow-resume      follow-inbox: gateway error upstream_unavailable
+  775.9s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  775.9s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  788.9s fault-cut          native: 1 connections
+  788.9s native-reconnect   native-tunnel: disconnected
+  813.9s fault-freeze       mqtt-ws for 34s
+  847.9s mqtt-reconnect     mqtt-ws-2: failed to write msg: failed to write frame: failed to flush: write tcp 127.0.0.1:54770->127.0.0.1:38005: write: connection reset by peer
+  865.9s fault-aircd        SIGTERM and restart
+  865.9s native-reconnect   native-tunnel: disconnected
+  865.9s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  865.9s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  865.9s follow-resume      follow-inbox: gateway error upstream_unavailable
+  865.9s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  865.9s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  865.9s check-retry        check-http3: gateway error upstream_unavailable
+  890.0s fault-aircd-pause  SIGSTOP for 8s
+  897.2s check-retry        check-http3: gateway error upstream_unavailable
+  897.2s follow-resume      follow-inbox: gateway error upstream_unavailable
+  934.0s fault-cut          http3: 10 flows rebound
+  939.8s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+  945.0s fault-aircd        SIGKILL and restart
+  945.0s follow-resume      follow-framed-0: gateway error upstream_unavailable
+  945.0s follow-resume      follow-inbox: gateway error upstream_unavailable
+  945.0s native-reconnect   native-tunnel: disconnected
+  945.0s follow-resume      follow-framed-1: gateway error upstream_unavailable
+  945.0s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+  945.0s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+  945.0s check-retry        check-http3: gateway error upstream_unavailable
+  978.0s fault-slow         framed: 1024 bytes per 179ms for 29s
+ 1021.1s fault-cut          mqtt-ws: 1 connections
+ 1021.1s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1056.1s fault-cut          irc: 0 connections
+ 1070.1s fault-cut          irc: 0 connections
+ 1092.1s fault-cut          native: 1 connections
+ 1092.1s native-reconnect   native-tunnel: disconnected
+ 1123.1s fault-cut          framed: 3 connections
+ 1123.1s follow-resume      follow-framed-1: EOF
+ 1123.1s follow-resume      follow-inbox: EOF
+ 1123.1s follow-resume      follow-framed-0: EOF
+ 1143.1s fault-gateway      SIGTERM and restart
+ 1143.1s follow-resume      follow-websocket-2: gateway follow went silent
+ 1143.1s mqtt-reconnect     mqtt-0: EOF
+ 1143.1s mqtt-reconnect     mqtt-1: EOF
+ 1143.1s follow-resume      follow-websocket-3: gateway follow went silent
+ 1143.1s native-reconnect   native-tunnel: disconnected
+ 1143.1s mqtt-reconnect     mqtt-ws-2: EOF
+ 1143.1s follow-resume      follow-inbox: EOF
+ 1143.1s follow-resume      follow-framed-1: EOF
+ 1143.1s follow-resume      follow-framed-0: EOF
+ 1143.1s check-retry        check-http3: gateway error upstream_unavailable
+ 1168.1s fault-cut          irc: 0 connections
+ 1186.1s fault-freeze       websocket for 26s
+ 1212.1s follow-resume      follow-websocket-2: gateway follow went silent
+ 1212.1s follow-resume      follow-websocket-3: gateway follow went silent
+ 1236.2s fault-gateway      SIGTERM and restart
+ 1236.3s mqtt-reconnect     mqtt-0: EOF
+ 1236.3s mqtt-reconnect     mqtt-1: EOF
+ 1236.3s follow-resume      follow-websocket-2: gateway follow went silent
+ 1236.3s native-reconnect   native-tunnel: disconnected
+ 1236.3s follow-resume      follow-websocket-3: gateway follow went silent
+ 1236.3s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1236.3s check-retry        check-http3: gateway error upstream_unavailable
+ 1236.3s follow-resume      follow-framed-0: EOF
+ 1236.3s follow-resume      follow-inbox: EOF
+ 1236.3s follow-resume      follow-framed-1: EOF
+ 1261.4s fault-gateway      SIGKILL and restart
+ 1261.4s follow-resume      follow-websocket-3: gateway follow went silent
+ 1261.4s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1261.4s follow-resume      follow-framed-1: EOF
+ 1261.4s follow-resume      follow-framed-0: EOF
+ 1261.4s follow-resume      follow-inbox: EOF
+ 1261.4s native-reconnect   native-tunnel: disconnected
+ 1261.4s mqtt-reconnect     mqtt-0: EOF
+ 1261.4s follow-resume      follow-websocket-2: gateway follow went silent
+ 1261.4s mqtt-reconnect     mqtt-1: EOF
+ 1267.3s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+ 1275.5s fault-cut          websocket: 2 connections
+ 1275.5s follow-resume      follow-websocket-2: gateway follow went silent
+ 1275.5s follow-resume      follow-websocket-3: gateway follow went silent
+ 1295.5s fault-cut          mqtt: 2 connections
+ 1295.5s mqtt-reconnect     mqtt-1: EOF
+ 1295.5s mqtt-reconnect     mqtt-0: EOF
+ 1306.5s fault-aircd-pause  SIGSTOP for 3s
+ 1324.5s fault-cut          mqtt: 2 connections
+ 1324.5s mqtt-reconnect     mqtt-0: EOF
+ 1324.5s mqtt-reconnect     mqtt-1: EOF
+ 1362.5s fault-gateway      SIGKILL and restart
+ 1362.5s follow-resume      follow-framed-0: EOF
+ 1362.5s follow-resume      follow-framed-1: EOF
+ 1362.5s follow-resume      follow-websocket-3: gateway follow went silent
+ 1362.5s native-reconnect   native-tunnel: disconnected
+ 1362.5s follow-resume      follow-inbox: EOF
+ 1362.5s follow-resume      follow-websocket-2: gateway follow went silent
+ 1362.5s mqtt-reconnect     mqtt-1: EOF
+ 1362.5s mqtt-reconnect     mqtt-0: EOF
+ 1362.5s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1368.3s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+ 1389.5s fault-slow         irc: 256 bytes per 101ms for 26s
+ 1446.5s fault-aircd        SIGKILL and restart
+ 1446.5s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1446.5s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1446.5s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1446.5s native-reconnect   native-tunnel: disconnected
+ 1446.5s check-retry        check-http3: gateway error upstream_unavailable
+ 1446.5s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1446.5s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1472.6s fault-aircd        SIGKILL and restart
+ 1472.6s check-retry        check-http3: gateway error upstream_unavailable
+ 1472.6s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1472.6s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1472.6s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1472.6s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1472.6s native-reconnect   native-tunnel: disconnected
+ 1472.6s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1507.6s fault-aircd        SIGTERM and restart
+ 1507.6s native-reconnect   native-tunnel: disconnected
+ 1507.6s follow-resume      follow-framed-0: gateway error upstream_unavailable
+ 1507.6s follow-resume      follow-inbox: gateway error upstream_unavailable
+ 1507.6s check-retry        check-http3: gateway error upstream_unavailable
+ 1507.6s follow-resume      follow-framed-1: gateway error upstream_unavailable
+ 1507.6s follow-resume      follow-websocket-3: gateway error upstream_unavailable
+ 1507.6s follow-resume      follow-websocket-2: gateway error upstream_unavailable
+ 1517.7s fault-gateway      SIGKILL and restart
+ 1517.7s follow-resume      follow-framed-0: EOF
+ 1517.7s follow-resume      follow-inbox: EOF
+ 1517.7s native-reconnect   native-tunnel: disconnected
+ 1517.7s follow-resume      follow-framed-1: EOF
+ 1517.7s mqtt-reconnect     mqtt-1: EOF
+ 1517.7s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1517.7s follow-resume      follow-websocket-2: gateway follow went silent
+ 1517.7s follow-resume      follow-websocket-3: gateway follow went silent
+ 1517.7s mqtt-reconnect     mqtt-0: EOF
+ 1523.3s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+ 1529.7s fault-freeze       mqtt-ws for 11s
+ 1572.7s fault-gateway      SIGTERM and restart
+ 1572.7s follow-resume      follow-framed-1: EOF
+ 1572.7s follow-resume      follow-framed-0: EOF
+ 1572.7s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1572.7s mqtt-reconnect     mqtt-1: EOF
+ 1572.7s native-reconnect   native-tunnel: disconnected
+ 1572.7s follow-resume      follow-inbox: EOF
+ 1572.7s follow-resume      follow-websocket-3: gateway follow went silent
+ 1572.7s mqtt-reconnect     mqtt-0: EOF
+ 1572.7s follow-resume      follow-websocket-2: gateway follow went silent
+ 1572.7s check-retry        check-http3: gateway error upstream_unavailable
+ 1583.8s fault-cut          websocket: 2 connections
+ 1583.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1583.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1605.8s fault-freeze       framed for 13s
+ 1632.8s fault-loss         http3: 34% of datagrams for 38s
+ 1672.5s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+ 1686.8s fault-cut          http3: 13 flows rebound
+ 1692.7s check-retry        check-http3: Post "https://127.0.0.1:40558/v1/request": context deadline exceeded
+ 1703.8s fault-slow         mqtt-ws: 1024 bytes per 160ms for 17s
+ 1736.8s fault-gateway      SIGTERM and restart
+ 1736.8s mqtt-reconnect     mqtt-1: EOF
+ 1736.8s follow-resume      follow-inbox: EOF
+ 1736.8s follow-resume      follow-framed-0: EOF
+ 1736.8s native-reconnect   native-tunnel: disconnected
+ 1736.8s mqtt-reconnect     mqtt-0: EOF
+ 1736.8s follow-resume      follow-framed-1: EOF
+ 1736.8s follow-resume      follow-websocket-2: gateway follow went silent
+ 1736.8s follow-resume      follow-websocket-3: gateway follow went silent
+ 1736.8s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1736.8s check-retry        check-http3: gateway error upstream_unavailable
+ 1765.9s fault-cut          mqtt: 2 connections
+ 1765.9s mqtt-reconnect     mqtt-0: EOF
+ 1765.9s mqtt-reconnect     mqtt-1: EOF
+ 1802.9s fault-gateway      SIGTERM and restart
+ 1802.9s mqtt-reconnect     mqtt-1: EOF
+ 1802.9s follow-resume      follow-websocket-3: gateway follow went silent
+ 1802.9s mqtt-reconnect     mqtt-0: EOF
+ 1802.9s follow-resume      follow-inbox: EOF
+ 1802.9s follow-resume      follow-framed-1: EOF
+ 1802.9s native-reconnect   native-tunnel: disconnected
+ 1802.9s follow-resume      follow-framed-0: EOF
+ 1802.9s follow-resume      follow-websocket-2: gateway follow went silent
+ 1802.9s mqtt-reconnect     mqtt-ws-2: failed to get reader: failed to read frame header: EOF
+ 1802.9s check-retry        check-http3: gateway error upstream_unavailable
+ 1832.9s calm               faults over; stopping posters
