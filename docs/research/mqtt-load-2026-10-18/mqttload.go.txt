@@ -1,0 +1,500 @@
+// Command mqttload measures many MQTT 5 subscribers on the gateway's mqtt
+// listener, each a persistent session following a few rooms, while native
+// IRC posters publish timestamped messages. It runs real aircd and
+// airc-gateway processes and depends on nothing in the repository: its MQTT
+// client and IRC posters are written here.
+package main
+
+import (
+	"bufio"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	mathrand "math/rand/v2"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+type result struct {
+	Label        string  `json:"label"`
+	Subscribers  int     `json:"subscribers"`
+	Connected    int     `json:"connected"`
+	ConnectFails int     `json:"connect_failures"`
+	RatePerSec   float64 `json:"posts_per_second"`
+	Posts        int     `json:"posts_measured"`
+	Expected     int     `json:"deliveries_expected"`
+	Delivered    int     `json:"deliveries"`
+	Missing      int     `json:"deliveries_missing"`
+	Duplicates   int     `json:"duplicates"`
+	P50          float64 `json:"deliver_p50_ms"`
+	P95          float64 `json:"deliver_p95_ms"`
+	P99          float64 `json:"deliver_p99_ms"`
+	Max          float64 `json:"deliver_max_ms"`
+	GatewayCPU   float64 `json:"gateway_cpu_percent"`
+	AircdCPU     float64 `json:"aircd_cpu_percent"`
+	GatewayRSS   int64   `json:"gateway_rss_kib"`
+	AircdRSS     int64   `json:"aircd_rss_kib"`
+	Disconnects  int64   `json:"subscriber_disconnects"`
+	ConnectP50   float64 `json:"connect_p50_ms"`
+	ConnectP99   float64 `json:"connect_p99_ms"`
+}
+
+func usage(pid int) (cpu float64, rss int64) {
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid)); err == nil {
+		f := strings.Fields(string(data)[strings.LastIndexByte(string(data), ')')+2:])
+		ut, _ := strconv.ParseFloat(f[11], 64)
+		st, _ := strconv.ParseFloat(f[12], 64)
+		cpu = (ut + st) / 100
+	}
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid)); err == nil {
+		for line := range strings.SplitSeq(string(data), "\n") {
+			if v, ok := strings.CutPrefix(line, "VmRSS:"); ok {
+				rss, _ = strconv.ParseInt(strings.Fields(v)[0], 10, 64)
+			}
+		}
+	}
+	return
+}
+
+func credential(path string) {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	if err := os.WriteFile(path, []byte(hex.EncodeToString(b)+"\n"), 0o600); err != nil {
+		panic(err)
+	}
+}
+
+func freePort() int {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func waitFor(addr string) error {
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if c, err := net.Dial("tcp", addr); err == nil {
+			_ = c.Close()
+			return nil
+		}
+	}
+	return fmt.Errorf("%s not ready", addr)
+}
+
+// --- MQTT 5 ---
+
+func mstr(b []byte, s string) []byte {
+	return append(binary.BigEndian.AppendUint16(b, uint16(len(s))), s...)
+}
+
+func varint(b []byte, v int) []byte {
+	for {
+		d := byte(v % 128)
+		v /= 128
+		if v > 0 {
+			d |= 128
+		}
+		b = append(b, d)
+		if v == 0 {
+			return b
+		}
+	}
+}
+
+type mqttConn struct {
+	conn net.Conn
+	r    *bufio.Reader
+	wmu  sync.Mutex
+}
+
+func (c *mqttConn) write(header byte, body []byte) error {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err := c.conn.Write(append(varint([]byte{header}, len(body)), body...))
+	return err
+}
+
+func (c *mqttConn) read(timeout time.Duration) (byte, []byte, error) {
+	_ = c.conn.SetReadDeadline(time.Now().Add(timeout))
+	h, err := c.r.ReadByte()
+	if err != nil {
+		return 0, nil, err
+	}
+	size, shift := 0, 0
+	for {
+		b, err := c.r.ReadByte()
+		if err != nil {
+			return 0, nil, err
+		}
+		size |= int(b&0x7f) << shift
+		if b&0x80 == 0 {
+			break
+		}
+		shift += 7
+	}
+	p := make([]byte, size)
+	_, err = io.ReadFull(c.r, p)
+	return h, p, err
+}
+
+func props(pairs ...string) []byte {
+	var b []byte
+	for i := 0; i < len(pairs); i += 2 {
+		b = append(b, 0x26)
+		b = mstr(mstr(b, pairs[i]), pairs[i+1])
+	}
+	return append(varint(nil, len(b)), b...)
+}
+
+// subscribe connects and subscribes; it returns the connection ready to
+// read publications.
+func subscribe(addr, nick string, rooms []string) (*mqttConn, error) {
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	c := &mqttConn{conn: conn, r: bufio.NewReader(conn)}
+	body := append(mstr(nil, "MQTT"), 5, 2, 0, 60)
+	cp := append([]byte{0x11}, binary.BigEndian.AppendUint32(nil, 600)...)
+	cp = append(cp, 0x26)
+	cp = mstr(mstr(cp, "airc-nick"), nick)
+	body = append(body, varint(nil, len(cp))...)
+	body = append(body, cp...)
+	body = mstr(body, nick)
+	if err := c.write(0x10, body); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	h, p, err := c.read(20 * time.Second)
+	if err != nil || h>>4 != 2 || len(p) < 2 || p[1] != 0 {
+		conn.Close()
+		return nil, fmt.Errorf("CONNACK %x %v", p, err)
+	}
+	sub := binary.BigEndian.AppendUint16(nil, 1)
+	sub = append(sub, 0)
+	for _, room := range rooms {
+		sub = append(mstr(sub, "airc/room/"+strings.TrimPrefix(room, "#")), 1)
+	}
+	if err := c.write(0x82, sub); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	for {
+		h, p, err := c.read(20 * time.Second)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+		if h>>4 == 9 {
+			for _, code := range p[3:] {
+				if code >= 0x80 {
+					conn.Close()
+					return nil, fmt.Errorf("SUBACK %x", p)
+				}
+			}
+			return c, nil
+		}
+	}
+}
+
+// --- workload ---
+
+type delivery struct {
+	post int
+	ms   float64
+}
+
+func main() {
+	bin := flag.String("bin", "", "directory with aircd and airc-gateway")
+	subs := flag.Int("subs", 100, "MQTT subscribers")
+	nRooms := flag.Int("rooms", 10, "rooms")
+	per := flag.Int("per", 3, "rooms each subscriber follows")
+	rate := flag.Float64("rate", 20, "posts per second in all (0: quiet)")
+	warmup := flag.Duration("warmup", 10*time.Second, "unmeasured time after connecting")
+	duration := flag.Duration("duration", 30*time.Second, "measured time")
+	label := flag.String("label", "", "label for the result")
+	out := flag.String("out", "", "JSON lines file to append the result to")
+	flag.Parse()
+
+	dir, err := os.MkdirTemp("", "mqttload")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	_ = os.Chmod(dir, 0o700)
+	aircAddr := "127.0.0.1:" + strconv.Itoa(freePort())
+	mqttAddr := "127.0.0.1:" + strconv.Itoa(freePort())
+	token := filepath.Join(dir, "gateway.token")
+	credential(token)
+	cursor := filepath.Join(dir, "cursor.key")
+	credential(cursor)
+	_ = os.Mkdir(filepath.Join(dir, "gw"), 0o700)
+	logf, _ := os.Create(filepath.Join(dir, "procs.log"))
+	aircd := exec.Command(filepath.Join(*bin, "aircd"), "--listen", aircAddr, "--history-file", filepath.Join(dir, "history.jsonl"), "--gateway-token-file", token, "--max-connections", "16384", "--sync", "none")
+	aircd.Stdout, aircd.Stderr = logf, logf
+	if err := aircd.Start(); err != nil {
+		panic(err)
+	}
+	defer func() { _ = aircd.Process.Kill(); _, _ = aircd.Process.Wait() }()
+	if err := waitFor(aircAddr); err != nil {
+		panic(err)
+	}
+	config := map[string]any{"version": 1, "realm": "mqttload", "state_dir": filepath.Join(dir, "gw"), "cursor_key_file": cursor,
+		"upstream": map[string]any{"network": "tcp", "address": aircAddr, "gateway_token_file": token},
+		"limits":   map[string]any{"connections": 16384, "waits": 4096},
+		"listeners": []any{map[string]any{"id": "mqtt", "protocol": "mqtt", "enabled": true, "address": mqttAddr,
+			"limits": map[string]any{"connections": 4096, "author_requests_per_minute": 100000}}}}
+	data, _ := json.Marshal(config)
+	_ = os.WriteFile(filepath.Join(dir, "gateway.json"), data, 0o600)
+	gateway := exec.Command(filepath.Join(*bin, "airc-gateway"), "serve", "--file", filepath.Join(dir, "gateway.json"))
+	gateway.Stdout, gateway.Stderr = logf, logf
+	if err := gateway.Start(); err != nil {
+		panic(err)
+	}
+	defer func() { _ = gateway.Process.Kill(); _, _ = gateway.Process.Wait() }()
+	if err := waitFor(mqttAddr); err != nil {
+		panic(err)
+	}
+
+	rooms := make([]string, *nRooms)
+	for i := range rooms {
+		rooms[i] = fmt.Sprintf("#load-%d", i)
+	}
+	// Who follows what, so each post's expected deliveries are known.
+	followers := make([]int, *nRooms)
+	follow := make([][]int, *subs)
+	for i := range follow {
+		follow[i] = mathrand.Perm(*nRooms)[:*per]
+		for _, r := range follow[i] {
+			followers[r]++
+		}
+	}
+	var mu sync.Mutex
+	var measuring atomic.Bool
+	got := map[int]int{} // post -> deliveries
+	var deliveries []delivery
+	var disconnects atomic.Int64
+	var connectMS []float64
+	connected, fails := 0, 0
+	sem := make(chan struct{}, 64)
+	var wg sync.WaitGroup
+	conns := make([]*mqttConn, *subs)
+	for i := range *subs {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			var names []string
+			for _, r := range follow[i] {
+				names = append(names, rooms[r])
+			}
+			start := time.Now()
+			c, err := subscribe(mqttAddr, fmt.Sprintf("load-%d", i), names)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				fails++
+				fmt.Fprintln(os.Stderr, "subscribe:", err)
+				return
+			}
+			connected++
+			connectMS = append(connectMS, float64(time.Since(start).Microseconds())/1000)
+			conns[i] = c
+		}()
+	}
+	wg.Wait()
+	stop := make(chan struct{})
+	var readers sync.WaitGroup
+	for _, c := range conns {
+		if c == nil {
+			continue
+		}
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			pings := time.NewTicker(30 * time.Second)
+			defer pings.Stop()
+			go func() {
+				for {
+					select {
+					case <-stop:
+						return
+					case <-pings.C:
+						_ = c.write(0xc0, nil)
+					}
+				}
+			}()
+			for {
+				h, p, err := c.read(90 * time.Second)
+				if err != nil {
+					select {
+					case <-stop:
+					default:
+						disconnects.Add(1)
+					}
+					return
+				}
+				if h>>4 != 3 {
+					continue
+				}
+				qos := h >> 1 & 3
+				tl := int(binary.BigEndian.Uint16(p))
+				pos := 2 + tl
+				var id uint16
+				if qos > 0 {
+					id = binary.BigEndian.Uint16(p[pos:])
+					pos += 2
+				}
+				pl, n := 0, 0
+				for shift := 0; ; shift += 7 {
+					b := p[pos+n]
+					n++
+					pl |= int(b&0x7f) << shift
+					if b&0x80 == 0 {
+						break
+					}
+				}
+				if qos == 1 {
+					_ = c.write(0x40, binary.BigEndian.AppendUint16(nil, id))
+				}
+				var m struct {
+					Body string `json:"body_base64"`
+				}
+				if json.Unmarshal(p[pos+n+pl:], &m) != nil {
+					continue
+				}
+				body, _ := base64.RawStdEncoding.DecodeString(strings.TrimRight(m.Body, "="))
+				var sent int64
+				var post int
+				if _, err := fmt.Sscanf(string(body), "t=%d p=%d", &sent, &post); err != nil {
+					continue
+				}
+				ms := float64(time.Now().UnixNano()-sent) / 1e6
+				mu.Lock()
+				got[post]++
+				if measuring.Load() {
+					deliveries = append(deliveries, delivery{post, ms})
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// Native posters.
+	var posters []net.Conn
+	for i := range 4 {
+		c, err := net.Dial("tcp", aircAddr)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(c, "NICK poster-%d\r\nUSER u 0 * :u\r\nJOIN %s\r\n", i, strings.Join(rooms, ","))
+		go io.Copy(io.Discard, c)
+		posters = append(posters, c)
+	}
+	time.Sleep(time.Second)
+	postRoom := map[int]int{}
+	var postsMeasured []int
+	var postMu sync.Mutex
+	postDone := make(chan struct{})
+	go func() {
+		defer close(postDone)
+		if *rate <= 0 {
+			<-stop
+			return
+		}
+		tick := time.NewTicker(time.Duration(float64(time.Second) / *rate))
+		defer tick.Stop()
+		for seq := 0; ; seq++ {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+			}
+			room := seq % *nRooms
+			postMu.Lock()
+			postRoom[seq] = room
+			if measuring.Load() {
+				postsMeasured = append(postsMeasured, seq)
+			}
+			postMu.Unlock()
+			fmt.Fprintf(posters[seq%len(posters)], "PRIVMSG %s :t=%d p=%d\r\n", rooms[room], time.Now().UnixNano(), seq)
+		}
+	}()
+
+	time.Sleep(*warmup)
+	gw0, _ := usage(gateway.Process.Pid)
+	ad0, _ := usage(aircd.Process.Pid)
+	measuring.Store(true)
+	time.Sleep(*duration)
+	measuring.Store(false)
+	gw1, gwRSS := usage(gateway.Process.Pid)
+	ad1, adRSS := usage(aircd.Process.Pid)
+	time.Sleep(10 * time.Second) // let the measured posts arrive
+	close(stop)
+	<-postDone
+	for _, c := range conns {
+		if c != nil {
+			_ = c.write(0xe0, []byte{0, 0})
+			_ = c.conn.Close()
+		}
+	}
+	readers.Wait()
+
+	r := result{Label: *label, Subscribers: *subs, Connected: connected, ConnectFails: fails, RatePerSec: *rate,
+		GatewayCPU: 100 * (gw1 - gw0) / duration.Seconds(), AircdCPU: 100 * (ad1 - ad0) / duration.Seconds(),
+		GatewayRSS: gwRSS, AircdRSS: adRSS, Disconnects: disconnects.Load()}
+	mu.Lock()
+	postMu.Lock()
+	r.Posts = len(postsMeasured)
+	for _, seq := range postsMeasured {
+		want := followers[postRoom[seq]]
+		r.Expected += want
+		have := got[seq]
+		r.Delivered += min(have, want)
+		if have < want {
+			r.Missing += want - have
+		} else {
+			r.Duplicates += have - want
+		}
+	}
+	var ms []float64
+	for _, d := range deliveries {
+		ms = append(ms, d.ms)
+	}
+	slices.Sort(ms)
+	pct := func(xs []float64, p float64) float64 {
+		if len(xs) == 0 {
+			return 0
+		}
+		return xs[min(len(xs)-1, int(p*float64(len(xs))))]
+	}
+	r.P50, r.P95, r.P99 = pct(ms, 0.50), pct(ms, 0.95), pct(ms, 0.99)
+	if len(ms) > 0 {
+		r.Max = ms[len(ms)-1]
+	}
+	slices.Sort(connectMS)
+	r.ConnectP50, r.ConnectP99 = pct(connectMS, 0.5), pct(connectMS, 0.99)
+	postMu.Unlock()
+	mu.Unlock()
+	line, _ := json.Marshal(r)
+	fmt.Println(string(line))
+	if *out != "" {
+		f, _ := os.OpenFile(*out, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		fmt.Fprintln(f, string(line))
+		f.Close()
+	}
+}
