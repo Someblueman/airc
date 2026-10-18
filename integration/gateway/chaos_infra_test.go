@@ -5,6 +5,7 @@ package gateway_test
 import (
 	"errors"
 	"fmt"
+	mathrand "math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
@@ -312,4 +313,133 @@ func freePorts(t *testing.T, n int) []int {
 		_ = l.Close()
 	}
 	return ports
+}
+
+// chaosUDPProxy forwards UDP datagrams to target, each client address over
+// its own upstream socket, and injects path faults: cut gives every client
+// a new upstream socket, so the server sees each client come from a new
+// address (a NAT rebinding, which QUIC migrates across); freeze drops
+// every datagram until thaw; slow delays each datagram; and lossy drops a
+// share of them at random, until fast.
+type chaosUDPProxy struct {
+	target *net.UDPAddr
+	conn   *net.UDPConn
+	mu     sync.Mutex
+	flows  map[string]*net.UDPConn
+	frozen bool
+	delay  time.Duration
+	loss   float64
+	rng    *mathrand.Rand
+	closed bool
+	wg     sync.WaitGroup
+}
+
+func newChaosUDPProxy(t *testing.T, target string) *chaosUDPProxy {
+	t.Helper()
+	addr, err := net.ResolveUDPAddr("udp", target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &chaosUDPProxy{target: addr, conn: conn, flows: map[string]*net.UDPConn{}, rng: mathrand.New(mathrand.NewPCG(1, 2))}
+	p.wg.Add(1)
+	go p.serve()
+	t.Cleanup(p.close)
+	return p
+}
+
+func (p *chaosUDPProxy) port() int { return p.conn.LocalAddr().(*net.UDPAddr).Port }
+
+func (p *chaosUDPProxy) serve() {
+	defer p.wg.Done()
+	buf := make([]byte, 65535)
+	for {
+		n, from, err := p.conn.ReadFromUDP(buf)
+		if err != nil {
+			return
+		}
+		up := p.flow(from)
+		if up == nil {
+			continue
+		}
+		p.forward(append([]byte(nil), buf[:n]...), func(b []byte) { _, _ = up.Write(b) })
+	}
+}
+
+// flow is from's upstream socket, made (with its return path) if from has
+// none since the last cut.
+func (p *chaosUDPProxy) flow(from *net.UDPAddr) *net.UDPConn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	if up := p.flows[from.String()]; up != nil {
+		return up
+	}
+	up, err := net.DialUDP("udp", nil, p.target)
+	if err != nil {
+		return nil
+	}
+	p.flows[from.String()] = up
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		buf := make([]byte, 65535)
+		for {
+			n, err := up.Read(buf)
+			if err != nil {
+				return
+			}
+			p.forward(append([]byte(nil), buf[:n]...), func(b []byte) { _, _ = p.conn.WriteToUDP(b, from) })
+		}
+	}()
+	return up
+}
+
+// forward sends a datagram through the current faults.
+func (p *chaosUDPProxy) forward(datagram []byte, send func([]byte)) {
+	p.mu.Lock()
+	drop := p.frozen || p.loss > 0 && p.rng.Float64() < p.loss
+	delay := p.delay
+	p.mu.Unlock()
+	switch {
+	case drop:
+	case delay > 0:
+		time.AfterFunc(delay, func() { send(datagram) })
+	default:
+		send(datagram)
+	}
+}
+
+// cut rebinds every client to a new upstream socket.
+func (p *chaosUDPProxy) cut() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := len(p.flows)
+	for key, up := range p.flows {
+		_ = up.Close()
+		delete(p.flows, key)
+	}
+	return n
+}
+
+func (p *chaosUDPProxy) set(frozen bool, delay time.Duration, loss float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.frozen, p.delay, p.loss = frozen, delay, loss
+}
+
+func (p *chaosUDPProxy) close() {
+	p.mu.Lock()
+	p.closed = true
+	_ = p.conn.Close()
+	for _, up := range p.flows {
+		_ = up.Close()
+	}
+	p.mu.Unlock()
+	p.wg.Wait()
 }

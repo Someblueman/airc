@@ -16,6 +16,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	mathrand "math/rand/v2"
@@ -35,9 +36,11 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/testfs"
+	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
@@ -179,12 +182,15 @@ func TestChaosSoak(t *testing.T) {
 		}
 		_ = os.RemoveAll(root)
 	})
-	ports := freePorts(t, 5)
+	ports := freePorts(t, 7)
 	aircAddress := "127.0.0.1:" + strconv.Itoa(ports[0])
 	framedAddress := "127.0.0.1:" + strconv.Itoa(ports[1])
 	websocketAddress := "127.0.0.1:" + strconv.Itoa(ports[2])
 	mqttAddress := "127.0.0.1:" + strconv.Itoa(ports[3])
 	mqttWebSocketAddress := "127.0.0.1:" + strconv.Itoa(ports[4])
+	http3Address := "127.0.0.1:" + strconv.Itoa(ports[5]) // UDP
+	nativeAddress := "127.0.0.1:" + strconv.Itoa(ports[6])
+	cert := testtls.New(t)
 
 	// Wake notices go straight to an in-process receiver.
 	var notices struct {
@@ -228,8 +234,13 @@ func TestChaosSoak(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Upstream = &config.Upstream{Network: "tcp", Address: aircAddress, GatewayTokenFile: gatewayToken}
-	for _, l := range []config.Listener{{ID: "framed", Protocol: "framed", Address: framedAddress}, {ID: "websocket", Protocol: "websocket", Address: websocketAddress}, {ID: "mqtt", Protocol: "mqtt", Address: mqttAddress}, {ID: "mqtt-ws", Protocol: "mqtt_websocket", Address: mqttWebSocketAddress}} {
+	for _, l := range []config.Listener{{ID: "framed", Protocol: "framed", Address: framedAddress}, {ID: "websocket", Protocol: "websocket", Address: websocketAddress}, {ID: "mqtt", Protocol: "mqtt", Address: mqttAddress}, {ID: "mqtt-ws", Protocol: "mqtt_websocket", Address: mqttWebSocketAddress}, {ID: "http3", Protocol: "http3", Address: http3Address, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}, {ID: "native", Protocol: "irc_connect", Address: nativeAddress}} {
 		l.Enabled, l.Limits, l.Operations = true, fixtureListenerLimits(), dispatch.ImplementedOperations()
+		if l.Protocol == "irc_connect" {
+			// Native IRC, not contract requests: no operations, and limits
+			// on connections only.
+			l.Operations, l.Limits = []core.Operation{}, nil
+		}
 		c.Listeners = append(c.Listeners, l)
 	}
 	configPath := filepath.Join(root, "gateway.json")
@@ -240,7 +251,7 @@ func TestChaosSoak(t *testing.T) {
 	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	gateway := &chaosProcess{name: "gateway", logPath: filepath.Join(root, "gateway.log"), env: env, ready: dialReady(framedAddress, websocketAddress, mqttAddress, mqttWebSocketAddress),
+	gateway := &chaosProcess{name: "gateway", logPath: filepath.Join(root, "gateway.log"), env: env, ready: dialReady(framedAddress, websocketAddress, mqttAddress, mqttWebSocketAddress, nativeAddress),
 		args: []string{gatewayBinary(t), "serve", "--file", configPath}}
 	if err := gateway.start(); err != nil {
 		t.Fatal(err)
@@ -254,7 +265,10 @@ func TestChaosSoak(t *testing.T) {
 		"websocket": newChaosProxy(t, "websocket", websocketAddress),
 		"mqtt":      newChaosProxy(t, "mqtt", mqttAddress),
 		"mqtt-ws":   newChaosProxy(t, "mqtt-ws", mqttWebSocketAddress),
+		"native":    newChaosProxy(t, "native", nativeAddress),
 	}
+	// HTTP/3 rides UDP, through its own proxy.
+	quic := newChaosUDPProxy(t, http3Address)
 	endpoint := func(name string) fallback.Endpoint {
 		return fallback.Endpoint{Carrier: protocol.Carrier{Name: name, Port: proxies[name].port()}}
 	}
@@ -318,6 +332,25 @@ func TestChaosSoak(t *testing.T) {
 	go func() {
 		defer clients.Done()
 		chaosFollow(ctx, log, inbox, &fallback.Client{Host: "127.0.0.1", Nick: chaosInbox, Token: tokens[chaosInbox], Endpoints: []fallback.Endpoint{endpoint("framed")}}, true)
+	}()
+	// A reader over HTTP/3, which has no stream: it waits on the gateway
+	// for news with long checks, across rebinding, blackholes, delay and
+	// loss on its UDP path.
+	quicSeen := newChaosSeen("check-http3", seeds)
+	readers = append(readers, quicSeen)
+	clients.Add(1)
+	go func() {
+		defer clients.Done()
+		chaosFollow(ctx, log, quicSeen, &fallback.Client{Host: "127.0.0.1", Nick: quicSeen.name, TLSConfig: cert.Client, Endpoints: []fallback.Endpoint{{Carrier: protocol.Carrier{Name: "http3", Port: quic.port(), TLS: true}}}}, false)
+	}()
+	// A plain IRC client through the irc_connect tunnel, catching up from
+	// history after every reconnect.
+	nativeSeen := newChaosSeen("native-tunnel", seeds)
+	readers = append(readers, nativeSeen)
+	clients.Add(1)
+	go func() {
+		defer clients.Done()
+		chaosNativeReader(ctx, log, nativeSeen, &fallback.Client{Host: "127.0.0.1", Nick: nativeSeen.name, ConnectTimeout: 5 * time.Second, NativeConnectTimeout: 10 * time.Second, Endpoints: []fallback.Endpoint{{Carrier: protocol.Carrier{Name: "irc_connect", Port: proxies["native"].port()}}}})
 	}()
 	mqttTCP := func(ctx context.Context) (net.Conn, error) {
 		var d net.Dialer
@@ -399,39 +432,63 @@ func TestChaosSoak(t *testing.T) {
 		if !time.Now().Before(deadline) {
 			break
 		}
-		names := []string{"irc", "framed", "websocket", "mqtt", "mqtt-ws"}
+		names := []string{"irc", "framed", "websocket", "mqtt", "mqtt-ws", "native", "http3"}
 		switch roll := rng.IntN(100); {
-		case roll < 25:
+		case roll < 22:
 			name := names[rng.IntN(len(names))]
-			log.add("fault-cut", "%s: %d connections", name, proxies[name].cut())
-		case roll < 40:
+			if name == "http3" {
+				log.add("fault-cut", "http3: %d flows rebound", quic.cut())
+			} else {
+				log.add("fault-cut", "%s: %d connections", name, proxies[name].cut())
+			}
+		case roll < 35:
 			name := names[rng.IntN(len(names))]
 			hold := time.Duration(5+rng.IntN(36)) * time.Second
 			log.add("fault-freeze", "%s for %v", name, hold)
-			proxies[name].freeze()
-			time.Sleep(hold)
-			proxies[name].thaw()
-		case roll < 55:
+			if name == "http3" {
+				quic.set(true, 0, 0)
+				time.Sleep(hold)
+				quic.set(false, 0, 0)
+			} else {
+				proxies[name].freeze()
+				time.Sleep(hold)
+				proxies[name].thaw()
+			}
+		case roll < 47:
 			name := names[rng.IntN(len(names))]
 			link := chaosLink{delay: time.Duration(20+rng.IntN(181)) * time.Millisecond, chunk: 256 << rng.IntN(5)}
 			hold := time.Duration(10+rng.IntN(31)) * time.Second
-			log.add("fault-slow", "%s: %d bytes per %v for %v", name, link.chunk, link.delay, hold)
-			proxies[name].slow(link)
+			if name == "http3" {
+				log.add("fault-slow", "http3: %v per datagram for %v", link.delay, hold)
+				quic.set(false, link.delay, 0)
+				time.Sleep(hold)
+				quic.set(false, 0, 0)
+			} else {
+				log.add("fault-slow", "%s: %d bytes per %v for %v", name, link.chunk, link.delay, hold)
+				proxies[name].slow(link)
+				time.Sleep(hold)
+				proxies[name].fast()
+			}
+		case roll < 55:
+			loss := float64(5+rng.IntN(36)) / 100
+			hold := time.Duration(10+rng.IntN(31)) * time.Second
+			log.add("fault-loss", "http3: %.0f%% of datagrams for %v", loss*100, hold)
+			quic.set(false, 0, loss)
 			time.Sleep(hold)
-			proxies[name].fast()
-		case roll < 67:
+			quic.set(false, 0, 0)
+		case roll < 65:
 			log.add("fault-gateway", "SIGTERM and restart")
 			chaosRestart(t, log, gateway, syscall.SIGTERM)
-		case roll < 75:
+		case roll < 72:
 			log.add("fault-gateway", "SIGKILL and restart")
 			chaosRestart(t, log, gateway, syscall.SIGKILL)
-		case roll < 83:
+		case roll < 80:
 			hold := time.Duration(3+rng.IntN(13)) * time.Second
 			log.add("fault-aircd-pause", "SIGSTOP for %v", hold)
 			aircd.signal(syscall.SIGSTOP)
 			time.Sleep(hold)
 			aircd.signal(syscall.SIGCONT)
-		case roll < 93:
+		case roll < 92:
 			log.add("fault-aircd", "SIGTERM and restart")
 			chaosRestart(t, log, aircd, syscall.SIGTERM)
 		default:
@@ -667,21 +724,32 @@ func chaosSend(log *chaosLog, client *fallback.Client, post *chaosPost, stop con
 // one gateway carrier, resuming from the last message it saw whenever the
 // follow ends.
 func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fallback.Client, inbox bool) {
+	last := ""
 	for ctx.Err() == nil {
 		reader, err := client.ReadRooms(ctx)
 		if err != nil {
+			if ctx.Err() == nil && err.Error() != last {
+				last = err.Error()
+				log.add("connect-retry", "%s: %v", seen.name, err)
+			}
 			time.Sleep(time.Second)
 			continue
 		}
+		last = ""
 		for ctx.Err() == nil {
-			set := fallback.CheckSet{Limit: 200}
-			if inbox {
-				after := seen.after(chaosInbox)
-				set.Inbox = &after
-			} else {
-				for _, room := range chaosRooms {
-					set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: seen.after(room)})
+			set := chaosCheckSet(seen, inbox)
+			if !reader.Follows() {
+				// A carrier without streams waits on the gateway instead.
+				set.Wait = 20 * time.Second
+				checked, err := reader.CheckAll(ctx, set)
+				if err != nil {
+					if ctx.Err() == nil {
+						log.add("check-retry", "%s: %v", seen.name, err)
+					}
+					break
 				}
+				chaosRecord(seen, set, checked, inbox)
+				continue
 			}
 			err = reader.Follow(ctx, set, 45*time.Second, func(checked fallback.Checked) error {
 				if page := checked.Inbox; inbox && page != nil {
@@ -716,6 +784,122 @@ func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fa
 		_ = reader.Close()
 		time.Sleep(time.Second)
 	}
+}
+
+// chaosCheckSet reads the rooms, or the inbox, after the last message seen.
+func chaosCheckSet(seen *chaosSeen, inbox bool) fallback.CheckSet {
+	set := fallback.CheckSet{Limit: 200}
+	if inbox {
+		after := seen.after(chaosInbox)
+		set.Inbox = &after
+		return set
+	}
+	for _, room := range chaosRooms {
+		set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: seen.after(room)})
+	}
+	return set
+}
+
+// chaosRecord records a check's pages for set.
+func chaosRecord(seen *chaosSeen, set fallback.CheckSet, checked fallback.Checked, inbox bool) {
+	pages := map[string]*fallback.Page{}
+	if inbox && checked.Inbox != nil {
+		pages[chaosInbox] = checked.Inbox
+	}
+	for i, page := range checked.Rooms {
+		pages[set.Rooms[i].Room] = page
+	}
+	for key, page := range pages {
+		if page.Gap {
+			seen.mu.Lock()
+			seen.gaps++
+			seen.mu.Unlock()
+		}
+		for _, m := range page.Messages {
+			seen.record(key, m.ID)
+		}
+	}
+}
+
+// chaosNativeReader reads the rooms as a plain IRC client through the
+// gateway's irc_connect tunnel: each connection observes the rooms, then
+// reads each one's history after the position it had reached, then takes
+// messages live. A room's position advances only where nothing before it
+// can be missing, so a reconnect may show a message again (counted) but
+// never skips one.
+func chaosNativeReader(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fallback.Client) {
+	positions := map[string]string{}
+	for _, room := range chaosRooms {
+		positions[room] = seen.after(room)
+	}
+	for ctx.Err() == nil {
+		err := chaosNativeSession(ctx, seen, client, positions)
+		if ctx.Err() == nil {
+			log.add("native-reconnect", "%s: %v", seen.name, err)
+			time.Sleep(time.Second)
+		}
+	}
+}
+
+func chaosNativeSession(ctx context.Context, seen *chaosSeen, client *fallback.Client, positions map[string]string) error {
+	k, err := client.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	c := k.Native()
+	_ = k.Close()
+	if c == nil {
+		return errors.New("not a native connection")
+	}
+	defer c.Close()
+	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stop()
+	if err := c.Observe(chaosRooms...); err != nil {
+		return err
+	}
+	pending := slices.Clone(chaosRooms)
+	if err := c.HistoryAfter(pending[0], positions[pending[0]], 200); err != nil {
+		return err
+	}
+	for event := range c.Events() {
+		switch e := event.(type) {
+		case *irc.MessageEvent:
+			if !slices.Contains(chaosRooms, e.Target) {
+				continue
+			}
+			seen.record(e.Target, e.ID)
+			if !slices.Contains(pending, e.Target) {
+				positions[e.Target] = e.ID // caught up: live messages are contiguous
+			}
+		case *irc.HistoryEvent:
+			if len(pending) > 0 && e.Target == pending[0] {
+				seen.record(e.Target, e.ID)
+				positions[e.Target] = e.ID
+			}
+		case *irc.EndOfHistoryEvent:
+			if len(pending) == 0 || e.Target != pending[0] {
+				continue
+			}
+			switch e.Status {
+			case "more":
+				if err := c.HistoryAfter(e.Target, positions[e.Target], 200); err != nil {
+					return err
+				}
+				continue
+			case "expired":
+				seen.mu.Lock()
+				seen.gaps++
+				seen.mu.Unlock()
+			}
+			pending = pending[1:]
+			if len(pending) > 0 {
+				if err := c.HistoryAfter(pending[0], positions[pending[0]], 200); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return errors.New("disconnected")
 }
 
 // chaosMQTT keeps an MQTT 5 persistent session subscribed to the rooms,

@@ -1,0 +1,102 @@
+{
+  "seed": 8037704936111224335,
+  "duration": "30m0s",
+  "events": {
+    "calm": 1,
+    "check-retry": 27,
+    "fault-aircd": 10,
+    "fault-aircd-pause": 2,
+    "fault-cut": 19,
+    "fault-freeze": 7,
+    "fault-gateway": 12,
+    "fault-loss": 3,
+    "fault-slow": 7,
+    "follow-resume": 123,
+    "mqtt-reconnect": 44,
+    "native-reconnect": 26,
+    "seed": 1
+  },
+  "posts_acknowledged": 8888,
+  "posts_unacknowledged": 0,
+  "posts_retried": 0,
+  "posts_in_history": 8888,
+  "duplicate_posts": 0,
+  "acknowledged_posts_missing": 0,
+  "clients": [
+    {
+      "name": "follow-framed-0",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-framed-1",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-websocket-2",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-websocket-3",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "follow-inbox",
+      "received": 711,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "check-http3",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 0,
+      "gaps": 0
+    },
+    {
+      "name": "native-tunnel",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 1,
+      "gaps": 0
+    },
+    {
+      "name": "mqtt-0",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 438,
+      "gaps": 0
+    },
+    {
+      "name": "mqtt-1",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 438,
+      "gaps": 0
+    },
+    {
+      "name": "mqtt-ws-2",
+      "received": 7823,
+      "missing": 0,
+      "duplicates": 439,
+      "gaps": 0
+    }
+  ],
+  "wake_notices": 185,
+  "direct_messages": 355,
+  "direct_messages_woken_late": 0,
+  "direct_messages_excused_by_sigkill": 0,
+  "final_direct_message_woke": true
+}

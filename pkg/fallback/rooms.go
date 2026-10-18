@@ -220,6 +220,9 @@ func (r *RoomReader) Follow(ctx context.Context, set CheckSet, idle time.Duratio
 	if !ok || r.readEach || r.noFollow {
 		return ErrNoFollow
 	}
+	if r.c.Hedge {
+		return r.c.FollowHedged(ctx, set, idle, emit)
+	}
 	if r.noThreads {
 		set.Threads = nil
 	}

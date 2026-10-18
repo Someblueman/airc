@@ -41,8 +41,17 @@ func TestMQTTConfiguration(t *testing.T) {
 	// Only an address: the listener policy's operations and one default topic.
 	bare := mqttConfig()
 	bare.Listeners[0] = Listener{ID: "mqtt", Protocol: "mqtt", Address: "127.0.0.1:1883", Enabled: true}
-	if err := bare.Validate(); err != nil || len(bare.Listeners[0].MQTT.Routes) != 1 || bare.Listeners[0].MQTT.Routes[0].Topic != DefaultMQTTTopic {
+	if err := bare.Validate(); err != nil || len(bare.Listeners[0].MQTT.Routes) != 1 || bare.Listeners[0].MQTT.Routes[0].Topic != DefaultMQTTTopic || bare.Listeners[0].MQTT.Sessions != DefaultMQTTSessions || bare.Listeners[0].MQTT.SessionsPerAuthor != DefaultMQTTSessionsPerAuthor {
 		t.Fatalf("address-only MQTT listener: %+v %v", bare.Listeners[0].MQTT, err)
+	}
+	// Session caps: within bounds, and a small cap lowers the default per
+	// author with it.
+	for _, caps := range []struct{ sessions, perAuthor int }{{16384, 16384}, {8, 0}, {1, 1}} {
+		c := mqttConfig()
+		c.Listeners[0].MQTT.Sessions, c.Listeners[0].MQTT.SessionsPerAuthor = caps.sessions, caps.perAuthor
+		if err := c.Validate(); err != nil || c.Listeners[0].MQTT.SessionsPerAuthor > caps.sessions {
+			t.Fatalf("caps %+v: %+v %v", caps, c.Listeners[0].MQTT, err)
+		}
 	}
 	for name, mutate := range map[string]func(*Config){
 		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
@@ -51,6 +60,11 @@ func TestMQTTConfiguration(t *testing.T) {
 			c.Listeners[0].MQTT.Routes = append(c.Listeners[0].MQTT.Routes, c.Listeners[0].MQTT.Routes[0])
 		},
 		"wildcard": func(c *Config) { c.Listeners[0].MQTT.Routes[0].Topic = "airc/+" },
+		"sessions": func(c *Config) { c.Listeners[0].MQTT.Sessions = MaxMQTTSessions + 1 },
+		"negative": func(c *Config) { c.Listeners[0].MQTT.Sessions = -1 },
+		"per_author": func(c *Config) {
+			c.Listeners[0].MQTT.Sessions, c.Listeners[0].MQTT.SessionsPerAuthor = 8, 9
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := mqttConfig()

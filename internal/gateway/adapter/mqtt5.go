@@ -47,11 +47,6 @@ import (
 const (
 	// mqtt5MaxSessionExpiry caps a session's life after its connection ends.
 	mqtt5MaxSessionExpiry = time.Hour
-	// mqtt5MaxSessions caps the sessions the listener remembers, and
-	// mqtt5MaxSessionsPerOwner those of one author, so no author can take
-	// them all.
-	mqtt5MaxSessions         = 1024
-	mqtt5MaxSessionsPerOwner = 16
 	// mqtt5MaxInflight caps unacknowledged QoS 1 messages to one client,
 	// and mqtt5MaxInflightBytes their size, so the sessions the listener
 	// keeps hold at most 256 MiB.
@@ -117,6 +112,14 @@ type mqtt5Store struct {
 	// them; closed refuses new ones once it is closing.
 	running sync.WaitGroup
 	closed  bool
+	// groups are the shared subscriptions, by mqtt5GroupKey, and
+	// groupsRunning their follows (mqtt5_shared.go).
+	groups        map[string]*mqtt5Group
+	groupsRunning sync.WaitGroup
+	// maxSessions caps the sessions the listener remembers, and perOwner
+	// those of one author, so no author can take them all
+	// (config.MQTT.Sessions and SessionsPerAuthor).
+	maxSessions, perOwner int
 }
 
 // mqtt5Will is a will waiting out its delay. run submits it; drop frees
@@ -158,8 +161,10 @@ type mqtt5Sub struct {
 	target string // the room name or the thread's root ID
 	qos    byte
 	// after is the position delivered so far: the next message comes after
-	// it.
+	// it. A shared subscription's position is its group's.
 	after string
+	// group names a shared subscription's group ($share/<group>/...).
+	group string
 }
 
 type mqtt5Outbound struct {
@@ -170,7 +175,7 @@ type mqtt5Outbound struct {
 }
 
 func newMQTT5Store(ctx context.Context) *mqtt5Store {
-	return &mqtt5Store{ctx: ctx, sessions: map[string]*mqtt5State{}, wills: map[string]*mqtt5Will{}}
+	return &mqtt5Store{ctx: ctx, sessions: map[string]*mqtt5State{}, wills: map[string]*mqtt5Will{}, groups: map[string]*mqtt5Group{}, maxSessions: config.DefaultMQTTSessions, perOwner: config.DefaultMQTTSessionsPerAuthor}
 }
 
 // take hands the session for clientID to a new connection: the existing
@@ -198,12 +203,12 @@ func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Durat
 		delete(s.sessions, clientID)
 	}
 	s.endWillLocked(clientID, true)
-	if len(s.sessions) >= mqtt5MaxSessions || owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
+	if len(s.sessions) >= s.maxSessions || owner != "" && s.ownedLocked(owner) >= s.perOwner {
 		s.sweepLocked(now)
-		if len(s.sessions) >= mqtt5MaxSessions {
+		if len(s.sessions) >= s.maxSessions {
 			return nil, false, errMQTTSessions
 		}
-		if owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
+		if owner != "" && s.ownedLocked(owner) >= s.perOwner {
 			return nil, false, errMQTTOwnerSessions
 		}
 	}
@@ -257,6 +262,7 @@ func (s *mqtt5Store) sweepLocked(now time.Time) {
 			delete(s.sessions, id)
 		}
 	}
+	s.pruneGroupsLocked()
 }
 
 // scheduleWill submits a connection's will after delay, unless the
@@ -316,8 +322,14 @@ func (s *mqtt5Store) close() {
 			s.running.Done()
 		}
 	}
+	for _, g := range s.groups {
+		if g.cancel != nil {
+			g.cancel()
+		}
+	}
 	s.mu.Unlock()
 	s.running.Wait()
+	s.groupsRunning.Wait()
 }
 
 // sweep forgets expired sessions, and saves the rest, every minute until
@@ -367,9 +379,11 @@ type mqtt5Conn struct {
 	identified bool
 	// willless is set by a DISCONNECT that asks for no will.
 	willless bool
-	// owners and session are the connection's hold on its client ID.
+	// owners and session are the connection's hold on its client ID, and
+	// store the listener's sessions and shared subscription groups.
 	owners  *mqttSessions
 	session *mqttSession
+	store   *mqtt5Store
 }
 
 // serveMQTT5 runs an MQTT 5 connection after its CONNECT. It owns the
@@ -481,7 +495,7 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 		}
 		return
 	}
-	c.owners, c.session = owners, session
+	c.owners, c.session, c.store = owners, session, sessions
 	state, present, err := sessions.take(*clientID, owner, !connect.CleanSession, expiry)
 	if err != nil {
 		refuse(mqttReason(err), err.Error())
@@ -495,7 +509,7 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 	one, zero := byte(1), byte(0)
 	receiveMax := uint16(mqtt5ReceiveMaximum)
 	maxPacket := uint32(mqttwire.MaxBodyBytesV5 + 8)
-	ack := mqttwire.Properties{AssignedClientID: assigned, MaximumQoS: &one, RetainAvailable: &zero, WildcardAvailable: &zero, SubIDAvailable: &zero, SharedAvailable: &zero, ReceiveMaximum: &receiveMax, MaximumPacketSize: &maxPacket}
+	ack := mqttwire.Properties{AssignedClientID: assigned, MaximumQoS: &one, RetainAvailable: &zero, WildcardAvailable: &zero, SubIDAvailable: &zero, SharedAvailable: &one, ReceiveMaximum: &receiveMax, MaximumPacketSize: &maxPacket}
 	if p.SessionExpiry != nil && time.Duration(*p.SessionExpiry)*time.Second > expiry {
 		granted := uint32(expiry / time.Second)
 		ack.SessionExpiry = &granted
@@ -520,6 +534,7 @@ func serveMQTT5(ctx context.Context, conn net.Conn, connect mqttwire.Packet, d *
 	}
 	c.restartFollow()
 	defer c.stopFollow()
+	defer sessions.leaveGroups(c)
 	c.readLoop(idle, expiry > 0)
 }
 
@@ -948,9 +963,21 @@ func mqtt5Topic(kind mqtt5Kind, target string) string {
 // classify reads a topic filter: a room, a thread, the inbox, or a
 // response topic. It answers a SUBACK refusal otherwise.
 func (c *mqtt5Conn) classify(filter string) (*mqtt5Sub, byte) {
+	if group, topic, shared := parseShared(filter); shared {
+		if group == "" {
+			return nil, mqttTopicFilterInvalid
+		}
+		sub, reason := c.classify(topic)
+		switch {
+		case sub == nil:
+			return nil, reason
+		case sub.kind == mqtt5Reply:
+			return nil, mqttSharedNotSupported // replies are the session's own
+		}
+		sub.filter, sub.group = filter, group
+		return sub, mqttSuccess
+	}
 	switch {
-	case strings.HasPrefix(filter, "$share/"):
-		return nil, mqttSharedNotSupported
 	case strings.ContainsAny(filter, "+#"):
 		return nil, mqttWildcardNotSupported
 	case strings.HasPrefix(filter, "$") || containsControl(filter):
@@ -1158,11 +1185,14 @@ func (c *mqtt5Conn) restartFollow() {
 	c.state.mu.Lock()
 	var subs []*mqtt5Sub
 	for _, sub := range c.state.subs {
-		if sub.kind != mqtt5Reply {
+		if sub.kind != mqtt5Reply && sub.group == "" {
 			subs = append(subs, sub)
 		}
 	}
 	c.state.mu.Unlock()
+	if c.store != nil && c.identified {
+		c.store.syncGroups(c) // shared subscriptions follow per group
+	}
 	if len(subs) == 0 || !c.identified {
 		return
 	}

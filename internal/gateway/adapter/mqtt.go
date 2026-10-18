@@ -47,6 +47,12 @@ func newMQTTBroker(parent context.Context, d *dispatch.Dispatcher, requests chan
 	ctx, stop := context.WithCancel(parent)
 	b := &mqttBroker{d: d, requests: requests, routes: routes, owners: mqttSessions{active: make(map[string]*mqttSession)}, sessions: newMQTT5Store(ctx), stop: stop}
 	b.sessions.path = sessionsFile
+	if options.Sessions > 0 {
+		b.sessions.maxSessions = options.Sessions
+	}
+	if options.SessionsPerAuthor > 0 {
+		b.sessions.perOwner = options.SessionsPerAuthor
+	}
 	if err := b.sessions.load(); err != nil {
 		stop()
 		return nil, err

@@ -21,6 +21,8 @@ func addTransportOptions(fs *flag.FlagSet, opt *options) {
 	fs.StringVar(&opt.tlsServerName, "tls-server-name", os.Getenv("AIRC_TLS_SERVER_NAME"), "certificate hostname; implies TLS")
 	fs.StringVar(&opt.accessTokenFile, "access-token-file", os.Getenv("AIRC_ACCESS_TOKEN_FILE"), "owner-only connection credential file")
 	fs.StringVar(&opt.carriers, "carriers", os.Getenv("AIRC_CARRIERS"), "fallback carriers when native IRC is unreachable, e.g. http:6680,websocket:6681 (env AIRC_CARRIERS; default: the list the server advertised)")
+	hedge, _ := strconv.ParseBool(os.Getenv("AIRC_HEDGE"))
+	fs.BoolVar(&opt.hedge, "hedge", hedge, "follow over two gateway connections at once while on fallback carriers, so a stalled link costs nothing (env AIRC_HEDGE; the gateway serves two follows)")
 }
 
 func usesTLS(opt options) bool { return opt.tls || opt.tlsCA != "" || opt.tlsServerName != "" }

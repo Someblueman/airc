@@ -4,11 +4,13 @@ package gateway_test
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -441,5 +443,168 @@ func TestMQTT5RequestsSubscriptionsAndSessions(t *testing.T) {
 	}
 	if d := resumed.next(14); d.reason != 0x8E {
 		t.Fatalf("takeover DISCONNECT %#x", d.reason)
+	}
+}
+
+// The listener's session caps hold: beyond sessions_per_author one author
+// is refused, and beyond sessions everyone is.
+func TestMQTT5SessionCaps(t *testing.T) {
+	socket, gatewayToken := currentNative(t)
+	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt", MQTT: &config.MQTT{Sessions: 3, SessionsPerAuthor: 2}})
+	g := startAuthorGateway(t, c)
+	address := g.addresses["mqtt"]
+	for i, want := range []byte{0, 0, 0x97} {
+		if _, connack := dialMQTT5(t, address, fmt.Sprintf("m9-a%d", i), true, 600, "airc-nick=m9-alice"); connack.reason != want {
+			t.Fatalf("alice's session %d: CONNACK %#x, want %#x", i, connack.reason, want)
+		}
+	}
+	for i, want := range []byte{0, 0x97} {
+		if _, connack := dialMQTT5(t, address, fmt.Sprintf("m9-b%d", i), true, 600, "airc-nick=m9-bob"); connack.reason != want {
+			t.Fatalf("bob's session %d: CONNACK %#x, want %#x", i, connack.reason, want)
+		}
+	}
+}
+
+// drainMQTT5 reads PUBLISHes on c, acknowledging each, until none arrives
+// for quiet, and returns their message bodies.
+func drainMQTT5(t *testing.T, c *mqtt5Client, quiet time.Duration) []string {
+	t.Helper()
+	var bodies []string
+	for {
+		_ = c.conn.SetReadDeadline(time.Now().Add(quiet))
+		header, err := c.r.ReadByte()
+		if err != nil {
+			return bodies
+		}
+		size, shift := 0, 0
+		for {
+			b, err := c.r.ReadByte()
+			if err != nil {
+				t.Fatal(err)
+			}
+			size |= int(b&0x7f) << shift
+			if b&0x80 == 0 {
+				break
+			}
+			shift += 7
+		}
+		packet := make([]byte, size)
+		if _, err := io.ReadFull(c.r, packet); err != nil {
+			t.Fatal(err)
+		}
+		if header>>4 != 3 {
+			continue
+		}
+		pos := 2 + int(binary.BigEndian.Uint16(packet))
+		if header>>1&3 > 0 {
+			c.ack(binary.BigEndian.Uint16(packet[pos:]))
+			pos += 2
+		}
+		propLen, n := 0, 0
+		for shift := 0; ; shift += 7 {
+			b := packet[pos+n]
+			n++
+			propLen |= int(b&0x7f) << shift
+			if b&0x80 == 0 {
+				break
+			}
+		}
+		var m struct {
+			Body string `json:"body_base64"`
+		}
+		if err := json.Unmarshal(packet[pos+n+propLen:], &m); err != nil {
+			t.Fatal(err)
+		}
+		body, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(m.Body, "="))
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodies = append(bodies, string(body))
+	}
+}
+
+// Shared subscriptions: the members of one author's group each get some of
+// a room's messages and together every one, once; a plain subscription
+// and another author's group of the same name each get them all; a member
+// that leaves hands its share to the rest, and one that resumes its
+// session rejoins.
+func TestMQTT5SharedSubscriptions(t *testing.T) {
+	socket, gatewayToken := currentNative(t)
+	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"})
+	g := startAuthorGateway(t, c)
+	address := g.addresses["mqtt"]
+	poster := dial(t, socket, "m10-poster", "", false, true)
+	post := func(prefix string, n int) []string {
+		t.Helper()
+		var sent []string
+		for i := range n {
+			text := fmt.Sprintf("%s %d", prefix, i)
+			if err := poster.Send("#m10", text); err != nil {
+				t.Fatal(err)
+			}
+			next(t, poster, func(e *irc.SendReceiptEvent) bool { return e.Message == text })
+			sent = append(sent, text)
+		}
+		return sent
+	}
+	member := func(id string) *mqtt5Client {
+		client, connack := dialMQTT5(t, address, id, true, 600, "airc-nick=m10-pool")
+		if connack.reason != 0 || connack.props[0x2A] == nil || connack.props[0x2A][0] != 1 {
+			t.Fatalf("%s CONNACK %#x, shared subscriptions available %v", id, connack.reason, connack.props[0x2A])
+		}
+		if got := client.subscribe("$share/pool/airc/room/m10", 1); got[0] != 1 {
+			t.Fatalf("%s SUBACK %v", id, got)
+		}
+		return client
+	}
+	w1, w2 := member("m10-w1"), member("m10-w2")
+	watcher, _ := dialMQTT5(t, address, "m10-watcher", true, 600, "airc-nick=m10-watcher")
+	if got := watcher.subscribe("airc/room/m10", 1); got[0] != 1 {
+		t.Fatalf("watcher SUBACK %v", got)
+	}
+	other, _ := dialMQTT5(t, address, "m10-other", true, 600, "airc-nick=m10-other")
+	if got := other.subscribe("$share/pool/airc/room/m10", 1); got[0] != 1 {
+		t.Fatalf("other author's SUBACK %v", got)
+	}
+	for filter, want := range map[string]byte{"$share//airc/room/m10": 0x8F, "$share/pool/replies/x": 0x9E, "$share/pool": 0x8F} {
+		if got := watcher.subscribe(filter, 1); got[0] != want {
+			t.Fatalf("SUBACK for %s: %#x, want %#x", filter, got[0], want)
+		}
+	}
+
+	sent := post("pooled", 20)
+	quiet := 1500 * time.Millisecond
+	got1, got2 := drainMQTT5(t, w1, quiet), drainMQTT5(t, w2, quiet)
+	if len(got1) == 0 || len(got2) == 0 {
+		t.Fatalf("one member got nothing: %d and %d", len(got1), len(got2))
+	}
+	shared := append(append([]string(nil), got1...), got2...)
+	slices.Sort(shared)
+	want := slices.Clone(sent)
+	slices.Sort(want)
+	if !slices.Equal(shared, want) {
+		t.Fatalf("the group got %v, want each of %v once", shared, want)
+	}
+	for name, client := range map[string]*mqtt5Client{"watcher": watcher, "other author's group": other} {
+		if got := drainMQTT5(t, client, quiet); !slices.Equal(got, sent) {
+			t.Fatalf("%s got %v, want all %d in order", name, got, len(sent))
+		}
+	}
+
+	// w1 leaves: its share goes to w2. w1 comes back to its session.
+	_ = w1.conn.Close()
+	time.Sleep(200 * time.Millisecond)
+	alone := post("alone", 6)
+	if got := drainMQTT5(t, w2, quiet); !slices.Equal(got, alone) {
+		t.Fatalf("the remaining member got %v, want %v", got, alone)
+	}
+	back, connack := dialMQTT5(t, address, "m10-w1", false, 600, "airc-nick=m10-pool")
+	if connack.reason != 0 || connack.body[0] != 1 {
+		t.Fatalf("resume CONNACK %#x present %d", connack.reason, connack.body[0])
+	}
+	again := post("again", 10)
+	got1, got2 = drainMQTT5(t, back, quiet), drainMQTT5(t, w2, quiet)
+	if len(got1) == 0 || len(got1)+len(got2) != len(again) {
+		t.Fatalf("after w1 resumed: %d and %d of %d", len(got1), len(got2), len(again))
 	}
 }
