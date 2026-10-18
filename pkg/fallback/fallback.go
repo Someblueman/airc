@@ -171,6 +171,10 @@ type Client struct {
 	// not an attempt. Calls are never concurrent. Errors never contain the
 	// token or password.
 	Attempted func(Endpoint, error)
+	// Hedge makes a RoomReader's Follow follow over two gateway
+	// connections at once, as FollowHedged does: the reader's own
+	// connection then stays idle, and the gateway serves two follows.
+	Hedge bool
 }
 
 // Refusal is a definite answer: the server refused the request, and another

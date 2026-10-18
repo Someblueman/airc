@@ -164,7 +164,7 @@ func primaryHost(opt options) string {
 // fallbackClient runs requests as cfg's author (its nickname and saved
 // account token) over endpoints.
 func fallbackClient(opt options, cfg irc.Config, endpoints []fallback.Endpoint) *fallback.Client {
-	c := &fallback.Client{Endpoints: endpoints, Host: primaryHost(opt), Nick: cfg.Nick, Token: cfg.IdentityToken, Password: cfg.AccessToken, TLSConfig: cfg.TLSConfig, KeepAlive: cfg.KeepAlive, ProbeTimeout: cfg.ProbeTimeout}
+	c := &fallback.Client{Endpoints: endpoints, Host: primaryHost(opt), Nick: cfg.Nick, Token: cfg.IdentityToken, Password: cfg.AccessToken, TLSConfig: cfg.TLSConfig, KeepAlive: cfg.KeepAlive, ProbeTimeout: cfg.ProbeTimeout, Hedge: opt.hedge}
 	if c.TLSConfig != nil && opt.tlsServerName == "" {
 		c.TLSConfig = c.TLSConfig.Clone()
 		c.TLSConfig.ServerName = "" // each endpoint's own host
