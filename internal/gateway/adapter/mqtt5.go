@@ -47,11 +47,6 @@ import (
 const (
 	// mqtt5MaxSessionExpiry caps a session's life after its connection ends.
 	mqtt5MaxSessionExpiry = time.Hour
-	// mqtt5MaxSessions caps the sessions the listener remembers, and
-	// mqtt5MaxSessionsPerOwner those of one author, so no author can take
-	// them all.
-	mqtt5MaxSessions         = 1024
-	mqtt5MaxSessionsPerOwner = 16
 	// mqtt5MaxInflight caps unacknowledged QoS 1 messages to one client,
 	// and mqtt5MaxInflightBytes their size, so the sessions the listener
 	// keeps hold at most 256 MiB.
@@ -117,6 +112,10 @@ type mqtt5Store struct {
 	// them; closed refuses new ones once it is closing.
 	running sync.WaitGroup
 	closed  bool
+	// maxSessions caps the sessions the listener remembers, and perOwner
+	// those of one author, so no author can take them all
+	// (config.MQTT.Sessions and SessionsPerAuthor).
+	maxSessions, perOwner int
 }
 
 // mqtt5Will is a will waiting out its delay. run submits it; drop frees
@@ -170,7 +169,7 @@ type mqtt5Outbound struct {
 }
 
 func newMQTT5Store(ctx context.Context) *mqtt5Store {
-	return &mqtt5Store{ctx: ctx, sessions: map[string]*mqtt5State{}, wills: map[string]*mqtt5Will{}}
+	return &mqtt5Store{ctx: ctx, sessions: map[string]*mqtt5State{}, wills: map[string]*mqtt5Will{}, maxSessions: config.DefaultMQTTSessions, perOwner: config.DefaultMQTTSessionsPerAuthor}
 }
 
 // take hands the session for clientID to a new connection: the existing
@@ -198,12 +197,12 @@ func (s *mqtt5Store) take(clientID, owner string, resume bool, expiry time.Durat
 		delete(s.sessions, clientID)
 	}
 	s.endWillLocked(clientID, true)
-	if len(s.sessions) >= mqtt5MaxSessions || owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
+	if len(s.sessions) >= s.maxSessions || owner != "" && s.ownedLocked(owner) >= s.perOwner {
 		s.sweepLocked(now)
-		if len(s.sessions) >= mqtt5MaxSessions {
+		if len(s.sessions) >= s.maxSessions {
 			return nil, false, errMQTTSessions
 		}
-		if owner != "" && s.ownedLocked(owner) >= mqtt5MaxSessionsPerOwner {
+		if owner != "" && s.ownedLocked(owner) >= s.perOwner {
 			return nil, false, errMQTTOwnerSessions
 		}
 	}

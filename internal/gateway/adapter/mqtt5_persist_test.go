@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
 func TestMQTT5SnapshotRoundTripAndRefusals(t *testing.T) {
@@ -94,7 +96,7 @@ func TestMQTT5SnapshotBounds(t *testing.T) {
 	repeated := good("repeated")
 	repeated.Inflight = []mqtt5SnapshotOutbound{{ID: 3}, {ID: 3}}
 	sessions := []mqtt5SnapshotSession{good("kept"), flood, mismatched, repeated}
-	for i := range mqtt5MaxSessionsPerOwner + 4 {
+	for i := range config.DefaultMQTTSessionsPerAuthor + 4 {
 		sessions = append(sessions, good(fmt.Sprintf("many-%d", i)))
 	}
 	data, err := json.Marshal(mqtt5Snapshot{Version: 1, Sessions: sessions})
@@ -115,8 +117,8 @@ func TestMQTT5SnapshotBounds(t *testing.T) {
 			t.Errorf("loaded %s", id)
 		}
 	}
-	if s.sessions["kept"] == nil || len(s.sessions) != mqtt5MaxSessionsPerOwner {
-		t.Fatalf("loaded %d sessions, want %d of alice's", len(s.sessions), mqtt5MaxSessionsPerOwner)
+	if s.sessions["kept"] == nil || len(s.sessions) != config.DefaultMQTTSessionsPerAuthor {
+		t.Fatalf("loaded %d sessions, want %d of alice's", len(s.sessions), config.DefaultMQTTSessionsPerAuthor)
 	}
 	// The per-author cap holds for new sessions too.
 	if _, _, err := s.take("one-more", "a:alice", false, time.Hour); !errors.Is(err, errMQTTOwnerSessions) {

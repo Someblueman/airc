@@ -11,9 +11,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/mqttwire"
 )
 
-// mqtt5SnapshotBytes caps a sessions snapshot: the sessions the listener
-// keeps, each with its unacknowledged messages.
-const mqtt5SnapshotBytes = 512 << 20
+// mqtt5SnapshotSessionBytes is what a sessions snapshot may take per
+// session the listener keeps: its unacknowledged messages and the rest.
+const mqtt5SnapshotSessionBytes = 512 << 10
 
 // mqtt5Snapshot is a listener's sessions written to its state file, so
 // they outlive a gateway restart. Wills are not kept: they hold their
@@ -127,11 +127,11 @@ func (s *mqtt5Store) load() error {
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(link, info) || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > mqtt5SnapshotBytes {
+	if !os.SameFile(link, info) || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > int64(s.maxSessions)*mqtt5SnapshotSessionBytes {
 		return errors.New("MQTT sessions file must be a private regular file")
 	}
 	var snapshot mqtt5Snapshot
-	if err := json.NewDecoder(io.LimitReader(file, mqtt5SnapshotBytes)).Decode(&snapshot); err != nil {
+	if err := json.NewDecoder(io.LimitReader(file, int64(s.maxSessions)*mqtt5SnapshotSessionBytes)).Decode(&snapshot); err != nil {
 		return err
 	}
 	if snapshot.Version != 1 {
@@ -141,7 +141,7 @@ func (s *mqtt5Store) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, saved := range snapshot.Sessions {
-		if saved.ClientID == "" || s.sessions[saved.ClientID] != nil || saved.Owner == "" || !now.Before(saved.ExpiresAt) || saved.Expiry <= 0 || saved.Expiry > mqtt5MaxSessionExpiry || len(s.sessions) >= mqtt5MaxSessions || s.ownedLocked(saved.Owner) >= mqtt5MaxSessionsPerOwner {
+		if saved.ClientID == "" || s.sessions[saved.ClientID] != nil || saved.Owner == "" || !now.Before(saved.ExpiresAt) || saved.Expiry <= 0 || saved.Expiry > mqtt5MaxSessionExpiry || len(s.sessions) >= s.maxSessions || s.ownedLocked(saved.Owner) >= s.perOwner {
 			continue
 		}
 		if state := restoreMQTT5Session(saved); state != nil {

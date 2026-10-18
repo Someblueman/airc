@@ -443,3 +443,22 @@ func TestMQTT5RequestsSubscriptionsAndSessions(t *testing.T) {
 		t.Fatalf("takeover DISCONNECT %#x", d.reason)
 	}
 }
+
+// The listener's session caps hold: beyond sessions_per_author one author
+// is refused, and beyond sessions everyone is.
+func TestMQTT5SessionCaps(t *testing.T) {
+	socket, gatewayToken := currentNative(t)
+	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt", MQTT: &config.MQTT{Sessions: 3, SessionsPerAuthor: 2}})
+	g := startAuthorGateway(t, c)
+	address := g.addresses["mqtt"]
+	for i, want := range []byte{0, 0, 0x97} {
+		if _, connack := dialMQTT5(t, address, fmt.Sprintf("m9-a%d", i), true, 600, "airc-nick=m9-alice"); connack.reason != want {
+			t.Fatalf("alice's session %d: CONNACK %#x, want %#x", i, connack.reason, want)
+		}
+	}
+	for i, want := range []byte{0, 0x97} {
+		if _, connack := dialMQTT5(t, address, fmt.Sprintf("m9-b%d", i), true, 600, "airc-nick=m9-bob"); connack.reason != want {
+			t.Fatalf("bob's session %d: CONNACK %#x, want %#x", i, connack.reason, want)
+		}
+	}
+}

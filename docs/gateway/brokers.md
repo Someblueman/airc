@@ -87,8 +87,13 @@ unexpired session belongs to that author: anyone else's CONNECT with it is
 refused (`0x87`), and the connection and session carry on. The same author's
 newer connection replaces the older, which gets DISCONNECT `0x8E`; a
 connection without an author may be replaced by any. A listener keeps at
-most 1024 sessions, 16 of them one author's (`0x97` beyond), and saves them, with their positions and unacknowledged
-messages, to `mqtt-<listener id>.sessions` in the
+most `mqtt.sessions` sessions (default 1024, up to 16384), connected or not,
+and `mqtt.sessions_per_author` of one author's (default 16); CONNACK `0x97`
+refuses one beyond either. Each session's followed check holds a wait slot,
+so a listener for more than about a thousand subscribers also needs
+`limits.waits` raised, and each may hold 256 KiB of unacknowledged
+messages. The listener saves its sessions, with their positions and
+unacknowledged messages, to `mqtt-<listener id>.sessions` in the
 [state directory](configuration.md#journal) every minute and when it stops,
 so they survive a gateway restart; a session saved before a crash may
 redeliver what it had already sent, never skip it. A session that is
