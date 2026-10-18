@@ -12,6 +12,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func posixPacketFixture(t *testing.T) (config.Config, *store.Store, config.Listener, string) {
@@ -41,6 +42,7 @@ func TestPOSIXQueueOwnerMissingResponsePreservesIngressAbsence(t *testing.T) {
 }
 
 func TestPOSIXQueueOwnerRoutesAndJoinedClose(t *testing.T) {
+	testmqueue.Require(t)
 	c, journal, l, name := posixPacketFixture(t)
 	response, err := adapter.CreatePOSIXQueue(name, 1)
 	if err != nil {

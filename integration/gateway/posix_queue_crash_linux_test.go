@@ -15,6 +15,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testmqueue"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -53,6 +54,7 @@ func waitPOSIXGatewayStopped(t *testing.T, pid int) {
 }
 
 func TestPOSIXQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixtureShutdown(t, false)
 	// The real journal writer holds admission before a protected request arrives.
 	db, err := sql.Open("sqlite", filepath.Join(f.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")

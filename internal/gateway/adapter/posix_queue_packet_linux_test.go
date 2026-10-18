@@ -9,6 +9,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func queuePacketFixture(t *testing.T) (*queuePackets, *POSIXQueue, *POSIXQueue) {
@@ -31,6 +33,7 @@ func queuePacketFixture(t *testing.T) (*queuePackets, *POSIXQueue, *POSIXQueue) 
 }
 
 func TestPOSIXQueuePacketsWholeAndFixedRoutes(t *testing.T) {
+	testmqueue.Require(t)
 	conn, producer, response := queuePacketFixture(t)
 	body := bytes.Repeat([]byte("p"), POSIXQueueMessageBytes)
 	if err := producer.WriteMessage(t.Context(), body); err != nil {
@@ -79,6 +82,7 @@ func TestPOSIXQueuePacketsWholeAndFixedRoutes(t *testing.T) {
 }
 
 func TestPOSIXQueuePacketsMutableDeadlinesAndClose(t *testing.T) {
+	testmqueue.Require(t)
 	conn, _, response := queuePacketFixture(t)
 	read := make(chan error, 1)
 	go func() { _, _, err := conn.ReadFrom(make([]byte, POSIXQueueMessageBytes)); read <- err }()

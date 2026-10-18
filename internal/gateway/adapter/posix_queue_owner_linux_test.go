@@ -8,9 +8,12 @@ import (
 	"testing"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXQueueExclusiveAttributesAndPermissions(t *testing.T) {
+	testmqueue.Require(t)
 	q := newTestPOSIXQueue(t, 2)
 	if duplicate, err := CreatePOSIXQueue(q.name, 2); !errors.Is(err, unix.EEXIST) {
 		if duplicate != nil {
@@ -53,6 +56,7 @@ func TestPOSIXQueueExclusiveAttributesAndPermissions(t *testing.T) {
 }
 
 func TestPOSIXQueueReplacementRefusesIOAndPreservesNewName(t *testing.T) {
+	testmqueue.Require(t)
 	original := newTestPOSIXQueue(t, 2)
 	if err := unix.Unlinkat(original.directory, original.name[1:], 0); err != nil {
 		t.Fatal(err)
@@ -95,6 +99,7 @@ func TestPOSIXQueueReplacementRefusesIOAndPreservesNewName(t *testing.T) {
 }
 
 func TestPOSIXQueueRejectsForeignOwnedQueue(t *testing.T) {
+	testmqueue.Require(t)
 	if os.Geteuid() != 0 {
 		t.Skip("requires root in the isolated Linux fixture")
 	}

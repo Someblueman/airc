@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 type queueRecoveryRecord struct {
@@ -39,6 +41,7 @@ func TestPOSIXQueueRecoveryHelper(t *testing.T) {
 }
 
 func TestPOSIXQueueRecoveryAfterKilledOwner(t *testing.T) {
+	testmqueue.Require(t)
 	placeholder := newTestPOSIXQueue(t, 1)
 	name := placeholder.Name()
 	if err := placeholder.Close(); err != nil {
@@ -119,6 +122,7 @@ func TestPOSIXQueueRecoveryAfterKilledOwner(t *testing.T) {
 }
 
 func TestPOSIXQueueRecoveryPreservesReplacement(t *testing.T) {
+	testmqueue.Require(t)
 	original := newTestPOSIXQueue(t, 1)
 	epoch, err := CurrentPOSIXQueueEpoch()
 	if err != nil {

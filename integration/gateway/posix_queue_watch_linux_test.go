@@ -11,10 +11,12 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testmqueue"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestPOSIXQueueWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixture(t)
 	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)

@@ -15,9 +15,11 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXQueueServiceReadyAndJoinedRestart(t *testing.T) {
+	testmqueue.Require(t)
 	c, journal, l, name := posixPacketFixture(t)
 	if err := journal.Close(); err != nil {
 		t.Fatal(err)

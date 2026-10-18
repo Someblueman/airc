@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testnet"
 )
 
 func TestFramedCLINativeIPv6(t *testing.T) {
+	testnet.RequireIPv6Loopback(t)
 	for _, secure := range []bool{false, true} {
 		conn, credentials, _, stop := framedFixtureAddress(t, secure, "[::1]:0")
 		profile := "encrypted"

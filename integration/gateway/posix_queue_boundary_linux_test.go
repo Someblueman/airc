@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func assertPOSIXSilent(t *testing.T, socket *adapter.POSIXQueue) {
@@ -25,6 +26,7 @@ func assertPOSIXSilent(t *testing.T, socket *adapter.POSIXQueue) {
 }
 
 func TestPOSIXQueueUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixture(t)
 	for _, kind := range []string{"unknown-profile", "malformed", "override", "oversize-producer-api", "incomplete"} {
 		t.Run(kind, func(t *testing.T) {
