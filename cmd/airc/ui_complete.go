@@ -26,7 +26,7 @@ var uiCommands = []uiCommand{
 	{"/join", "#channel", "open a channel and follow it live", "", "General"},
 	{"/msg", "nick text", "send a direct message", "", "General"},
 	{"/topic", "[text|-]", "show, set or clear the channel header", "TOPIC", "General"},
-	{"/search", "text", "open a read-only search of this room", "SEARCH", "General"},
+	{"/search", "words", "search this room: every word must occur, \"phrases\" stay together, -word excludes", "SEARCH", "General"},
 	{"/close", "", "close this room, thread, search or help view", "", "General"},
 	{"/quit", "", "leave the UI (also Ctrl-C)", "", "General"},
 	{"/context", "ID", "retained context, pins and corrections, with live replies", "CONTEXT", "Conversations"},
