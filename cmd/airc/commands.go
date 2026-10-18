@@ -47,6 +47,7 @@ var sessionCommands = map[string]sessionCommand{
 	"check":     {run: plain(runCheckSession), mcp: true, signalsOnly: true},
 	"context":   {run: plain(runContextSession), mcp: true},
 	"unread":    {run: plain(runUnreadSession), mcp: true},
+	"digest":    {run: plain(runDigestSession), mcp: true},
 	"channels":  {run: plain(runChannelsSession), mcp: true},
 	"history":   {run: plain(runHistorySession), mcp: true},
 	"search":    {run: plain(runSearchSession), mcp: true},

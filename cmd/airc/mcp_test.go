@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 19 {
+	if len(tools.Tools) != 20 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -67,10 +67,17 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	call("directory", map[string]any{"who": "adapter"})
 	call("presence", map[string]any{"state": "thinking", "ttl_seconds": 60})
 	call("profile", map[string]any{"about": "MCP acceptance"})
-	for name, args := range map[string]map[string]any{"channels": {}, "history": {"target": "#room"}, "unread": {"channels": []string{"#room"}}} {
+	for name, args := range map[string]map[string]any{"channels": {}, "history": {"target": "#room"}, "unread": {"channels": []string{"#room"}}, "digest": {"channels": []string{"#room"}}} {
 		data, _ := json.Marshal(call(name, args).StructuredContent)
-		if name != "unread" && !strings.Contains(string(data), "#room") || name == "unread" && !strings.Contains(string(data), `"type":"unread"`) {
-			t.Fatal(name, string(data))
+		switch name {
+		case "unread", "digest":
+			if !strings.Contains(string(data), `"type":"`+name+`"`) {
+				t.Fatal(name, string(data))
+			}
+		default:
+			if !strings.Contains(string(data), "#room") {
+				t.Fatal(name, string(data))
+			}
 		}
 	}
 	call("prepare", map[string]any{"id": id, "seconds": 60, "message": "reviewing"})
@@ -88,6 +95,11 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	encoded, _ = json.Marshal(searchResult.StructuredContent)
 	if !strings.Contains(string(encoded), "cursor") || !strings.Contains(string(encoded), "more") {
 		t.Fatal("search pagination missing", string(encoded))
+	}
+	newest := call("search", map[string]any{"query": "from MCP -nothing", "target": "#room", "newest": true, "since": "1h"})
+	encoded, _ = json.Marshal(newest.StructuredContent)
+	if !strings.Contains(string(encoded), "from MCP") {
+		t.Fatal("terms search missing", string(encoded))
 	}
 	call("retract", map[string]any{"id": id, "message": "withdrawn"})
 
@@ -198,7 +210,8 @@ func TestMCPInputBoundsEachLine(t *testing.T) {
 }
 
 // The MCP Go SDK served these tools before the in-repo server replaced it;
-// testdata/mcp_discovery.json is its initialize and tools/list output.
+// testdata/mcp_discovery.json is its initialize and tools/list output,
+// regenerated from this server when a tool is added or its schema changes.
 func TestMCPDiscoveryMatchesSDKServer(t *testing.T) {
 	data, err := os.ReadFile("testdata/mcp_discovery.json")
 	if err != nil {

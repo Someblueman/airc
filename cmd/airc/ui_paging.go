@@ -70,7 +70,7 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		if q.Kind == "thread" {
 			return fetchHistory(ctx, c, "thread:"+q.Target, after, 100, forward)
 		}
-		if err := c.Search(q.Target, q.Text, "", after, 50); err != nil {
+		if err := c.SearchWith(q.Target, q.Text, "", after, 50, irc.SearchOptions{Terms: c.Supports("SEARCH_TERMS")}); err != nil {
 			return historyPage{}, err
 		}
 		return awaitHistory(ctx, c, q.Target, forward)

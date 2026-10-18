@@ -13,11 +13,15 @@ import (
 )
 
 type mcpSearchInput struct {
-	Query  string `json:"query" jsonschema:"Case-insensitive substring, at most 256 bytes"`
+	Query  string `json:"query" jsonschema:"Words that must all occur (case-insensitive substrings), \"quoted phrases\", and -word to exclude; at most 256 bytes"`
 	Target string `json:"target,omitempty" jsonschema:"#room, @nick, thread:ID or * for everything; defaults to AIRC_CHANNEL, else *"`
 	From   string `json:"from,omitempty" jsonschema:"Only this sender"`
-	After  string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page; * restarts from the oldest"`
+	After  string `json:"after,omitempty" jsonschema:"Cursor from the previous page's page row; * restarts"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum matches, 1-1000; default 50"`
+	Since  string `json:"since,omitempty" jsonschema:"Only messages at or after: a duration ago (90m, 2h, 3d, 1w), a date (2026-10-17) or RFC 3339"`
+	Until  string `json:"until,omitempty" jsonschema:"Only messages before, in the same forms as since"`
+	Newest bool   `json:"newest,omitempty" jsonschema:"Newest matches first; status archived means older matches may remain on disk"`
+	Exact  bool   `json:"exact,omitempty" jsonschema:"Match the whole query as one literal substring"`
 }
 type mcpReactionInput struct {
 	ID       string `json:"id" jsonschema:"ID of the message to react to"`
@@ -39,6 +43,10 @@ type mcpPrepareInput struct {
 type mcpUnreadInput struct {
 	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to count besides the inbox; defaults to AIRC_CHANNEL"`
 	Mentions bool     `json:"mentions,omitempty" jsonschema:"Count only direct messages and tags"`
+}
+type mcpDigestInput struct {
+	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to summarize besides the inbox; defaults to AIRC_CHANNEL"`
+	MarkRead bool     `json:"mark_read,omitempty" jsonschema:"Mark everything summarized as read, as check would; read what matters first"`
 }
 type mcpHistoryInput struct {
 	Target string `json:"target" jsonschema:"#room, or a nickname for its direct messages"`
@@ -70,6 +78,16 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		}
 		if in.Mentions {
 			args = append(args, "--mentions")
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "digest", Description: "Summarize unread traffic without message bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, corrections, open polls, and changed headers and pins. Marks nothing read unless mark_read; use it after time away instead of reading the whole backlog."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDigestInput) (*mcpserver.Result, mcpOutput, error) {
+		args := []string{"digest"}
+		for _, channel := range in.Channels {
+			args = append(args, "--channel", channel)
+		}
+		if in.MarkRead {
+			args = append(args, "--mark-read")
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
@@ -126,15 +144,21 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 }
 
 func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search original retained messages. Results include a page cursor and status; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search original retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes. Narrow with since/until; newest returns the latest matches first. Results end with a page row whose cursor continues the search; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"search", in.Query}
-		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}} {
+		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}, {"--since", in.Since}, {"--until", in.Until}} {
 			if pair[1] != "" {
-				args = append(args, pair[0], pair[1])
+				args = append(args, pair[0]+"="+pair[1])
 			}
 		}
 		if in.Limit != 0 {
 			args = append(args, "--limit", strconv.Itoa(in.Limit))
+		}
+		if in.Newest {
+			args = append(args, "--newest")
+		}
+		if in.Exact {
+			args = append(args, "--exact")
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
