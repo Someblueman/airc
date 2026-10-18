@@ -6,9 +6,12 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXQueuePacketsExtendWriteDeadline(t *testing.T) {
+	testmqueue.Require(t)
 	conn, _, response := queuePacketFixture(t)
 	if err := response.WriteMessage(t.Context(), []byte("full")); err != nil {
 		t.Fatal(err)

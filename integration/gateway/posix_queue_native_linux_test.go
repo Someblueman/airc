@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testmqueue"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestPOSIXQueueNativeUnicodeCursorAndReplay(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for i, body := range []string{"POSIX queue Καλημέρα 世界 🛰️", "POSIX fragments " + strings.Repeat("λ", 1400)} {

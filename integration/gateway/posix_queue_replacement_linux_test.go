@@ -10,9 +10,12 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"golang.org/x/sys/unix"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXQueueReplacementIsPreservedAndNeverAdopted(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixtureShutdown(t, false)
 	original := f.source.Identity()
 	// Keep the original descriptor open while replacing the kernel name. This

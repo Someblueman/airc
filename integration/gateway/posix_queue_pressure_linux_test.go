@@ -10,9 +10,12 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXQueueInputAndResponsePressureRemainBounded(t *testing.T) {
+	testmqueue.Require(t)
 	f := newPOSIXFixture(t)
 	if err := f.process.command.Process.Signal(syscall.SIGSTOP); err != nil {
 		t.Fatal(err)

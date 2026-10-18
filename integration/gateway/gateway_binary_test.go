@@ -52,8 +52,14 @@ func buildCurrentGateway() (string, string, error) {
 	return root, binary, nil
 }
 
+// gatewayBuildTimeout bounds one build of the gateway. A race-enabled build
+// with an empty build cache takes about four minutes on a 4-vCPU host, and a
+// failed build fails every test in the package, so the bound only catches a
+// hung toolchain.
+const gatewayBuildTimeout = 10 * time.Minute
+
 func buildGateway(binary, ldflags string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), gatewayBuildTimeout)
 	defer cancel()
 	args := []string{"build", fmt.Sprintf("-race=%t", gatewayTestRace), "-trimpath", "-ldflags=" + ldflags, "-o", binary, "./cmd/airc-gateway"}
 	build := exec.CommandContext(ctx, "go", args...)

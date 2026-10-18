@@ -11,6 +11,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func newTestPOSIXQueue(t *testing.T, depth int) *POSIXQueue {
@@ -28,6 +30,7 @@ func newTestPOSIXQueue(t *testing.T, depth int) *POSIXQueue {
 }
 
 func TestPOSIXQueueWholeMessageAndBounds(t *testing.T) {
+	testmqueue.Require(t)
 	q := newTestPOSIXQueue(t, 2)
 	producer, err := OpenPOSIXQueue(q.name, 2)
 	if err != nil {
@@ -70,6 +73,7 @@ func TestPOSIXQueueWholeMessageAndBounds(t *testing.T) {
 }
 
 func TestPOSIXQueueFullPressureDeadlineAndDrain(t *testing.T) {
+	testmqueue.Require(t)
 	q := newTestPOSIXQueue(t, 1)
 	if err := q.WriteMessage(t.Context(), []byte("first")); err != nil {
 		t.Fatal(err)
@@ -98,6 +102,7 @@ func TestPOSIXQueueFullPressureDeadlineAndDrain(t *testing.T) {
 }
 
 func TestPOSIXQueueCloseJoinsWaitingReadAndWrite(t *testing.T) {
+	testmqueue.Require(t)
 	for _, write := range []bool{false, true} {
 		t.Run(fmt.Sprint(write), func(t *testing.T) {
 			q := newTestPOSIXQueue(t, 1)

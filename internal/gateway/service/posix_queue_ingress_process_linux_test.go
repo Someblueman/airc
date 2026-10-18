@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func TestPOSIXIngressOwnerProcessHelper(t *testing.T) {
@@ -45,6 +46,7 @@ func TestPOSIXIngressOwnerProcessHelper(t *testing.T) {
 }
 
 func TestPOSIXIngressRecoversKilledJournalOwner(t *testing.T) {
+	testmqueue.Require(t)
 	c, journal, l := posixIngressFixture(t)
 	if err := journal.Close(); err != nil {
 		t.Fatal(err)

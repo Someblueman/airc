@@ -14,6 +14,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testmqueue"
 )
 
 func posixIngressFixture(t *testing.T) (config.Config, *store.Store, config.Listener) {
@@ -34,6 +35,7 @@ func posixIngressFixture(t *testing.T) (config.Config, *store.Store, config.List
 }
 
 func TestPOSIXIngressRegistersAndRecreates(t *testing.T) {
+	testmqueue.Require(t)
 	_, s, l := posixIngressFixture(t)
 	q, err := openPOSIXIngress(t.Context(), s, l)
 	if err != nil {
@@ -64,6 +66,7 @@ func TestPOSIXIngressRegistersAndRecreates(t *testing.T) {
 }
 
 func TestPOSIXIngressPreservesUnknownQueue(t *testing.T) {
+	testmqueue.Require(t)
 	_, s, l := posixIngressFixture(t)
 	unknown, err := adapter.CreatePOSIXQueue(l.Address, 1)
 	if err != nil {
@@ -84,6 +87,7 @@ func TestPOSIXIngressPreservesUnknownQueue(t *testing.T) {
 }
 
 func TestPOSIXIngressRegistrationFailureCleansOwnedQueue(t *testing.T) {
+	testmqueue.Require(t)
 	c, s, l := posixIngressFixture(t)
 	db, err := sql.Open("sqlite", filepath.Join(c.StateDir, "journal.sqlite"))
 	if err != nil {

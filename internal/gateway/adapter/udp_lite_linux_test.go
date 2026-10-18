@@ -9,6 +9,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testnet"
 )
 
 func udpLiteFixture(t *testing.T, ip net.IP) *UDPLitePackets {
@@ -40,6 +42,9 @@ func udpLiteOption(t *testing.T, c *UDPLitePackets, option, value int) {
 func TestUDPLiteActualProtocolAndFullCoverage(t *testing.T) {
 	for _, ip := range []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback} {
 		t.Run(ip.String(), func(t *testing.T) {
+			if ip.To4() == nil {
+				testnet.RequireIPv6Loopback(t)
+			}
 			receiver, client := udpLiteFixture(t, ip), udpLiteFixture(t, ip)
 			raw, err := receiver.conn.SyscallConn()
 			if err != nil {

@@ -22,6 +22,7 @@ func IPv6Multicast(t testing.TB) (*net.Interface, net.IP) {
 	}
 	address := os.Getenv("AGW_IPV6_MULTICAST_SOURCE")
 	if address == "" {
+		RequireIPv6Loopback(t) // an explicit source is the operator's to qualify
 		address = "::1"
 	}
 	source := net.ParseIP(address)
