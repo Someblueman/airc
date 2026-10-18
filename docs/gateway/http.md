@@ -161,11 +161,11 @@ itself rather than through grpc-go; its tests call it with grpc-go clients.
 
 `protocol: "http3"` serves the same routes as `http` over QUIC (quic-go
 v0.63.0, TLS 1.3, ALPN `h3`) on a UDP address. A certificate is required.
-0-RTT is accepted: a client resuming a TLS session may send its first
-request in the handshake's first flight, which is safe because every
-request is replay-safe (a mutation is one job by author and `request_id`
-however often it arrives, and reads change nothing); `airc` resumes its
-sessions this way. GET routes take the author headers. Handshakes have
+A client resuming a TLS session may use 0-RTT for a quicker handshake
+(`airc` resumes its sessions), but a request is served only once the
+handshake completes: one that arrives in early data, which can be replayed
+from an address never proven, is answered `425 Too Early` (RFC 8470) and
+may be sent again after the handshake. GET routes take the author headers. Handshakes have
 five seconds; idle connections close after thirty unless the listener's
 [keepalive](configuration.md#keepalive) says otherwise.
 
