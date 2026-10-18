@@ -82,24 +82,31 @@ the position each reached, gets its unacknowledged QoS 1 messages again
 (DUP, original packet IDs), and then everything that arrived while it was
 away, from history, within AIRC's retention; the user property `airc-gap`
 marks a retention gap. Only a session with an author is kept: a client
-ID alone proves nothing. Another author's CONNECT with the same client ID
-starts a clean session. A newer connection with the same client ID
-replaces the older, which gets DISCONNECT `0x8E`. A listener keeps at
-most 1024 sessions and saves them, with their positions and unacknowledged
+ID alone proves nothing. A client ID held by an author's connection or
+unexpired session belongs to that author: anyone else's CONNECT with it is
+refused (`0x87`), and the connection and session carry on. The same author's
+newer connection replaces the older, which gets DISCONNECT `0x8E`; a
+connection without an author may be replaced by any. A listener keeps at
+most 1024 sessions, 16 of them one author's (`0x97` beyond), and saves them, with their positions and unacknowledged
 messages, to `mqtt-<listener id>.sessions` in the
 [state directory](configuration.md#journal) every minute and when it stops,
 so they survive a gateway restart; a session saved before a crash may
 redeliver what it had already sent, never skip it. A session that is
 lost (expired, or its file removed) gets Session Present `0`. QoS 1 deliveries respect the client's Receive
 Maximum (at most 64, and 256 KiB, outstanding) and Maximum Packet Size; a
-reply that finds no room goes at QoS 0 rather than wait.
+reply that finds no room goes at QoS 0 rather than wait, and so does the
+reply to a request made as another author than the session's, which a
+resumed session must not hand to its next owner. A subscription that
+waits 30 seconds for an acknowledgement ends the connection
+(DISCONNECT `0x80`); the session keeps what was unacknowledged.
 
 **Wills.** A will is a contract mutation on a route topic, which the
 gateway runs as the connection's author when the link dies, so an agent
 that crashes or loses its network still says so: `presence.set` away is
 the usual one. It runs when the connection ends without a DISCONNECT, or
 with DISCONNECT `0x04` (mosquitto_sub sends that on SIGINT), after its Will
-Delay Interval cut to the session's expiry; a session that resumes within
+Delay Interval cut to the session's expiry (none without a connection
+author, whose session never resumes); a session that resumes within
 the delay drops it, one that starts clean runs it at once, and a normal
 DISCONNECT drops it. Each connection's will is its own job, under a
 request ID the gateway gives it. A will needs an author (the connection's

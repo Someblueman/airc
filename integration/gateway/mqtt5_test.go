@@ -419,14 +419,27 @@ func TestMQTT5RequestsSubscriptionsAndSessions(t *testing.T) {
 		resumed.ack(got.id)
 	}
 
-	// Another author cannot resume the session: it starts clean.
-	other, connack := dialMQTT5(t, address, "m5-reader", false, 600, "airc-nick=m5-intruder")
-	if connack.reason != 0 || connack.body[0] != 0 {
-		t.Fatalf("another author resumed the session: present %d", connack.body[0])
+	// Another author, or a client without one, cannot take the client ID:
+	// it is refused, and the connection holding it carries on.
+	for _, user := range [][]string{{"airc-nick=m5-intruder"}, nil} {
+		for _, clean := range []bool{false, true} {
+			if _, connack := dialMQTT5(t, address, "m5-reader", clean, 600, user...); connack.reason != 0x87 {
+				t.Fatalf("%v clean %v took the client ID: CONNACK %#x", user, clean, connack.reason)
+			}
+		}
 	}
-	// The connection it replaced was told why.
+	still := post("#m5", "still here")
+	if got := resumed.next(3); !strings.Contains(string(got.payload), still) {
+		t.Fatalf("after refused takeovers: %s", got.payload)
+	} else {
+		resumed.ack(got.id)
+	}
+	// The same author replaces it, and the connection it replaced is told
+	// why.
+	if _, connack := dialMQTT5(t, address, "m5-reader", true, 600, "airc-nick=m5-reader"); connack.reason != 0 {
+		t.Fatalf("the owner's takeover CONNACK %#x", connack.reason)
+	}
 	if d := resumed.next(14); d.reason != 0x8E {
 		t.Fatalf("takeover DISCONNECT %#x", d.reason)
 	}
-	_ = other
 }

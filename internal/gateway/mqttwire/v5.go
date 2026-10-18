@@ -191,11 +191,14 @@ func (f *fields) properties(allowed map[byte]bool) (Properties, error) {
 	end := f.position + size
 	seen := map[byte]bool{}
 	for f.position < end && f.err == nil {
-		id := byte(f.varint())
+		value := f.varint()
 		if f.err != nil {
 			break
 		}
-		if !allowed[id] {
+		// Every property identifier fits one byte; a longer encoding of
+		// one would otherwise read as that property.
+		id := byte(value)
+		if value > 0x7f || !allowed[id] {
 			return p, ErrProtocol
 		}
 		if seen[id] && id != 0x26 && id != 0x0B {

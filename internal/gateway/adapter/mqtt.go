@@ -150,7 +150,10 @@ func serveMQTTConnection(parent context.Context, conn net.Conn, d *dispatch.Disp
 	if clientID == "" {
 		clientID = "airc-" + rand.Text()
 	}
-	if !owners.claim(ctx, clientID, session) {
+	if err := owners.claim(ctx, clientID, "", session); err != nil {
+		if errors.Is(err, errMQTTClientIDHeld) {
+			_ = mqttwire.WriteConnack(conn, 2)
+		}
 		return
 	}
 	if conn.SetWriteDeadline(time.Now().Add(mqttDeadline)) != nil || mqttwire.WriteConnack(conn, 0) != nil {

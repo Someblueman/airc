@@ -2,8 +2,12 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -39,9 +43,12 @@ func TestMQTT5SnapshotRoundTripAndRefusals(t *testing.T) {
 	if got == nil || got.owner != "guest:alice" || got.nextID != 7 || got.subs["airc/room/a"].after != kept.subs["airc/room/a"].after || len(got.inflight) != 1 || got.inflight[0].id != 7 || got.expiresAt.IsZero() {
 		t.Fatalf("restored %+v", got)
 	}
-	// The owner resumes it; anyone else starts clean.
-	if _, present, _ := restored.take("kept", "guest:mallory", true, time.Hour); present {
-		t.Fatal("another author resumed a restored session")
+	// Another author is refused, and the session stays its owner's.
+	if _, _, err := restored.take("kept", "guest:mallory", true, time.Hour); !errors.Is(err, errMQTTClientIDHeld) {
+		t.Fatal("another author took a restored session:", err)
+	}
+	if _, present, err := restored.take("kept", "guest:alice", true, time.Hour); !present || err != nil {
+		t.Fatal("the owner did not resume its session:", err)
 	}
 
 	missing := newMQTT5Store(context.Background())
@@ -56,6 +63,7 @@ func TestMQTT5SnapshotRoundTripAndRefusals(t *testing.T) {
 			return os.WriteFile(p, []byte(`{"version":2,"sessions":[]}`), 0o600)
 		},
 		"garbage": func(p string) error { return os.WriteFile(p, []byte(`not json`), 0o600) },
+		"fifo":    func(p string) error { return syscall.Mkfifo(p, 0o600) },
 	} {
 		p := filepath.Join(dir, name)
 		if err := setup(p); err != nil {
@@ -66,5 +74,55 @@ func TestMQTT5SnapshotRoundTripAndRefusals(t *testing.T) {
 		if err := bad.load(); err == nil {
 			t.Errorf("%s: loaded", name)
 		}
+	}
+}
+
+// A saved session outside the bounds a live one keeps is dropped on load:
+// one that would make nextIDLocked search forever, hold more than its
+// share, or follow what its filter does not name.
+func TestMQTT5SnapshotBounds(t *testing.T) {
+	future := time.Now().Add(time.Hour)
+	good := func(id string) mqtt5SnapshotSession {
+		return mqtt5SnapshotSession{ClientID: id, Owner: "a:alice", Expiry: time.Hour, ExpiresAt: future, Subs: []mqtt5SnapshotSub{{Filter: "airc/room/a", Kind: mqtt5Room, Target: "#a", QoS: 1}}}
+	}
+	flood := good("flood")
+	for i := range 65535 {
+		flood.Inflight = append(flood.Inflight, mqtt5SnapshotOutbound{ID: uint16(i + 1), Topic: "airc/room/a"})
+	}
+	mismatched := good("mismatched")
+	mismatched.Subs[0].Target = "#elsewhere"
+	repeated := good("repeated")
+	repeated.Inflight = []mqtt5SnapshotOutbound{{ID: 3}, {ID: 3}}
+	sessions := []mqtt5SnapshotSession{good("kept"), flood, mismatched, repeated}
+	for i := range mqtt5MaxSessionsPerOwner + 4 {
+		sessions = append(sessions, good(fmt.Sprintf("many-%d", i)))
+	}
+	data, err := json.Marshal(mqtt5Snapshot{Version: 1, Sessions: sessions})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "sessions")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := newMQTT5Store(context.Background())
+	s.path = path
+	if err := s.load(); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"flood", "mismatched", "repeated"} {
+		if s.sessions[id] != nil {
+			t.Errorf("loaded %s", id)
+		}
+	}
+	if s.sessions["kept"] == nil || len(s.sessions) != mqtt5MaxSessionsPerOwner {
+		t.Fatalf("loaded %d sessions, want %d of alice's", len(s.sessions), mqtt5MaxSessionsPerOwner)
+	}
+	// The per-author cap holds for new sessions too.
+	if _, _, err := s.take("one-more", "a:alice", false, time.Hour); !errors.Is(err, errMQTTOwnerSessions) {
+		t.Fatal("an author exceeded its sessions:", err)
+	}
+	if _, _, err := s.take("bobs", "a:bob", false, time.Hour); err != nil {
+		t.Fatal("another author refused:", err)
 	}
 }

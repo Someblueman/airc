@@ -50,3 +50,18 @@ func hasUser(props Properties, key, value string) bool {
 	got, ok := props.UserProperty(key)
 	return ok && got == value
 }
+
+// A property identifier in more than one byte is refused, not read as the
+// property its low bits name.
+func TestReadV5RefusesLongPropertyID(t *testing.T) {
+	wire := []byte{0x30, 13, 0, 1, 't', 8, 0xa6, 0x02, 0, 1, 'k', 0, 1, 'v', 'x'}
+	if p, err := ReadV5(bytes.NewReader(wire)); err == nil {
+		t.Fatalf("read %+v", p)
+	}
+	wire[6], wire[7] = 0x26, 0 // the same property, encoded in one byte
+	wire = append(wire[:7], wire[8:]...)
+	wire[1], wire[5] = 12, 7
+	if p, err := ReadV5(bytes.NewReader(wire)); err != nil || !hasUser(p.Props, "k", "v") {
+		t.Fatalf("%+v %v", p, err)
+	}
+}
