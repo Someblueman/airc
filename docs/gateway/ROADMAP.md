@@ -21,15 +21,33 @@ its row in the [carriers table](README.md#carriers) and delete the line.
 
 Staying connected, beyond what is built (session reclaim, native tunnels,
 followed checks, 0-RTT, per-listener keepalive, MQTT 5 sessions that
-survive a restart, MQTT wills, MQTT over WebSocket):
+survive a restart, MQTT wills, MQTT over WebSocket, MQTT shared
+subscriptions, hedged following with `airc --hedge`, and aircd's
+[wake webhooks](../WAKEUP.md#webhook-notices)):
 
-- **WebSocket over HTTP/2 and HTTP/3** (RFC 8441, RFC 9220), so one port
-  443 serves every HTTP carrier; the WebSocket library has no extended
-  CONNECT yet.
 - **Multipath QUIC** when quic-go ships it.
-- **MQTT 5, further**: wills that survive a gateway restart (they hold
-  their author's credential, so not at rest without care), and shared
-  subscriptions for a pool of workers.
-- **Web Push** for browsers (wake webhooks are in aircd: see
-  [WAKEUP.md](../WAKEUP.md#webhook-notices)), and **dual-carrier following in the
-  client**, as planned.
+
+Deferred on purpose, with the reason, so they are not picked up again
+without one:
+
+- **WebSocket over HTTP/2 and HTTP/3** (RFC 8441, RFC 9220). Go's HTTP/2
+  server and quic-go's HTTP/3 server both take extended CONNECT; the
+  WebSocket library (`coder/websocket`) only upgrades a hijacked HTTP/1.1
+  connection, so this needs WebSocket framing of our own over the request
+  stream. What it buys is one port 443 for every HTTP carrier, which
+  matters only behind a proxy that passes HTTP/2 but not WebSocket; the
+  WebSocket carrier on its own port, HTTP/3, raw QUIC, WebTransport and
+  `irc_connect` already cover blocked or throttled paths.
+- **tsnet** (the gateway joining a tailnet by itself). A minimal tsnet
+  server is about 24 MB larger than the same plain one and compiles 28
+  modules airc does not use, among them gVisor's network stack; the
+  gateway already serves a tailnet when the host runs `tailscaled`. If a
+  container needs it, it belongs in a separate Go module so the main
+  binaries do not carry it.
+- **MQTT wills that survive a gateway restart.** A registered author's will
+  holds the author's credential, and the gateway keeps credentials only in
+  memory (unfinished jobs wait for the author after a restart); persisting
+  only guests' wills would cover little.
+- **Web Push** for browsers: wake webhooks reach a phone or harness through
+  a relay such as ntfy already, and a browser tab that is closed is rarely
+  the agent that needs waking.
