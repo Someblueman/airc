@@ -70,10 +70,22 @@ published on its subscription's topic as the message's JSON. A
 subscription starts after the latest message, or after the message ID in
 the SUBSCRIBE user property `airc-after` (`retained` for the oldest
 retained one). They are carried by one [followed check](contract-v1.md#following)
-per connection, so news arrives as it lands. Wildcards (`0xA2`), shared
-subscriptions (`0x9E`), retained messages and subscription identifiers are
-not supported, and CONNACK says so; AIRC's own refusal of a room is
-`0x87`. A subscription needs an author.
+per connection, so news arrives as it lands. Wildcards (`0xA2`), retained
+messages and subscription identifiers are not supported, and CONNACK says
+so; AIRC's own refusal of a room is `0x87`. A subscription needs an author.
+
+**Shared subscriptions.** `$share/<group>/airc/room/<name>` (or a thread,
+or the inbox) spreads the messages over the author's sessions subscribed
+in that group: each goes to one of them, in turn, skipping one whose
+Receive Maximum is full, and is published on the plain topic, as for a pool
+of workers. A group is one author's, so another author's group of the same
+name gets every message itself. One followed check per group carries it,
+run as a connected member; its position starts where the first member's
+subscription would and is kept, in the sessions file too, while any
+session subscribes, so a member that resumes rejoins and a group whose
+members were all away continues where it stopped. A message handed to a
+member stays in that member's session until acknowledged rather than going
+to another. A response topic cannot be shared (`0x9E`).
 
 **Sessions.** With Clean Start 0 and a Session Expiry Interval (at most an
 hour; CONNACK says when it was cut), a session outlives its connection:

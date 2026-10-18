@@ -128,3 +128,31 @@ func TestMQTT5SnapshotBounds(t *testing.T) {
 		t.Fatal("another author refused:", err)
 	}
 }
+
+// A shared subscription group's position is saved with the sessions, and
+// restored while a session still subscribes to it.
+func TestMQTT5SnapshotKeepsGroupPositions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions")
+	s := newMQTT5Store(context.Background())
+	s.path = path
+	member, _, _ := s.take("worker-1", "a:pool", false, time.Hour)
+	member.subs["$share/w/airc/room/a"] = &mqtt5Sub{filter: "$share/w/airc/room/a", kind: mqtt5Room, target: "#a", qos: 1, group: "w"}
+	kept := mqtt5GroupKey("a:pool", "w", mqtt5Room, "#a")
+	orphan := mqtt5GroupKey("a:pool", "gone", mqtt5Room, "#a")
+	s.groups[kept] = &mqtt5Group{owner: "a:pool", name: "w", kind: mqtt5Room, target: "#a", after: "0123456789abcdef0123456789abcdef"}
+	s.groups[orphan] = &mqtt5Group{owner: "a:pool", name: "gone", kind: mqtt5Room, target: "#a", after: "0123456789abcdef0123456789abcdef"}
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	restored := newMQTT5Store(context.Background())
+	restored.path = path
+	if err := restored.load(); err != nil {
+		t.Fatal(err)
+	}
+	if g := restored.groups[kept]; g == nil || g.after != "0123456789abcdef0123456789abcdef" || restored.sessions["worker-1"].subs["$share/w/airc/room/a"].group != "w" {
+		t.Fatalf("restored groups %v", restored.groups)
+	}
+	if restored.groups[orphan] != nil {
+		t.Fatal("restored a group no session subscribes to")
+	}
+}
