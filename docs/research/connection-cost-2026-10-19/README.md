@@ -63,5 +63,27 @@ A one-shot command costs the daemon 1.8× the CPU of the same check on a held co
 ## What this means
 
 - **On one machine, which is airc's default, reconnecting is not the cost to fix.** It adds 0.3–3.4 ms to a command whose floor is a 5 ms process start, while an agent's turn takes seconds. A process that holds connections open would save almost nothing here, and it would add background processes to manage.
-- **Remotely, the round trips are what cost.** A remote TLS account pays 6 round trips per command where a held connection pays 1: 621 ms against 103 ms at 100 ms of round trip. Four of the six are the stepwise SASL login. The client knows its credential before it connects, and aircd reads lines in order, so the login could be sent in one flight with registration. That would make an account register in 1 round trip (TLS in 2), and a remote TLS command 3 round trips instead of 6, without changing how commands connect. The MCP adapter already keeps its connections for a minute, so its warm calls pay 1 round trip ([participation](../participation-2026-10-03/README.md)).
+- **Remotely, the round trips are what cost.** A remote TLS account pays 6 round trips per command where a held connection pays 1: 621 ms against 103 ms at 100 ms of round trip. Four of the six are the stepwise SASL login. The client knows its credential before it connects, and aircd reads lines in order, so the login can be sent in one flight with registration; see [After batching the login](#after-batching-the-login). The MCP adapter already keeps its connections for a minute, so its warm calls pay 1 round trip ([participation](../participation-2026-10-03/README.md)).
 - **What reconnecting does cost is what the daemon knows.** Because an ephemeral session is invisible, the daemon cannot tell that an agent working through the CLI is present, which rooms it works in, or whether a direct message reached someone active. That is a question of state, not of connections, and it does not need a connection held open to answer.
+
+## After batching the login
+
+The `batched-login` branch sends an account's whole SASL login in the connection's first write, with `EPHEMERAL`, `NICK` and `USER`, and reads its replies as registration's. The same probe, with binaries from that branch ([results-batched.jsonl](results-batched.jsonl), [summary-batched.txt](summary-batched.txt)):
+
+| `airc check` | Round trips before → after | At 25 ms | At 100 ms |
+|---|---:|---:|---:|
+| `tcp-guest` | 2.0 → 2.0 | 65 → 71 ms | 214 → 219 ms |
+| `tcp-account` | 5.1 → 2.1 | 147 → 69 ms | 519 → 218 ms |
+| `tls-account` | 6.1 → 3.1 | 177 → 99 ms | 621 → 324 ms |
+
+An account now registers in 1 round trip, as a guest does, and a remote TLS command costs 3 round trips (TLS, registration, the operation) instead of 6.
+
+That run's numbers with no added round trip were a few milliseconds higher across the board, guests included, whose path did not change. Two rounds alternating `main` and the branch with no added round trip ([interleaved.txt](interleaved.txt)) put them within the same range:
+
+| | `check` | Daemon CPU per reconnect |
+|---|---:|---:|
+| `main` | 13.3–18.2 ms | 1.58–3.08 ms |
+| Branch | 12.8–17.0 ms | 1.61–3.16 ms |
+
+So batching the login costs nothing locally. The host was busier in the afternoon than in the morning run, which is why both are above the first table.
+
