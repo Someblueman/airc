@@ -82,15 +82,19 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	_ = conn.SetReadDeadline(deadline)
 	scanner := newScanner(conn)
+	// pendingLogin holds until the server confirms the SASL login, whose
+	// replies arrive before registration completes.
+	pendingLogin := false
 	if c.cfg.IdentityToken != "" && !c.cfg.CreateAccount {
 		if !validIdentityToken(c.cfg.IdentityToken) {
 			_ = conn.Close()
 			return nil, nil, errors.New("invalid account credential")
 		}
-		if err := c.loginSASL(ctx, scanner); err != nil {
+		if err := c.writeLine(c.saslLogin()); err != nil {
 			_ = conn.Close()
 			return nil, nil, err
 		}
+		pendingLogin = true
 	}
 	if c.cfg.IdentityToken != "" && c.cfg.CreateAccount {
 		if !validIdentityToken(c.cfg.IdentityToken) {
@@ -162,6 +166,15 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			_ = conn.Close()
 			return nil, nil, err
 		}
+		if pendingLogin {
+			confirmed, err := saslReply(command)
+			if err != nil {
+				c.clearConn(conn)
+				_ = conn.Close()
+				return nil, nil, err
+			}
+			pendingLogin = !confirmed
+		}
 		if command.Name == "464" || command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && (c.cfg.IdentityToken != "" || c.cfg.AccessToken != "") || (command.Name == "461" || command.Name == "462") && c.cfg.GatewayToken != "" {
 			c.clearConn(conn)
 			_ = conn.Close()
@@ -191,6 +204,11 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
 		}
 		if command.Name == "001" {
+			if pendingLogin {
+				c.clearConn(conn)
+				_ = conn.Close()
+				return nil, nil, errors.New("server registered the connection without confirming its login")
+			}
 			if err := c.rejoin(); err != nil {
 				c.clearConn(conn)
 				_ = conn.Close()
