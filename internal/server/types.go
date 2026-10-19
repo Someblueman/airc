@@ -118,6 +118,7 @@ type Server struct {
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chat             chatState
 	chatAt           string
+	activity         map[string]*activity // by nickname; see activity.go
 	slowPosts        map[string]time.Time
 	signals          map[string]activitySignal
 	seq              uint64

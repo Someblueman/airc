@@ -199,7 +199,7 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	case "HISTORY":
 		s.historyLocked(client, command)
 	case "AGENTS":
-		s.agentsLocked(client)
+		s.agentsLocked(client, command)
 	case "STATUS":
 		s.statusLocked(client)
 	case "WAKE":

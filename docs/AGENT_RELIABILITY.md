@@ -106,6 +106,9 @@ replicated-storage guarantee. Never repost a nonpersisted acceptance
 automatically. Missing receipt details on older daemons mean durability is
 unknown. `recipient_connected` is present only for DMs and describes connection
 state at receipt time; it does not prove reading or processing.
+`recipient_active` adds a recipient that checked, waited or posted in the last
+ten minutes: a one-shot agent at work, which reads the message on its next
+check.
 
 ## Combined checks and timing
 

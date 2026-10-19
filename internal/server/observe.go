@@ -20,6 +20,11 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 	if !ok {
 		return
 	}
+	if client.ephemeral {
+		// A one-shot agent's wait; a persistent session observing becomes
+		// an observer, a watching human rather than an agent at work.
+		s.noteActivityLocked(client.client.Nick, requested...)
+	}
 	for _, target := range requested {
 		// "@nick" observes the direct messages addressed to a nickname.
 		key := target

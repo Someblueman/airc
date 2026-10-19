@@ -26,8 +26,9 @@ func TestProfilesAndPresenceWorkAcrossOneShotConnections(t *testing.T) {
 	if got := mustCLI(t, address, "directory", "--json"); strings.Count(got, "\n") != 1 {
 		t.Fatalf("temporary query nick leaked into directory: %s", got)
 	}
-	if got := mustCLI(t, address, "agents", "--json"); strings.TrimSpace(got) != "[]" {
-		t.Fatalf("one-shot profiles changed connected AGENTS contract: %s", got)
+	// A one-shot agent is listed as active, never as connected.
+	if agents := cliJSON[[]irc.AgentInfo](t, address, "agents"); len(agents) != 1 || agents[0].Nick != "bob" || !agents[0].ConnectedAt.IsZero() || agents[0].ActiveAt.IsZero() || card.Connected {
+		t.Fatalf("agents listed %+v", agents)
 	}
 	advanceServerClock(t, time.Until(card.ExpiresAt)+time.Second)
 	card = cliJSON[irc.DirectoryEvent](t, address, "directory", "--who", "bob")
@@ -44,8 +45,13 @@ func TestProfilesAndPresenceWorkAcrossOneShotConnections(t *testing.T) {
 		t.Fatalf("field clear = %+v", card)
 	}
 	mustCLI(t, address, "profile", "--nick", "bob", "--clear", "--json")
+	// Bob posted recently, so stays listed as active, without the profile.
+	if card = cliJSON[irc.DirectoryEvent](t, address, "directory", "--json"); card.Nick != "bob" || card.AgentProfile != (irc.AgentProfile{}) || !card.Active {
+		t.Fatalf("cleared profile remains: %+v", card)
+	}
+	advanceServerClock(t, 10*time.Minute)
 	if got := mustCLI(t, address, "directory", "--json"); got != "" {
-		t.Fatalf("cleared profile remains: %s", got)
+		t.Fatalf("an agent idle for ten minutes is still listed: %s", got)
 	}
 }
 

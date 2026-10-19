@@ -11,6 +11,7 @@ import (
 // message order (see groupCommit), so appends, broadcasts and receipts keep
 // their order while queries, connection cleanup and later appends proceed.
 func (s *Server) recordLocked(message *Message) []string {
+	s.noteActivityLocked(message.From, message.Target)
 	mentions := s.history.add(*message)
 	if s.histFile == nil && s.commit.idle() {
 		return mentions

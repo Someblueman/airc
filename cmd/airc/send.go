@@ -414,6 +414,9 @@ func outputSend(ctx context.Context, opt options, result *sendResult, check bool
 		}
 		if result.Delivered != nil && !*result.Delivered {
 			suffix = fmt.Sprintf(" (queued: %s can read it with airc check)", msg.Target)
+			if result.Receipt != nil && result.Receipt.RecipientActive != nil && *result.Receipt.RecipientActive {
+				suffix = fmt.Sprintf(" (queued: %s is at work and reads it on its next check)", msg.Target)
+			}
 		}
 		if result.Receipt != nil && !result.Receipt.Persisted {
 			suffix += " (accepted in memory; not persisted to disk)"

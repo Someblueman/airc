@@ -5,6 +5,7 @@ package gateway_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -87,7 +88,7 @@ func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 	}
 	status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
 	var saved core.Result
-	if status != http.StatusOK || json.Unmarshal(body, &saved) != nil || saved.Card == nil || saved.Card.Card != card || saved.SendAttempts != 1 {
+	if status != http.StatusOK || json.Unmarshal(body, &saved) != nil || saved.Card == nil || !reflect.DeepEqual(saved.Card.Card, card) || saved.SendAttempts != 1 {
 		t.Fatalf("stored acknowledgement changed after native expiry: status=%d body=%s", status, body)
 	}
 }

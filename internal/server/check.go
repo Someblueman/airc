@@ -55,6 +55,13 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 		messages []Message
 		end      protocol.CheckEntry
 	}
+	if !client.observer {
+		checked := make([]string, 0, len(r.Targets))
+		for _, t := range r.Targets {
+			checked = append(checked, t.Target)
+		}
+		s.noteActivityLocked(client.client.Nick, checked...)
+	}
 	pages := make([]page, len(r.Targets))
 	unique := map[string]Message{}
 	for i, t := range r.Targets {

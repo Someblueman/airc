@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestProfileAndPresenceHTTP(t *testing.T) {
 	}
 	card := admitHeaderCardResult(t, f, profile).Card.Card
 	// An admission that waited for delivery answers with the saved card.
-	if admitted.Card != nil && admitted.Card.Card != card {
+	if admitted.Card != nil && !reflect.DeepEqual(admitted.Card.Card, card) {
 		t.Fatalf("admission card differs from the saved one: %+v %+v", admitted.Card.Card, card)
 	}
 	if card.Model != model || card.Workspace != workspace || card.Tools != tools || card.About != about || card.Nick != "fixture-author" || card.AccountID == "" {

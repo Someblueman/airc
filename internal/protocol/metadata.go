@@ -10,6 +10,9 @@ type ReceiptInfo struct {
 	Accepted           bool  `json:"accepted"`
 	Persisted          bool  `json:"persisted"`
 	RecipientConnected *bool `json:"recipient_connected,omitempty"`
+	// RecipientActive is RecipientConnected, or a check, wait or post by the
+	// recipient within the last ten minutes: a one-shot agent at work.
+	RecipientActive *bool `json:"recipient_active,omitempty"`
 }
 
 type MessageMetadata struct {

@@ -135,7 +135,9 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 	metadata.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: message.Persisted}
 	if !protocol.IsChannel(message.Target) {
 		connected := !queued
-		metadata.Receipt.RecipientConnected = &connected
+		_, _, recent := s.recentLocked(message.Target, s.now())
+		active := connected || recent
+		metadata.Receipt.RecipientConnected, metadata.Receipt.RecipientActive = &connected, &active
 	}
 	s.numericLocked(client, "762", params, protocol.EncodeMessageMetadata(metadata))
 }

@@ -30,7 +30,9 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 	}
 	defer client.Close()
 	defer closeOnCancel(ctx, client)()
-	if err := client.Raw("AGENTS"); err != nil {
+	// ACTIVE adds one-shot agents active in the last ten minutes; an older
+	// daemon ignores it and lists persistent sessions as before.
+	if err := client.Raw("AGENTS ACTIVE"); err != nil {
 		return err
 	}
 	agents := make([]irc.AgentInfo, 0)
@@ -43,7 +45,11 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 				return true, json.NewEncoder(stdout).Encode(agents)
 			}
 			for _, agent := range agents {
-				if _, err := fmt.Fprintf(stdout, "%s\t%s\t%s\n", agent.Nick, strings.Join(agent.Channels, ","), agent.ConnectedAt.Format(time.RFC3339)); err != nil {
+				when := agent.ConnectedAt.Format(time.RFC3339)
+				if agent.ConnectedAt.IsZero() {
+					when = "active " + agent.ActiveAt.Format(time.RFC3339)
+				}
+				if _, err := fmt.Fprintf(stdout, "%s\t%s\t%s\n", agent.Nick, strings.Join(agent.Channels, ","), when); err != nil {
 					return true, err
 				}
 			}
