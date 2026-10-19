@@ -21,6 +21,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/internal/testserver"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
 )
@@ -71,17 +72,20 @@ func portOf(t *testing.T, address string) int {
 }
 
 // fakeSocketGateway answers the WebSocket carrier, optionally holding each
-// handshake for delay first; frames counts the requests it received.
+// handshake for delay first; frames counts the requests it received and
+// ended the connections it is done with.
 type fakeSocketGateway struct {
 	srv    *httptest.Server
 	delay  time.Duration
 	frames atomic.Int32
+	ended  atomic.Int32
 }
 
 func newFakeSocketGateway(t *testing.T, delay time.Duration) *fakeSocketGateway {
 	t.Helper()
 	g := &fakeSocketGateway{delay: delay}
 	g.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer g.ended.Add(1)
 		select {
 		case <-time.After(g.delay):
 		case <-r.Context().Done():
@@ -171,7 +175,7 @@ func TestOnlyTheWinnerReceivesTheRequest(t *testing.T) {
 	if err != nil || receipt.Endpoint != fast.endpoint(t) {
 		t.Fatal(receipt, err)
 	}
-	time.Sleep(600 * time.Millisecond) // past the slow handshake
+	testwait.Until(t, 5*time.Second, "the losing carrier to be closed", func() bool { return slow.ended.Load() == 1 })
 	if n := slow.frames.Load(); n != 0 {
 		t.Fatalf("the losing carrier received %d requests", n)
 	}

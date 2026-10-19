@@ -2,24 +2,29 @@ package fallback
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/internal/testserver"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // stallProxy forwards TCP to target until stall, after which it forwards
 // nothing in either direction and closes nothing, as a dead NAT path does.
+// accepted counts the connections it took.
 type stallProxy struct {
 	listener net.Listener
+	accepted atomic.Int32
 	mu       sync.Mutex
 	stalled  bool
 }
@@ -38,6 +43,7 @@ func newStallProxy(t *testing.T, target string) *stallProxy {
 			if err != nil {
 				return
 			}
+			p.accepted.Add(1)
 			go func() {
 				defer client.Close()
 				upstream, err := net.Dial("tcp", target)
@@ -86,6 +92,42 @@ func (p *stallProxy) stall() {
 	p.stalled = true
 }
 
+// observers returns a probe of how many of the daemon at addr's
+// connections observe live traffic, as its STATUS says: one per follow the
+// gateway holds there.
+func observers(t *testing.T, addr string) func() int {
+	t.Helper()
+	client, err := irc.Dial(irc.Config{Nick: "status-probe", Addr: addr, Ephemeral: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return func() int {
+		t.Helper()
+		if err := client.Raw("STATUS"); err != nil {
+			t.Fatal(err)
+		}
+		timeout := time.After(5 * time.Second)
+		for {
+			select {
+			case event, ok := <-client.Events():
+				if !ok {
+					t.Fatal("the status connection closed")
+				}
+				if raw, ok := event.(*irc.RawEvent); ok && raw.Command == "770" {
+					var status protocol.ServerStatus
+					if err := json.Unmarshal([]byte(raw.Trailing), &status); err != nil {
+						t.Fatal(err)
+					}
+					return status.Observers
+				}
+			case <-timeout:
+				t.Fatal("no STATUS answer")
+			}
+		}
+	}
+}
+
 // A hedged follow keeps delivering, each message once and in order, when
 // the link it preferred stalls silently, and does not wait out the
 // stalled link's idle time to do it.
@@ -94,13 +136,16 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	endpoints := followGateway(t, addr, 2, 1)
 	proxy := newStallProxy(t, "127.0.0.1:"+strconv.Itoa(endpoints["framed"].Port))
 	stalling := Endpoint{Carrier: protocol.Carrier{Name: "framed", Port: proxy.listener.Addr().(*net.TCPAddr).Port}}
+	other := newStallProxy(t, "127.0.0.1:"+strconv.Itoa(endpoints["websocket"].Port)) // never stalled
+	healthy := Endpoint{Carrier: protocol.Carrier{Name: "websocket", Port: other.listener.Addr().(*net.TCPAddr).Port}}
+	followers := observers(t, addr)
 	poster, err := irc.Dial(irc.Config{Nick: "hedge-poster", Addr: addr, Ephemeral: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer poster.Close()
 
-	c := &Client{Host: "127.0.0.1", Nick: "hedger", Endpoints: []Endpoint{stalling, endpoints["websocket"]}}
+	c := &Client{Host: "127.0.0.1", Nick: "hedger", Endpoints: []Endpoint{stalling, healthy}}
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	var mu sync.Mutex
@@ -118,7 +163,7 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 			return nil
 		})
 	}()
-	time.Sleep(time.Second) // both legs following
+	testwait.Every(t, 10*time.Second, 10*time.Millisecond, "both legs following", func() bool { return followers() == 2 })
 	var sent []string
 	post := func(n int) {
 		for range n {
@@ -134,7 +179,9 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	proxy.stall()
 	stalledAt := time.Now()
 	post(20) // across lease renewals on the other link
-	time.Sleep(3 * time.Second)
+	// A renewal is a new connection: the rest follows one more.
+	renewals := other.accepted.Load()
+	testwait.Until(t, 10*time.Second, "a lease renewal on the other link", func() bool { return other.accepted.Load() > renewals })
 	post(10)
 	deadline := time.Now().Add(10 * time.Second)
 	for {
@@ -180,17 +227,21 @@ func TestFollowHedgedEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reader.Close()
+	followers := observers(t, addr)
 	stop := errors.New("enough")
 	emitted := 0
+	followed := make(chan error, 1)
 	go func() {
-		time.Sleep(time.Second) // both following
-		_ = poster.Send("#ends", "news")
+		followed <- reader.Follow(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(checked Checked) error {
+			emitted += len(checked.Rooms[0].Messages)
+			return stop
+		})
 	}()
-	err = reader.Follow(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(checked Checked) error {
-		emitted += len(checked.Rooms[0].Messages)
-		return stop
-	})
-	if !errors.Is(err, stop) || emitted != 1 {
+	testwait.Every(t, 10*time.Second, 10*time.Millisecond, "both following", func() bool { return followers() == 2 })
+	if err := poster.Send("#ends", "news"); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-followed; !errors.Is(err, stop) || emitted != 1 {
 		t.Fatalf("emit's error: %v after %d messages", err, emitted)
 	}
 
