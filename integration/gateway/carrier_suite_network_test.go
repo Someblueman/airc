@@ -873,10 +873,17 @@ func quicDatagramSuiteWire(t *testing.T, e *suiteEnv) {
 	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("requires_datagrams", func(t *testing.T) {
-		// A peer that does not negotiate datagrams is closed.
+		// A peer that does not negotiate datagrams is closed. The close can
+		// reach the client before its handshake completes, as the transport
+		// error APPLICATION_ERROR (RFC 9000, section 10.2.3).
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
 		conn, err := quic.DialAddr(ctx, e.address, quicSuiteTLS(suiteDial{tls: e.cert.Client}), &quic.Config{})
+		var early *quic.TransportError
+		var closed *quic.ApplicationError
+		if errors.As(err, &early) && early.Remote && early.ErrorCode == quic.ApplicationErrorErrorCode || errors.As(err, &closed) && closed.Remote {
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
