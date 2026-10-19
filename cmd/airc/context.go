@@ -107,7 +107,7 @@ func printContext(w io.Writer, r conversationContext) error {
 			label = "pin "
 		}
 		for _, m := range group {
-			if _, err := fmt.Fprintf(w, "%s%s %s: %s\n", label, m.ID, m.From, indentContinuation(chatBody(m.ChatMetadata, m.ID, m.From, m.Message))); err != nil {
+			if _, err := fmt.Fprintf(w, "%s%s %s: %s\n", label, m.ID, m.From, indentContinuation(chatBody(m.ChatMetadata, m.ID, m.ReplyTo, m.From, m.Message))); err != nil {
 				return err
 			}
 		}

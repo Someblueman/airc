@@ -30,6 +30,22 @@ type ChatMetadata struct {
 	For string `json:"for,omitempty"`
 }
 
+// HandoffStepText is the body a handoff step carries when it has no note
+// of its own, readable as it stands by a client that knows no handoffs.
+func HandoffStepText(kind, offer string) string {
+	switch kind {
+	case "handoff-accept":
+		return "Accepted handoff " + offer
+	case "handoff-decline":
+		return "Declined handoff " + offer
+	case "handoff-done":
+		return "Done with handoff " + offer
+	case "handoff-withdraw":
+		return "Withdrew handoff " + offer
+	}
+	return ""
+}
+
 func EncodeChat(meta ChatMetadata) string {
 	data, _ := json.Marshal(meta)
 	return base64.RawURLEncoding.EncodeToString(data)

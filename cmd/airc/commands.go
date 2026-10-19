@@ -61,6 +61,10 @@ var sessionCommands = map[string]sessionCommand{
 	"retract":   {run: named(runChatCommandSession), mcp: true},
 	"prepare":   {run: named(runChatCommandSession), mcp: true},
 	"waiting":   {run: named(runChatCommandSession), mcp: true},
+	"handoff": {run: func(ctx context.Context, session *agentConnection, _ string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return runHandoffSession(ctx, session, args, stdin, stdout, stderr)
+	}, mcp: true},
+	"handoffs": {run: plain(runHandoffsSession), mcp: true},
 
 	"pin":          {run: named(runChatCommandSession)},
 	"unpin":        {run: named(runChatCommandSession)},

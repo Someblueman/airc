@@ -40,6 +40,19 @@ type mcpPrepareInput struct {
 	Message string `json:"message,omitempty" jsonschema:"Optional short note shown with the signal"`
 }
 
+type mcpHandoffInput struct {
+	Step    string `json:"step,omitempty" jsonschema:"offer (the default), accept, decline, done or withdraw"`
+	ID      string `json:"id,omitempty" jsonschema:"The handoff's ID, for every step but offer"`
+	Channel string `json:"channel,omitempty" jsonschema:"Offer: the room to hand the work to, or to post it in; defaults to AIRC_CHANNEL"`
+	To      string `json:"to,omitempty" jsonschema:"Offer: the nickname the work is for; without channel, a direct handoff"`
+	Message string `json:"message,omitempty" jsonschema:"Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered"`
+}
+type mcpHandoffsInput struct {
+	Channel string `json:"channel,omitempty" jsonschema:"Every handoff in this room, finished ones from the last week included"`
+	ID      string `json:"id,omitempty" jsonschema:"One handoff"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Newest handoffs to list, 1-1000; default 200"`
+}
+
 type mcpUnreadInput struct {
 	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to count besides the inbox; defaults to AIRC_CHANNEL"`
 	Mentions bool     `json:"mentions,omitempty" jsonschema:"Count only direct messages and tags"`
@@ -198,6 +211,43 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 			return a.call(ctx, args, "", 15*time.Second, false)
 		})
 	}
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffInput) (*mcpserver.Result, mcpOutput, error) {
+		args := []string{"handoff"}
+		switch in.Step {
+		case "", "offer":
+			if in.ID != "" {
+				return nil, mcpOutput{}, errors.New("an offer takes no id; it creates one")
+			}
+			for _, pair := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}} {
+				if pair[1] != "" {
+					args = append(args, pair[0]+"="+pair[1])
+				}
+			}
+		case "accept", "decline", "done", "withdraw":
+			if !protocol.ValidMessageID(in.ID) || in.Channel != "" || in.To != "" {
+				return nil, mcpOutput{}, errors.New(in.Step + " takes the handoff's id and no channel or to")
+			}
+			args = append(args, in.Step, in.ID)
+		default:
+			return nil, mcpOutput{}, errors.New("step is offer, accept, decline, done or withdraw")
+		}
+		if in.Message != "" {
+			args = append(args, "--message="+in.Message)
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open and accepted handoffs that concern you: for you, held by you, offered by you, or open to anyone in your rooms. With channel, every handoff in that room, finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
+		args := []string{"handoffs"}
+		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
+			if pair[1] != "" {
+				args = append(args, pair[0]+"="+pair[1])
+			}
+		}
+		if in.Limit != 0 {
+			args = append(args, "--limit", strconv.Itoa(in.Limit))
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) || in.Seconds < 0 || in.Seconds > 900 {
 			return nil, mcpOutput{}, errors.New("valid ID and seconds 1-900 required")

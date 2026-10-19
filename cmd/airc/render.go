@@ -207,7 +207,7 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		}
 	}
 
-	lines := r.bodyLines(cleanBody(chatBody(m.ChatMetadata, m.ID, m.From, m.Message)), max(r.width-prefixWidth, 1))
+	lines := r.bodyLines(cleanBody(chatBody(m.ChatMetadata, m.ID, m.ReplyTo, m.From, m.Message)), max(r.width-prefixWidth, 1))
 	var out strings.Builder
 	rule := r.dayRule(m.Timestamp)
 	out.WriteString(rule)
@@ -278,8 +278,9 @@ func (r *renderer) dayRule(at time.Time) string {
 	return "\n" + r.dim(rule) + "\n"
 }
 
-// chatBody renders a message body with the markers its chat metadata calls for.
-func chatBody(m irc.ChatMetadata, id, from, text string) string {
+// chatBody renders a message body with the markers its chat metadata calls
+// for. replyTo names the handoff a handoff step belongs to.
+func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 	body := text
 	switch m.Kind {
 	case "notice":
@@ -296,6 +297,17 @@ func chatBody(m irc.ChatMetadata, id, from, text string) string {
 		body = "[poll " + id + "] " + body
 		for i, option := range m.PollOptions {
 			body += fmt.Sprintf("\n%d. %s", i+1, option)
+		}
+	case "handoff":
+		if m.For != "" {
+			body = "[handoff " + id + " for " + m.For + "] " + body
+		} else {
+			body = "[handoff " + id + "] " + body
+		}
+	case "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw":
+		// A step without a note already says what it did.
+		if label := protocol.HandoffStepText(m.Kind, replyTo); body != label {
+			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
 		}
 	}
 	if m.Retracted {
