@@ -210,7 +210,7 @@ that owned the nickname when the message was stored, so a reader can tell whose
 inbox it was after the nickname changes hands.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
-`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`. Unknown fields are rejected;
+`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`. Unknown fields are rejected;
 requests are at most 7000 UTF-8 JSON bytes and wire lines at most 8192 bytes.
 Text may travel in the existing `+airc/body` tag instead of JSON. `777` returns
 one JSON `ChatEntry` per result, then `778` ends the response; malformed/invalid
@@ -229,6 +229,9 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `correct`, `retract` | Original retained/pinned `id`, replacement/reason `text`; author/admin only. |
 | `poll` | Room `target`, question `text` up to 1000 bytes, 2–8 distinct options each up to 80 bytes, `seconds` 1–604800. |
 | `vote`, `results`, `close-poll` | Poll `id`; vote `choice` numbered from 1; author/admin closes. |
+| `handoff` | Requires `HANDOFF=1`. Room or nickname `target`, `text` within the message limit, optional `for` (a nickname, in a room). Posts the offer and answers its handoff. |
+| `handoff-accept`, `handoff-decline`, `handoff-done`, `handoff-withdraw` | Offer `id`, optional note `text`. Posts the step as a reply to the offer, where the offer is (a direct handoff's steps go to the other side), and answers the handoff. A step that already took effect for the same actor answers again without posting. |
+| `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open and accepted handoffs that concern the caller. The newest `limit` (1–1000, default 200). |
 
 `CONTEXT_BYTES=1` permits `max_bytes` on context requests. Omission or zero retains
 the legacy response. A nonzero budget counts every `777` line and the final `778`,
@@ -248,7 +251,13 @@ wire framing means a given budget may return fewer records than local trimming.
 `780` carries transient live `ChatEntry` signals, including cancellation and poll
 result updates. `expires_at` defines activity lifetime; cancellation expires now.
 Results include `options`, parallel vote counts, `closed` and scheduled expiry.
-Signals are not history or answers. `UNOBSERVE target[,target...]` removes up to
+Signals are not history or answers. A handoff `ChatEntry` has `action:
+"handoff"`, the offer's `id`, `target` and `from`, `state` (`open`, `accepted`,
+`done`, `declined` or `withdrawn`), `holder` once accepted, and the offer as
+`message`. A room handoff without `for` goes to the first to accept; an
+accepted one its holder declines is open again. Only its addressee accepts or
+declines an addressed handoff, only the holder or an admin marks it done, and
+only the author or an admin withdraws it. `UNOBSERVE target[,target...]` removes up to
 16 subscriptions and acknowledges each with `781`; use canonical thread roots,
 which remain removable after history eviction. Regular observers remain read-only.
 
@@ -262,8 +271,11 @@ gateway carrier is one message. `NOTICE` and multi-target tagged sends are rejec
 slow mode returns `486` with a retry delay; reactions/identical retries bypass it.
 
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
-`retract`, `poll`), `supersedes`, `superseded_by`, `retracted`, `poll_options` and
-`poll_closes_at`. Live messages encode them and `account_id` in the base64url JSON
+`retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-decline`,
+`handoff-done`, `handoff-withdraw`), `supersedes`, `superseded_by`, `retracted`,
+`poll_options`, `poll_closes_at` and `for`. A room message with `for` counts as
+a mention of that nickname, as `@nick` in its body would: an offer's addressee,
+and the author of an accept, decline or done. Live messages encode them and `account_id` in the base64url JSON
 `+airc/chat` tag; receipts/history include them as optional JSON fields. Server
 metadata is derived from authenticated sessions and commands, not accepted from
 client-supplied `+airc/chat` tags. Originals retain their bodies and point to the

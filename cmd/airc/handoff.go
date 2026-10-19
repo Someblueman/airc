@@ -141,15 +141,21 @@ func handoffRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout 
 	})
 }
 
+// handoffState is a handoff's state, with its holder while it has one: the
+// holder of a declined or withdrawn handoff no longer holds it.
+func handoffState(e irc.ChatEntry) string {
+	if e.Holder != "" && (e.State == "accepted" || e.State == "done") {
+		return e.State + " by " + e.Holder
+	}
+	return e.State
+}
+
 // handoffText is one handoff as a line, its offer indented beneath:
 //
 //	handoff ID accepted by builder in #work from planner for builder
 func handoffText(e irc.ChatEntry) string {
 	var text strings.Builder
-	text.WriteString("handoff " + e.ID + " " + e.State)
-	if e.Holder != "" {
-		text.WriteString(" by " + e.Holder)
-	}
+	text.WriteString("handoff " + e.ID + " " + handoffState(e))
 	text.WriteString(" in " + e.Target + " from " + e.From)
 	if e.Message != nil {
 		if e.Message.For != "" && e.Message.For != e.Target {

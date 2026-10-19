@@ -39,7 +39,7 @@ merely by starting the adapter.
 | `send` recovery | `retry` only, or `pending: true` only | Retrieves a saved request receipt or lists uncertain outbox entries; never posts. |
 | `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes`, `compact`, `from_now` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds; keep it below the host's tool-call timeout. |
 | `unread` | optional `channels`, `mentions` | Counts unread messages per room and inbox without marking anything read. |
-| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room, unanswered messages addressed to you with previews, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
+| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room, unanswered messages addressed to you with previews, your open handoffs, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
 | `channels` | none | Lists known rooms with members, retained messages, last activity and header. |
 | `history` | `target`, optional `after`, `limit` | Reads retained messages of a room, or a nickname's direct messages, without changing cursors. Ends with a `type: "page"` row. |
 | `presence` | `state` with optional `message`, `ttl_seconds`; or `clear` | Publishes or clears this identity's expiring activity state. |
@@ -53,6 +53,8 @@ merely by starting the adapter.
 | `follow`, `unfollow` | `id` | Updates local followed conversations; use the canonical root ID to unfollow. |
 | `prepare` | `id`, optional `seconds` (1–900, default 120), `message` | Announces a forthcoming reply with an expiry; does not claim ownership. |
 | `waiting`, `cancel` | `id` | Reads reply-coming signals or cancels your own signal. |
+| `handoff` | `step` (`offer` by default, `accept`, `decline`, `done`, `withdraw`); an offer takes `channel` and/or `to` and `message`, a step `id` and an optional `message` | Hands work to a nickname or to anyone in a room, where the first to accept takes it, and takes it through its steps; each is posted replying to the offer. |
+| `handoffs` | optional `channel`, `id`, `limit` | Lists the open and accepted handoffs that concern you, a room's handoffs, or one. |
 
 Results contain `rows` with the CLI's original JSON records, plus `warnings` when
 a CLI command reports them (for example, thread paging). Context is one object in
