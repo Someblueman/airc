@@ -1,0 +1,495 @@
+// connmeasure compares what an agent pays for airc's one-shot commands, which
+// connect, register, do one thing and close, with the same operations over one
+// connection held open. It runs real aircd and airc binaries against isolated
+// daemons on scratch ports and state directories, with simulated round trips.
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"math/big"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
+)
+
+var (
+	aircdBin = flag.String("aircd", "", "aircd binary")
+	aircBin  = flag.String("airc", "", "airc binary")
+	samples  = flag.Int("n", 30, "samples per operation")
+	cycles   = flag.Int("cycles", 1000, "operations per server CPU measurement")
+	outDir   = flag.String("out", "", "output directory (must not exist)")
+	rttList  = flag.String("rtt", "0,25,100", "simulated round trips in milliseconds")
+)
+
+type row struct {
+	Scenario string    `json:"scenario"`
+	RTTms    int       `json:"rtt_ms"`
+	Mode     string    `json:"mode"` // cli, held, connect, server_cpu
+	Op       string    `json:"op"`
+	N        int       `json:"n"`
+	P50ms    float64   `json:"p50_ms"`
+	P90ms    float64   `json:"p90_ms"`
+	Minms    float64   `json:"min_ms"`
+	Maxms    float64   `json:"max_ms"`
+	Conns    float64   `json:"connections_per_op,omitempty"`
+	CPUms    float64   `json:"server_cpu_ms_per_op,omitempty"`
+	Raw      []float64 `json:"raw_ms,omitempty"`
+}
+
+var results []row
+
+func record(r row) {
+	results = append(results, r)
+	fmt.Fprintf(os.Stderr, "%-14s rtt=%-3d %-7s %-8s p50=%8.2fms p90=%8.2fms conns=%.2f cpu=%.3fms\n", r.Scenario, r.RTTms, r.Mode, r.Op, r.P50ms, r.P90ms, r.Conns, r.CPUms)
+}
+
+func stats(r row, ms []float64) row {
+	sorted := slices.Clone(ms)
+	slices.Sort(sorted)
+	at := func(q float64) float64 { return sorted[min(len(sorted)-1, int(q*float64(len(sorted))))] }
+	r.N, r.P50ms, r.P90ms, r.Minms, r.Maxms, r.Raw = len(ms), at(0.5), at(0.9), sorted[0], sorted[len(sorted)-1], ms
+	return r
+}
+
+func main() {
+	flag.Parse()
+	if *aircdBin == "" || *aircBin == "" || *outDir == "" {
+		fatalf("need -aircd, -airc and -out")
+	}
+	if err := os.Mkdir(*outDir, 0o700); err != nil {
+		fatalf("%v", err)
+	}
+	work := filepath.Join(*outDir, "work")
+	must(os.Mkdir(work, 0o700))
+	caPath, certPath, keyPath := writeCerts(work)
+	tokenPath := filepath.Join(work, "access.token")
+	run(nil, *aircBin, "service", "token", "init", "--file", tokenPath)
+	accessToken := strings.TrimSpace(string(mustRead(tokenPath)))
+
+	plain := startDaemon(work, "plain", "--listen", freeAddr(), "--accounts-file", filepath.Join(work, "plain", "accounts.json"))
+	// A socket path must stay under 108 bytes: name it from the work directory.
+	must(os.Chdir(work))
+	sock := "unix.sock"
+	unixd := startDaemon(work, "unix", "--unix", sock)
+	tlsd := startDaemon(work, "tls", "--listen", freeAddr(), "--tls-cert", certPath, "--tls-key", keyPath, "--access-token-file", tokenPath, "--accounts-file", filepath.Join(work, "tls", "accounts.json"))
+	defer func() {
+		for _, d := range []*daemon{plain, unixd, tlsd} {
+			d.stop()
+		}
+	}()
+	_ = unixd
+
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(mustRead(caPath))
+	tlsClient := &tls.Config{RootCAs: pool, ServerName: "127.0.0.1", MinVersion: tls.VersionTLS13}
+
+	tlsFlags := []string{"--tls-ca", caPath, "--access-token-file", tokenPath}
+
+	var rtts []int
+	for _, s := range strings.Split(*rttList, ",") {
+		v, err := strconv.Atoi(s)
+		must(err)
+		rtts = append(rtts, v)
+	}
+
+	// Process start alone: the floor any one-shot command pays.
+	{
+		var ms []float64
+		for range *samples {
+			start := time.Now()
+			run(nil, *aircBin, "--help")
+			ms = append(ms, since(start))
+		}
+		record(stats(row{Scenario: "process", Mode: "cli", Op: "help"}, ms))
+	}
+
+	type scenario struct {
+		name     string
+		upstream string
+		flags    []string // airc connection flags, without --addr
+		account  bool
+		cfg      irc.Config
+	}
+	scenarios := []scenario{
+		{name: "tcp-guest", upstream: plain.addr, cfg: irc.Config{}},
+		{name: "tcp-account", upstream: plain.addr, account: true, cfg: irc.Config{}},
+		{name: "tls-account", upstream: tlsd.addr, flags: tlsFlags, account: true, cfg: irc.Config{TLSConfig: tlsClient, AccessToken: accessToken}},
+	}
+	for _, rtt := range rtts {
+		for _, sc := range scenarios {
+			proxy := newDelayProxy(sc.upstream, time.Duration(rtt)*time.Millisecond)
+			flags := append([]string{"--addr", proxy.addr}, sc.flags...)
+			cfg := sc.cfg
+			cfg.Addr, cfg.Nick = proxy.addr, fmt.Sprintf("%s-%d", sc.name, rtt)
+			// An identity belongs to the address it was created at, so
+			// each proxy gets its own account, created before timing.
+			if sc.account {
+				id := createAccount(work, cfg.Nick, flags)
+				flags = append(flags, "--identity", id.path)
+				cfg.IdentityToken = id.token
+			}
+			measureScenario(sc.name, rtt, flags, cfg, proxy)
+			proxy.close()
+		}
+	}
+	measureScenario("unix-guest", 0, []string{"--unix", sock}, irc.Config{Nick: "unix-guest-0", Network: "unix", Addr: sock}, nil)
+
+	// What the daemon spends: connections opened per operation against
+	// operations over one held connection, with no proxy.
+	plainCPU := createAccount(work, "cpu-plain", []string{"--addr", plain.addr})
+	tlsCPU := createAccount(work, "cpu-tls", append([]string{"--addr", tlsd.addr}, tlsFlags...))
+	for _, sc := range []struct {
+		name string
+		d    *daemon
+		cfg  irc.Config
+	}{
+		{"tcp-guest", plain, irc.Config{Nick: "cpu-guest", Addr: plain.addr}},
+		{"tcp-account", plain, irc.Config{Nick: "cpu-plain", IdentityToken: plainCPU.token, Addr: plain.addr}},
+		{"tls-account", tlsd, irc.Config{Nick: "cpu-tls", IdentityToken: tlsCPU.token, TLSConfig: tlsClient, AccessToken: accessToken, Addr: tlsd.addr}},
+	} {
+		serverCPU(sc.name, sc.d, sc.cfg)
+	}
+
+	f, err := os.Create(filepath.Join(*outDir, "results.jsonl"))
+	must(err)
+	enc := json.NewEncoder(f)
+	for _, r := range results {
+		must(enc.Encode(r))
+	}
+	must(f.Close())
+}
+
+func measureScenario(name string, rtt int, flags []string, cfg irc.Config, proxy *delayProxy) {
+	state, err := os.MkdirTemp(*outDir, "state-")
+	must(err)
+	env := append(os.Environ(), "AIRC_STATE_DIR="+state, "AIRC_NICK=", "AIRC_CHANNEL=", "AIRC_CARRIERS=")
+	nick := cfg.Nick
+	commands := []struct {
+		op   string
+		args func(i int) []string
+	}{
+		{"unread", func(int) []string { return []string{"unread", "--nick", nick, "--channel", "#bench"} }},
+		{"check", func(int) []string { return []string{"check", "--nick", nick, "--channel", "#bench", "--json"} }},
+		{"send", func(i int) []string {
+			return []string{"send", "--nick", nick, "--channel", "#bench", "--message", fmt.Sprintf("bench %s %d %d", name, rtt, i), "--json"}
+		}},
+	}
+	times := map[string][]float64{}
+	conns := map[string]int64{}
+	for i := -1; i < *samples; i++ { // sample -1 warms caches and the cursor files
+		for _, c := range commands {
+			before := int64(0)
+			if proxy != nil {
+				before = proxy.accepted.Load()
+			}
+			start := time.Now()
+			run(env, *aircBin, append(c.args(i), flags...)...)
+			elapsed := since(start)
+			if i < 0 {
+				continue
+			}
+			times[c.op] = append(times[c.op], elapsed)
+			if proxy != nil {
+				conns[c.op] += proxy.accepted.Load() - before
+			}
+		}
+	}
+	for _, c := range commands {
+		r := stats(row{Scenario: name, RTTms: rtt, Mode: "cli", Op: c.op}, times[c.op])
+		if proxy != nil {
+			r.Conns = float64(conns[c.op]) / float64(*samples)
+		}
+		record(r)
+	}
+
+	// The same operations over one connection held open, and connecting alone.
+	cfg.Ephemeral = true
+	ctx := context.Background()
+	var connect []float64
+	for range *samples {
+		start := time.Now()
+		c, err := irc.DialContext(ctx, cfg)
+		must(err)
+		connect = append(connect, since(start))
+		c.Close()
+	}
+	record(stats(row{Scenario: name, RTTms: rtt, Mode: "connect", Op: "register"}, connect))
+	c, err := irc.DialContext(ctx, cfg)
+	must(err)
+	defer c.Close()
+	check := func() {
+		_, err := irc.RequestCheck(ctx, c, irc.CheckRequest{Targets: []irc.CheckTarget{{Target: "#bench", Limit: 100}}, MaxMessages: 100}, nil)
+		must(err)
+	}
+	send := func(i int) {
+		id := fmt.Sprintf("held-%d-%d-%d", rtt, i, time.Now().UnixNano())
+		must(c.SendWithID("#bench", "held "+id, id))
+		for e := range c.Events() {
+			if r, ok := e.(*irc.SendReceiptEvent); ok && r.RequestID == id {
+				return
+			}
+		}
+		fatalf("connection closed before the receipt")
+	}
+	check()
+	send(-1)
+	var checks, sends []float64
+	for i := range *samples {
+		start := time.Now()
+		check()
+		checks = append(checks, since(start))
+		start = time.Now()
+		send(i)
+		sends = append(sends, since(start))
+	}
+	record(stats(row{Scenario: name, RTTms: rtt, Mode: "held", Op: "check"}, checks))
+	record(stats(row{Scenario: name, RTTms: rtt, Mode: "held", Op: "send"}, sends))
+}
+
+func serverCPU(name string, d *daemon, cfg irc.Config) {
+	cfg.Ephemeral = true
+	ctx := context.Background()
+	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: "#bench", Limit: 20}}, MaxMessages: 20}
+	measure := func(mode string, op func()) {
+		op() // warm
+		cpu0 := d.cpu()
+		start := time.Now()
+		var ms []float64
+		for range *cycles {
+			s := time.Now()
+			op()
+			ms = append(ms, since(s))
+		}
+		_ = start
+		r := stats(row{Scenario: name, Mode: "server_cpu", Op: mode}, ms)
+		r.CPUms = (d.cpu() - cpu0) / float64(*cycles)
+		r.Raw = nil
+		record(r)
+	}
+	measure("reconnect", func() {
+		c, err := irc.DialContext(ctx, cfg)
+		must(err)
+		_, err = irc.RequestCheck(ctx, c, request, nil)
+		must(err)
+		c.Close()
+	})
+	c, err := irc.DialContext(ctx, cfg)
+	must(err)
+	defer c.Close()
+	measure("held", func() {
+		_, err := irc.RequestCheck(ctx, c, request, nil)
+		must(err)
+	})
+}
+
+type identity struct{ path, token string }
+
+func createAccount(work, nick string, flags []string) identity {
+	path := filepath.Join(work, nick+".identity.json")
+	state := filepath.Join(work, "state-"+nick)
+	run(append(os.Environ(), "AIRC_STATE_DIR="+state), *aircBin, append([]string{"user", "create", "--nick", nick, "--identity", path}, flags...)...)
+	var saved struct {
+		Token string `json:"token"`
+	}
+	must(json.Unmarshal(mustRead(path), &saved))
+	return identity{path, saved.Token}
+}
+
+// daemons are stopped on any failure, so none outlives the probe.
+var daemons []*daemon
+
+func fatalf(format string, args ...any) {
+	for _, d := range daemons {
+		d.stop()
+	}
+	log.Fatalf(format, args...)
+}
+
+type daemon struct {
+	cmd  *exec.Cmd
+	addr string
+}
+
+func startDaemon(work, name string, args ...string) *daemon {
+	dir := filepath.Join(work, name)
+	must(os.MkdirAll(dir, 0o700))
+	logf, err := os.Create(filepath.Join(dir, "aircd.log"))
+	must(err)
+	args = append(args, "--history-file", filepath.Join(dir, "history.jsonl"))
+	cmd := exec.Command(*aircdBin, args...)
+	cmd.Stdout, cmd.Stderr = logf, logf
+	must(cmd.Start())
+	d := &daemon{cmd: cmd}
+	daemons = append(daemons, d)
+	network, addr := "tcp", ""
+	for i, a := range args {
+		switch a {
+		case "--listen":
+			addr = args[i+1]
+		case "--unix":
+			network, addr = "unix", args[i+1]
+		}
+	}
+	d.addr = addr
+	for deadline := time.Now().Add(10 * time.Second); ; {
+		if c, err := net.Dial(network, addr); err == nil {
+			c.Close()
+			return d
+		}
+		if time.Now().After(deadline) {
+			fatalf("%s did not start; see %s", name, logf.Name())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// cpu is the daemon's user and system CPU so far, in milliseconds.
+func (d *daemon) cpu() float64 {
+	data := mustRead(fmt.Sprintf("/proc/%d/stat", d.cmd.Process.Pid))
+	fields := strings.Fields(string(data[bytes.LastIndexByte(data, ')')+2:]))
+	utime, _ := strconv.ParseFloat(fields[11], 64)
+	stime, _ := strconv.ParseFloat(fields[12], 64)
+	return (utime + stime) * 10 // USER_HZ is 100 on Linux
+}
+
+func (d *daemon) stop() {
+	_ = d.cmd.Process.Signal(os.Interrupt)
+	done := make(chan struct{})
+	go func() { _ = d.cmd.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = d.cmd.Process.Kill()
+		<-done
+	}
+}
+
+// delayProxy forwards TCP with half the round trip added in each direction,
+// keeping each direction's order. accepted counts connections opened.
+type delayProxy struct {
+	addr     string
+	l        net.Listener
+	accepted atomic.Int64
+	wg       sync.WaitGroup
+}
+
+func newDelayProxy(upstream string, rtt time.Duration) *delayProxy {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	must(err)
+	p := &delayProxy{addr: l.Addr().String(), l: l}
+	p.wg.Go(func() {
+		for {
+			front, err := l.Accept()
+			if err != nil {
+				return
+			}
+			back, err := net.Dial("tcp", upstream)
+			if err != nil {
+				front.Close()
+				continue
+			}
+			p.accepted.Add(1)
+			pump := func(dst, src net.Conn) {
+				type chunk struct {
+					due  time.Time
+					data []byte
+				}
+				queue := make(chan chunk, 4096)
+				go func() {
+					defer dst.Close()
+					for c := range queue {
+						time.Sleep(time.Until(c.due))
+						if _, err := dst.Write(c.data); err != nil {
+							return
+						}
+					}
+				}()
+				buf := make([]byte, 64<<10)
+				for {
+					n, err := src.Read(buf)
+					if n > 0 {
+						queue <- chunk{time.Now().Add(rtt / 2), slices.Clone(buf[:n])}
+					}
+					if err != nil {
+						close(queue)
+						return
+					}
+				}
+			}
+			go pump(back, front)
+			go pump(front, back)
+		}
+	})
+	return p
+}
+
+func (p *delayProxy) close() { p.l.Close(); p.wg.Wait() }
+
+func writeCerts(dir string) (ca, cert, key string) {
+	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caTmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "connmeasure CA"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	must(err)
+	leafKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	leafTmpl := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "127.0.0.1"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+	caCert, _ := x509.ParseCertificate(caDER)
+	leafDER, err := x509.CreateCertificate(rand.Reader, leafTmpl, caCert, &leafKey.PublicKey, caKey)
+	must(err)
+	keyDER, _ := x509.MarshalECPrivateKey(leafKey)
+	ca, cert, key = filepath.Join(dir, "ca.pem"), filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	must(os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), 0o600))
+	must(os.WriteFile(cert, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), 0o600))
+	must(os.WriteFile(key, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600))
+	return
+}
+
+func freeAddr() string {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	must(err)
+	defer l.Close()
+	return l.Addr().String()
+}
+
+func run(env []string, bin string, args ...string) {
+	cmd := exec.Command(bin, args...)
+	if env != nil {
+		cmd.Env = env
+	}
+	var stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = io.Discard, &stderr
+	if err := cmd.Run(); err != nil {
+		fatalf("%s %s: %v\n%s", filepath.Base(bin), strings.Join(args, " "), err, stderr.String())
+	}
+}
+
+func since(t time.Time) float64 { return float64(time.Since(t).Microseconds()) / 1000 }
+
+func mustRead(path string) []byte { data, err := os.ReadFile(path); must(err); return data }
+
+func must(err error) {
+	if err != nil {
+		fatalf("%v", err)
+	}
+}
