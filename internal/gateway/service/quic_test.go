@@ -207,7 +207,8 @@ func TestRawQUICHoldsEarlyDataUntilHandshake(t *testing.T) {
 	})
 	clientTLS := cert.Client.Clone()
 	clientTLS.NextProtos = []string{adapter.QUICALPN}
-	clientTLS.ClientSessionCache = tls.NewLRUClientSessionCache(4)
+	tickets := make(chan struct{}, 1)
+	clientTLS.ClientSessionCache = ticketCache{tls.NewLRUClientSessionCache(4), tickets}
 	dialCtx, finish := context.WithTimeout(ctx, 10*time.Second)
 	defer finish()
 	// A full handshake leaves a session ticket.
@@ -215,7 +216,11 @@ func TestRawQUICHoldsEarlyDataUntilHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	select {
+	case <-tickets:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no session ticket after the full handshake")
+	}
 	_ = first.CloseWithError(0, "")
 
 	// answered reports whether the server served the stream: it answers
@@ -243,6 +248,22 @@ func TestRawQUICHoldsEarlyDataUntilHandshake(t *testing.T) {
 	}
 	if conn, ok := answered(owner.addr().String()); !ok || !conn.ConnectionState().Used0RTT {
 		t.Fatalf("a resumed 0-RTT request was answered: %v (0-RTT %v)", ok, conn.ConnectionState().Used0RTT)
+	}
+}
+
+// ticketCache signals each session ticket it stores.
+type ticketCache struct {
+	tls.ClientSessionCache
+	stored chan struct{}
+}
+
+func (c ticketCache) Put(key string, session *tls.ClientSessionState) {
+	c.ClientSessionCache.Put(key, session)
+	if session != nil {
+		select {
+		case c.stored <- struct{}{}:
+		default:
+		}
 	}
 }
 

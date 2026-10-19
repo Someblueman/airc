@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -87,9 +88,13 @@ func TestServeCoAPUDPObserveRunsAfterReadyMarker(t *testing.T) {
 // A Reset of a confirmable notification cancels its watch over plain UDP, as
 // it does over DTLS (RFC 7641 section 3.6). The client drops the watch's first
 // page unacknowledged and answers it with a Reset carrying its message ID. The
-// scripted AIRC would keep the watch alive, a page every two seconds, until
-// its lease ends; instead its session ends at once and no later page follows.
+// scripted AIRC would keep the watch alive, a page every StreamPageInterval,
+// until its lease ends; instead its session ends at once and no later page
+// follows. A shorter interval keeps the wait for that page brief.
 func TestServeCoAPUDPResetCancelsWatch(t *testing.T) {
+	interval := backend.StreamPageInterval
+	t.Cleanup(func() { backend.StreamPageInterval = interval })
+	backend.StreamPageInterval = 500 * time.Millisecond
 	f := newRouteFixture(t)
 	upstream := scriptCoAPUDPWatchUpstream(t, f.c.Upstream.Address)
 	pages := make(chan int32, 16)
@@ -141,8 +146,8 @@ func TestServeCoAPUDPResetCancelsWatch(t *testing.T) {
 		t.Fatal("the Reset did not end the watch's AIRC session promptly")
 	}
 	t.Logf("watch ended %s after the Reset", time.Since(resetAt))
-	// The next page was due two seconds after the first.
-	time.Sleep(time.Until(paged.Add(2500 * time.Millisecond)))
+	// The next page was due one interval after the first.
+	time.Sleep(time.Until(paged.Add(backend.StreamPageInterval * 5 / 4)))
 	for len(pages) > 0 {
 		if later := <-pages; later != mid {
 			t.Fatalf("page MID=%d notified after the Reset of MID=%d", later, mid)
