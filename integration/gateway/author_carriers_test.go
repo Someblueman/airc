@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -166,7 +167,13 @@ func TestAuthorStateCrossesCarriersAndRestarts(t *testing.T) {
 	if status := plainHTTP(t, http.MethodPost, "http://"+first.addresses["web"]+"/v1/messages", parked, nil, nil); status != http.StatusAccepted {
 		t.Fatal("registered post", status)
 	}
-	time.Sleep(1500 * time.Millisecond) // at least one failed attempt
+	// Wait for at least one failed attempt.
+	firstBase := "http://" + first.addresses["web"]
+	testwait.Every(t, 10*time.Second, 20*time.Millisecond, "a failed attempt to reach AIRC", func() bool {
+		var result core.Result
+		status := plainHTTP(t, http.MethodGet, firstBase+"/v1/requests/parked", nil, authorHeaders("alice", aliceToken), &result)
+		return status == http.StatusOK && result.SendAttempts > 0 && result.Failure != nil
+	})
 	first.stop(t)
 	second := startAuthorGateway(t, c)
 	base = "http://" + second.addresses["web"]

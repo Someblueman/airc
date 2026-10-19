@@ -238,8 +238,9 @@ func TestBackendFollowBatchesABurst(t *testing.T) {
 		return frame{}
 	}
 	snapshot := take()
-	// Quiet for longer than the batch: the first post is read at once.
-	time.Sleep(800 * time.Millisecond)
+	// Quiet for longer than the batch, which runs from before the snapshot
+	// frame: the first post is read at once.
+	time.Sleep(time.Until(snapshot.at.Add(b.FollowBatch())))
 	sent := time.Now()
 	if err := poster.Send("#burst", "first"); err != nil {
 		t.Fatal(err)
@@ -270,5 +271,4 @@ func TestBackendFollowBatchesABurst(t *testing.T) {
 	if got != 5 || batched.messages != 5 {
 		t.Fatalf("the burst came in %d messages, the last frame holding %d", got, batched.messages)
 	}
-	_ = snapshot
 }
