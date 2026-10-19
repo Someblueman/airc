@@ -364,7 +364,6 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 		return nil
 	}
 	notify := h.Offer.From // who the step is for
-	var fallback string
 	switch r.Action {
 	case "handoff-accept":
 		switch {
@@ -375,7 +374,7 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 		case h.Offer.For != "" && !s.isNickLocked(client, h.Offer.For):
 			return errors.New("this handoff is for " + h.Offer.For)
 		}
-		h.State, h.Holder, h.HolderAccount, fallback = handoffAccepted, client.client.Nick, client.accountID, "Accepted"
+		h.State, h.Holder, h.HolderAccount = handoffAccepted, client.client.Nick, client.accountID
 	case "handoff-decline":
 		switch {
 		case holdsHandoff(client, h) && room && h.Offer.For == "":
@@ -388,7 +387,6 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 		default:
 			return errors.New("only the handoff's holder, or the person it is for, may decline it")
 		}
-		fallback = "Declined"
 	case "handoff-done":
 		if h.State != handoffAccepted {
 			return fmt.Errorf("handoff is %s", describeHandoff(h))
@@ -396,7 +394,7 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 		if !holdsHandoff(client, h) && !client.admin {
 			return errors.New("only " + h.Holder + ", who accepted it, may mark it done")
 		}
-		h.State, fallback = handoffDone, "Done"
+		h.State = handoffDone
 	case "handoff-withdraw":
 		if !h.live() {
 			return fmt.Errorf("handoff is %s", describeHandoff(h))
@@ -405,11 +403,11 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 			return errors.New("only the author or an admin may withdraw this handoff")
 		}
 		notify = cmp.Or(h.Holder, h.Offer.For)
-		h.State, fallback = handoffWithdrawn, "Withdrawn"
+		h.State = handoffWithdrawn
 	default:
 		return errors.New("unknown CHAT action")
 	}
-	body, err := s.handoffBody(r.Text, fallback)
+	body, err := s.handoffBody(r.Text, protocol.HandoffStepText(r.Action, h.Offer.ID))
 	if err != nil {
 		return err
 	}
@@ -437,11 +435,13 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 	return nil
 }
 
+// postHandoffLocked posts a step's message and answers with the state the
+// step produced: a later step may land while this one waits for its sync.
 func (s *Server) postHandoffLocked(client *session, m Message, h handoff) {
 	mentions := s.recordLocked(&m)
 	s.broadcastMessageLocked(m, client.client.Username, mentions)
 	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
-	s.chatEntryLocked(client, handoffEntry(s.handoffs[h.Offer.ID]))
+	s.chatEntryLocked(client, handoffEntry(h))
 }
 
 func describeHandoff(h handoff) string {

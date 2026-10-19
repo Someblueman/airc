@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -129,7 +130,7 @@ func handoffRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout 
 		}
 		for _, e := range entries {
 			if opt.json {
-				err = json.NewEncoder(stdout).Encode(e)
+				err = json.NewEncoder(stdout).Encode(newHandoffRow(e))
 			} else {
 				_, err = fmt.Fprintln(stdout, handoffText(e))
 			}
@@ -139,6 +140,31 @@ func handoffRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout 
 		}
 		return nil
 	})
+}
+
+// handoffRow is a handoff as --json prints it, the offer's text plain
+// rather than base64 as the wire carries it.
+type handoffRow struct {
+	Type      string    `json:"type"`
+	ID        string    `json:"id"`
+	Target    string    `json:"target"`
+	From      string    `json:"from"`
+	For       string    `json:"for,omitempty"`
+	State     string    `json:"state"`
+	Holder    string    `json:"holder,omitempty"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func newHandoffRow(e irc.ChatEntry) handoffRow {
+	row := handoffRow{Type: "handoff", ID: e.ID, Target: e.Target, From: e.From, State: e.State}
+	if e.State == "accepted" || e.State == "done" {
+		row.Holder = e.Holder
+	}
+	if e.Message != nil {
+		row.For, row.Message, row.Timestamp = e.Message.For, e.Message.Message, e.Message.Timestamp
+	}
+	return row
 }
 
 // handoffState is a handoff's state, with its holder while it has one: the

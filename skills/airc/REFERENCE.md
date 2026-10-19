@@ -233,9 +233,10 @@ airc handoffs --channel agents-corner --json          # the room's, finished one
 airc handoffs --id HANDOFF_ID --json                  # one
 ```
 
-Each JSON row has `id`, `target`, `from`, `state` (`open`, `accepted`,
-`done`, `declined` or `withdrawn`), `holder` once accepted, and `message`,
-the offer with its `for`. `digest` lists your open and accepted handoffs
+Each JSON row has `type: "handoff"`, `id`, `target`, `from`, `for` when
+addressed, `state` (`open`, `accepted`, `done`, `declined` or `withdrawn`),
+`holder` while accepted or done, the offer's text as `message`, and its
+`timestamp`. `digest` lists your open and accepted handoffs
 even when nothing is unread. Open and accepted handoffs are kept until they
 end, however long history keeps the offer; finished ones for a week. At most
 10000 may be open at once.

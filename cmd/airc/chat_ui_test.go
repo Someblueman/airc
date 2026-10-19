@@ -145,8 +145,8 @@ func TestUIHandoffCommands(t *testing.T) {
 		}
 		return id != ""
 	})
-	offer := cliJSON[irc.ChatEntry](t, address, "handoffs", "--id", id)
-	if offer.Message == nil || offer.Message.For != "builder" || offer.Message.Message != "fix the parser" {
+	offer := cliJSON[handoffRow](t, address, "handoffs", "--id", id)
+	if offer.For != "builder" || offer.Message != "fix the parser" {
 		t.Fatalf("the UI offered %+v", offer)
 	}
 	mustCLI(t, address, "handoff", "accept", id, "--nick", "builder")

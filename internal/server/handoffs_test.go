@@ -190,7 +190,7 @@ func TestRoomHandoffGivenBackIsOpenAgain(t *testing.T) {
 	if gone := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff-withdraw", ID: offer.ID}); gone.State != "withdrawn" {
 		t.Fatalf("withdraw %+v", gone)
 	}
-	if m := nextMessage(t, reviewer, "handoff-withdraw"); m.For != "reviewer" || m.Message != "Withdrawn" {
+	if m := nextMessage(t, reviewer, "handoff-withdraw"); m.For != "reviewer" || m.Message != "Withdrew handoff "+offer.ID {
 		t.Fatalf("the holder was told %+v", m)
 	}
 }
@@ -354,4 +354,56 @@ func listen(t *testing.T) net.Listener {
 		t.Fatal(err)
 	}
 	return listener
+}
+
+// Takers racing for a room handoff, with posts waiting on history syncs:
+// exactly one holds it, and every other is told who does.
+func TestConcurrentAcceptsHaveOneWinner(t *testing.T) {
+	dir := t.TempDir()
+	address, _ := startServer(t, Config{HistoryLimit: 64, PingInterval: time.Hour}, func(s *Server) error {
+		for _, err := range []error{s.RestoreHistory(filepath.Join(dir, "history")), s.RestoreHandoffs(filepath.Join(dir, "handoffs"))} {
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	planner := handoffClient(t, address, "planner", "#work")
+	offer := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "one of you, please"})
+	takers := make([]*irc.Client, 8)
+	for i := range takers {
+		takers[i] = handoffClient(t, address, "taker"+string(rune('a'+i)), "#work")
+	}
+	type outcome struct {
+		holder string
+		err    error
+	}
+	results := make(chan outcome, len(takers))
+	var start sync.WaitGroup
+	start.Add(1)
+	for _, c := range takers {
+		go func() {
+			start.Wait()
+			entries, _, err := handoffChat(t, c, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID})
+			if err == nil && len(entries) == 1 {
+				results <- outcome{holder: entries[0].Holder}
+				return
+			}
+			results <- outcome{err: err}
+		}()
+	}
+	start.Done()
+	var winners []string
+	for range takers {
+		r := <-results
+		switch {
+		case r.err == nil:
+			winners = append(winners, r.holder)
+		case !strings.Contains(r.err.Error(), "already accepted by "):
+			t.Fatal(r.err)
+		}
+	}
+	if len(winners) != 1 {
+		t.Fatalf("%d takers won: %v", len(winners), winners)
+	}
 }

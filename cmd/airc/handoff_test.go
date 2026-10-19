@@ -3,14 +3,12 @@ package main
 import (
 	"strings"
 	"testing"
-
-	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestHandoffThroughTheCLI(t *testing.T) {
 	address := chatServer(t, 64)
-	offer := cliJSON[irc.ChatEntry](t, address, "handoff", "--nick", "planner", "--channel", "work", "--to", "builder", "--message", "finish task 7 on branch work-7")
-	if offer.State != "open" || offer.Target != "#work" || offer.Message == nil || offer.Message.For != "builder" {
+	offer := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--to", "builder", "--message", "finish task 7 on branch work-7")
+	if offer.Type != "handoff" || offer.State != "open" || offer.Target != "#work" || offer.For != "builder" || offer.Message != "finish task 7 on branch work-7" || offer.Timestamp.IsZero() {
 		t.Fatalf("offer %+v", offer)
 	}
 
@@ -35,7 +33,7 @@ func TestHandoffThroughTheCLI(t *testing.T) {
 	if out := mustCLI(t, address, "handoff", "accept", offer.ID, "--nick", "builder"); !strings.HasPrefix(out, "handoff "+offer.ID+" accepted by builder in #work from planner for builder\n  finish task 7") {
 		t.Fatalf("accept printed %q", out)
 	}
-	mine := jsonLines[irc.ChatEntry](t, mustCLI(t, address, "handoffs", "--nick", "planner", "--json"))
+	mine := jsonLines[handoffRow](t, mustCLI(t, address, "handoffs", "--nick", "planner", "--json"))
 	if len(mine) != 1 || mine[0].Holder != "builder" {
 		t.Fatalf("planner's handoffs %+v", mine)
 	}
@@ -50,7 +48,7 @@ func TestHandoffThroughTheCLI(t *testing.T) {
 	if !strings.Contains(out, "[done with handoff "+offer.ID+"] merged in #54") {
 		t.Fatalf("planner was not told it is done: %s", out)
 	}
-	room := jsonLines[irc.ChatEntry](t, mustCLI(t, address, "handoffs", "--channel", "work", "--json"))
+	room := jsonLines[handoffRow](t, mustCLI(t, address, "handoffs", "--channel", "work", "--json"))
 	if len(room) != 1 || room[0].State != "done" {
 		t.Fatalf("the room's handoffs %+v", room)
 	}
@@ -58,6 +56,13 @@ func TestHandoffThroughTheCLI(t *testing.T) {
 		t.Fatalf("builder still has %q", out)
 	}
 	deniedCLI(t, address, "already done by builder", "handoff", "withdraw", offer.ID, "--nick", "planner")
+
+	// A withdrawn handoff names no holder.
+	other := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--message", "anyone")
+	mustCLI(t, address, "handoff", "accept", other.ID, "--nick", "reviewer")
+	if gone := cliJSON[handoffRow](t, address, "handoff", "withdraw", other.ID, "--nick", "planner"); gone.State != "withdrawn" || gone.Holder != "" {
+		t.Fatalf("withdrawn %+v", gone)
+	}
 }
 
 func TestHandoffCLIRefusesAmbiguousRequests(t *testing.T) {
