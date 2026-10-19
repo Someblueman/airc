@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -45,6 +48,35 @@ func TestOwnershipFilesAndSchema(t *testing.T) {
 	if next, err := Open(ctx, c); err == nil {
 		next.Close()
 		t.Fatal("future schema opened")
+	}
+}
+
+// Closing gives up ownership at once even while the process forks: a child
+// holds a copy of the lock's descriptor until it execs.
+func TestOwnershipReleasedWhileForking(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var stop atomic.Bool
+	var forks sync.WaitGroup
+	defer forks.Wait()
+	defer stop.Store(true)
+	for range 4 {
+		forks.Go(func() {
+			for !stop.Load() {
+				_ = exec.Command("/bin/true").Run()
+			}
+		})
+	}
+	for i := range 500 {
+		f, err := openFiles(dir)
+		if err != nil {
+			t.Fatalf("reopen %d: %v", i, err)
+		}
+		if err := f.close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
