@@ -23,6 +23,7 @@ const (
 	digestThreads  = 3   // per room, busiest first
 	digestWaiting  = 20  // unanswered messages addressed to you
 	digestNotes    = 10  // corrections, polls, headers and pins each
+	digestRooms    = 8   // rooms whose open handoffs are listed
 )
 
 // digestItem is one message, cut to a preview.
@@ -149,7 +150,7 @@ func runDigestSession(ctx context.Context, session *agentConnection, args []stri
 		summary.WaitingMore = len(summary.Waiting) - digestWaiting
 		summary.Waiting = summary.Waiting[:digestWaiting]
 	}
-	summary.Handoffs = openHandoffs(ctx, *opt, &summary.Warnings)
+	summary.Handoffs = openHandoffs(ctx, *opt, settings.channels, &summary.Warnings)
 	if len(summary.Handoffs) > digestWaiting {
 		summary.HandoffsMore = len(summary.Handoffs) - digestWaiting
 		summary.Handoffs = summary.Handoffs[:digestWaiting]
@@ -311,22 +312,41 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 }
 
 // openHandoffs lists the open and accepted handoffs that concern opt.nick,
-// oldest first. A daemon without handoffs has none; other failures warn.
-func openHandoffs(ctx context.Context, opt options, warnings *[]string) []digestHandoff {
+// then those open to anyone in the first digestRooms of rooms: a one-shot
+// command joins no room, so the daemon cannot know them. A daemon without
+// handoffs has none; other failures warn.
+func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestHandoff {
 	var out []digestHandoff
+	seen := map[string]bool{}
 	err := chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
 		if !client.Supports("HANDOFF") {
 			return nil
 		}
-		entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "handoffs"}, nil)
-		for _, e := range entries {
-			h := digestHandoff{ID: e.ID, State: e.State, From: e.From, Target: e.Target, Holder: e.Holder}
-			if e.Message != nil {
-				h.For, h.Preview = e.Message.For, preview(e.Message.Message)
+		requests := []irc.ChatRequest{{Action: "handoffs"}}
+		for _, room := range rooms[:min(len(rooms), digestRooms)] {
+			if room = channelName(room); protocol.IsChannel(room) {
+				requests = append(requests, irc.ChatRequest{Action: "handoffs", Target: room})
 			}
-			out = append(out, h)
 		}
-		return err
+		for i, r := range requests {
+			entries, err := irc.RequestChat(ctx, client, r, nil)
+			if err != nil {
+				return err
+			}
+			for _, e := range entries {
+				anyone := e.State == "open" && (e.Message == nil || e.Message.For == "") && !strings.EqualFold(e.From, opt.nick)
+				if seen[e.ID] || i > 0 && !anyone {
+					continue
+				}
+				seen[e.ID] = true
+				h := digestHandoff{ID: e.ID, State: e.State, From: e.From, Target: e.Target, Holder: e.Holder}
+				if e.Message != nil {
+					h.For, h.Preview = e.Message.For, preview(e.Message.Message)
+				}
+				out = append(out, h)
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		*warnings = append(*warnings, "could not list your handoffs: "+err.Error())

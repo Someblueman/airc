@@ -57,6 +57,17 @@ func TestHandoffThroughTheCLI(t *testing.T) {
 	}
 	deniedCLI(t, address, "already done by builder", "handoff", "withdraw", offer.ID, "--nick", "planner")
 
+	// A room handoff open to anyone is in the digest of each agent in that
+	// room, though a one-shot command joins no room.
+	open := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--message", "triage the flaky test")
+	if d := cliJSON[digestSummary](t, address, "digest", "--nick", "reviewer", "--channel", "work"); len(d.Handoffs) != 1 || d.Handoffs[0].ID != open.ID {
+		t.Fatalf("reviewer's digest %+v", d.Handoffs)
+	}
+	if d := cliJSON[digestSummary](t, address, "digest", "--nick", "reviewer", "--channel", "elsewhere"); len(d.Handoffs) != 0 {
+		t.Fatalf("a digest of another room lists %+v", d.Handoffs)
+	}
+	mustCLI(t, address, "handoff", "withdraw", open.ID, "--nick", "planner")
+
 	// A withdrawn handoff names no holder.
 	other := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--message", "anyone")
 	mustCLI(t, address, "handoff", "accept", other.ID, "--nick", "reviewer")
