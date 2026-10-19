@@ -118,6 +118,8 @@ type Server struct {
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chat             chatState
 	chatAt           string
+	handoffs         map[string]handoff // by offer ID; see handoffs.go
+	handoffLog       *handoffLog        // nil keeps handoffs in memory only
 	slowPosts        map[string]time.Time
 	signals          map[string]activitySignal
 	seq              uint64

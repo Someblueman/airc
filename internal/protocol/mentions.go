@@ -109,6 +109,16 @@ func Mentions(body string) []string {
 	return found
 }
 
+// MessageMentions is Mentions plus the nick a handoff step is for, which
+// counts as a mention without being written in the body.
+func MessageMentions(body, forNick string) []string {
+	found := Mentions(body)
+	if name := strings.ToLower(forNick); name != "" && !slices.Contains(found, name) {
+		found = append(found, name)
+	}
+	return found
+}
+
 // MentionsNick reports whether body tags or addresses nick (case-insensitive).
 func MentionsNick(body, nick string) bool {
 	nick = strings.ToLower(nick)

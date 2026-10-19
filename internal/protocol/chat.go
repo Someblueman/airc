@@ -24,6 +24,10 @@ type ChatMetadata struct {
 	Retracted          bool      `json:"retracted,omitempty"`
 	PollOptions        []string  `json:"poll_options,omitempty"`
 	PollClosesAt       time.Time `json:"poll_closes_at,omitzero"`
+	// For names who a handoff step is addressed to: on an offer, the nick
+	// it is handed to; on accept, decline and done, the offer's author.
+	// A room message counts as a mention of it.
+	For string `json:"for,omitempty"`
 }
 
 func EncodeChat(meta ChatMetadata) string {
@@ -70,6 +74,7 @@ type ChatRequest struct {
 	MaxBytes int      `json:"max_bytes,omitempty"`
 	Options  []string `json:"options,omitempty"`
 	Choice   int      `json:"choice,omitempty"`
+	For      string   `json:"for,omitempty"`
 }
 
 type ChatEntry struct {
@@ -87,6 +92,8 @@ type ChatEntry struct {
 	Options      []string         `json:"options,omitempty"`
 	Votes        []int            `json:"votes,omitempty"`
 	Closed       bool             `json:"closed,omitempty"`
+	State        string           `json:"state,omitempty"`
+	Holder       string           `json:"holder,omitempty"`
 	Message      *MessageMetadata `json:"message,omitempty"`
 }
 
