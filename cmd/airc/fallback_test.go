@@ -537,3 +537,15 @@ func TestFallbackEndpointsSkipThePrimary(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A direct message over a fallback carrier says its recipient is at work,
+// as a native one does.
+func TestFallbackSendSaysTheRecipientIsActive(t *testing.T) {
+	f := newFallbackFixture(t)
+	mustCLI(t, f.proxy.addr(), "check", "--nick", "builder", "--channel", "#ops", "--json")
+	f.proxy.down()
+	sent, stderr, err := sendJSON(t, "--addr", f.proxy.addr(), "--nick", "planner", "--to", "builder", "--message", "can you review?")
+	if err != nil || sent.Carrier != f.carrier("http") || sent.Receipt == nil || sent.Receipt.RecipientActive == nil || !*sent.Receipt.RecipientActive || sent.Delivered == nil || *sent.Delivered {
+		t.Fatalf("%+v %v %s", sent, err, stderr)
+	}
+}

@@ -37,3 +37,26 @@ func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T)
 		parent = result.MessageID
 	}
 }
+
+// A direct message to a one-shot agent at work says so through the gateway,
+// though the agent holds no connection.
+func TestMessageMutationDirectToActiveAgentSaysActive(t *testing.T) {
+	target := core.Target{Kind: "direct", Name: "post-active-peer"}
+	f := newReactionFixture(t, false, []core.Target{target}, true)
+	peer, err := irc.Dial(irc.Config{Nick: "post-active-peer", Network: "unix", Addr: f.socket, Ephemeral: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := irc.RequestCheck(ctx, peer, irc.CheckRequest{Targets: []irc.CheckTarget{{Target: "#work", Limit: 1}}, MaxMessages: 1}, nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = peer.Close()
+	r := messageMutationRequest("post-active-action", core.MessageAction, &target, "")
+	headerPost(t, f, r)
+	result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
+	if result.RecipientConnected == nil || *result.RecipientConnected || result.RecipientActive == nil || !*result.RecipientActive {
+		t.Fatalf("an active agent's receipt: %+v", result)
+	}
+}

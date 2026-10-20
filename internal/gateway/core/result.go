@@ -43,6 +43,8 @@ const (
 
 // Result distinguishes gateway responsibility from upstream observations.
 // Nil receipt facts mean unknown; recipient_connected never means read.
+// recipient_active is AIRC's: a direct message's recipient connected, or at
+// work through one-shot commands; it is absent when AIRC did not say.
 type Result struct {
 	Version             int                         `json:"version"`
 	RequestID           string                      `json:"request_id"`
@@ -52,6 +54,7 @@ type Result struct {
 	Accepted            *bool                       `json:"accepted"`
 	Persisted           *bool                       `json:"persisted"`
 	RecipientConnected  *bool                       `json:"recipient_connected"`
+	RecipientActive     *bool                       `json:"recipient_active,omitempty"`
 	DuplicateRisk       bool                        `json:"duplicate_risk"`
 	AcceptanceUncertain bool                        `json:"acceptance_uncertain"`
 	SendAttempts        int                         `json:"send_attempts"`
