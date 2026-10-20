@@ -15,8 +15,9 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// handoffClient dials nick and joins rooms; the test reads its replies with
-// handoffChat and its deliveries with handoffMessages.
+// handoffClient dials nick and joins rooms, returning once the joins have
+// taken effect; the test reads its replies with handoffChat and its
+// deliveries with nextMessage.
 func handoffClient(t *testing.T, address, nick string, rooms ...string) *irc.Client {
 	t.Helper()
 	c, err := irc.Dial(irc.Config{Nick: nick, Addr: address})
@@ -28,6 +29,11 @@ func handoffClient(t *testing.T, address, nick string, rooms ...string) *irc.Cli
 		if err := c.Join(room); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The server takes a connection's commands in order, so once a later
+	// request is answered the joins have taken effect.
+	if _, _, err := handoffChat(t, c, protocol.ChatRequest{Action: "handoffs"}); err != nil {
+		t.Fatal(err)
 	}
 	return c
 }
@@ -405,5 +411,30 @@ func TestConcurrentAcceptsHaveOneWinner(t *testing.T) {
 	}
 	if len(winners) != 1 {
 		t.Fatalf("%d takers won: %v", len(winners), winners)
+	}
+}
+
+// A one-shot agent joins no room, so the rooms it recently used are its
+// rooms: open handoffs there are in its default listing.
+func TestOneShotAgentListsOpenHandoffsInRoomsItUses(t *testing.T) {
+	address, _ := startServer(t, Config{HistoryLimit: 64, PingInterval: time.Hour}, nil)
+	planner := handoffClient(t, address, "planner", "#work")
+	offer := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "anyone: triage the flaky test"})
+	for nick, room := range map[string]string{"builder": "#work", "stranger": "#elsewhere"} {
+		c, err := irc.Dial(irc.Config{Nick: nick, Addr: address, Ephemeral: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Close() })
+		if _, err := irc.RequestCheck(t.Context(), c, irc.CheckRequest{Targets: []irc.CheckTarget{{Target: room, Limit: 10}}, MaxMessages: 10}, nil); err != nil {
+			t.Fatal(err)
+		}
+		listed, _, err := handoffChat(t, c, protocol.ChatRequest{Action: "handoffs"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := nick == "builder"; (len(listed) == 1 && listed[0].ID == offer.ID) != want || len(listed) > 1 {
+			t.Fatalf("%s, who checked %s, lists %+v", nick, room, listed)
+		}
 	}
 }

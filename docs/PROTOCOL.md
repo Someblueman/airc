@@ -231,7 +231,7 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `vote`, `results`, `close-poll` | Poll `id`; vote `choice` numbered from 1; author/admin closes. |
 | `handoff` | Requires `HANDOFF=1`. Room or nickname `target`, `text` within the message limit, optional `for` (a nickname, in a room). Posts the offer and answers its handoff. |
 | `handoff-accept`, `handoff-decline`, `handoff-done`, `handoff-withdraw` | Offer `id`, optional note `text`. Posts the step as a reply to the offer, where the offer is (a direct handoff's steps go to the other side), and answers the handoff. A step that already took effect for the same actor answers again without posting. |
-| `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open and accepted handoffs that concern the caller. The newest `limit` (1–1000, default 200). |
+| `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open and accepted handoffs that concern the caller, including those open to anyone in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
 
 `CONTEXT_BYTES=1` permits `max_bytes` on context requests. Omission or zero retains
 the legacy response. A nonzero budget counts every `777` line and the final `778`,
