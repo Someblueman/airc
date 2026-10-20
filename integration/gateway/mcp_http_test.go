@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -128,12 +129,30 @@ func TestMCPHTTPCheck(t *testing.T) {
 		t.Fatalf("first check: %s %v", mcpStructured(t, first), err)
 	}
 	request.Rooms[0].After, request.Inbox.After = page.Rooms[0].Cursor, page.Inbox.Cursor
-	go func() {
-		time.Sleep(400 * time.Millisecond)
-		_ = peer.Send(fixtureAuthor, "MCP inbox news")
-	}()
+	status := nativeStatusClient(t, f.config.Upstream.Address)
+	observers := nativeObserverCount(t, status)
+	params := mcpCallParams(t, request)
+	type called struct {
+		result *mcp.CallToolResult
+		err    error
+	}
+	done := make(chan called, 1)
 	start := time.Now()
-	result, err := f.client.CallTool(t.Context(), mcpCallParams(t, request))
+	go func() {
+		result, err := f.client.CallTool(t.Context(), params)
+		done <- called{result, err}
+	}()
+	// The message is sent once the waiting check observes its rooms
+	// natively, so it is news during the call.
+	testwait.Every(t, 5*time.Second, 10*time.Millisecond, "the waiting check to observe natively", func() bool { return nativeObserverCount(t, status) > observers })
+	_ = peer.Send(fixtureAuthor, "MCP inbox news")
+	var returned called
+	select {
+	case returned = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("waiting check did not return")
+	}
+	result, err := returned.result, returned.err
 	if err != nil || result.IsError {
 		t.Fatal("waiting check", err, result)
 	}

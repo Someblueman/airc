@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -465,6 +466,19 @@ func TestMQTT5SessionCaps(t *testing.T) {
 	}
 }
 
+// mqtt5Connections counts the MQTT 5 connections the in-process gateway is
+// still serving, its leaving of shared groups and scheduling of wills
+// included, so tests can wait for it to finish with a closed one.
+func mqtt5Connections() int {
+	n := 0
+	for line := range strings.Lines(string(goroutineStacks())) {
+		if strings.HasPrefix(line, "github.com/Someblueman/airc/internal/gateway/adapter.serveMQTT5(") {
+			n++
+		}
+	}
+	return n
+}
+
 // drainMQTT5 reads PUBLISHes on c, acknowledging each, until none arrives
 // for quiet, and returns their message bodies.
 func drainMQTT5(t *testing.T, c *mqtt5Client, quiet time.Duration) []string {
@@ -591,9 +605,11 @@ func TestMQTT5SharedSubscriptions(t *testing.T) {
 		}
 	}
 
-	// w1 leaves: its share goes to w2. w1 comes back to its session.
+	// w1 leaves: once the gateway has ended its connection, its share goes
+	// to w2. w1 comes back to its session.
+	serving := mqtt5Connections()
 	_ = w1.conn.Close()
-	time.Sleep(200 * time.Millisecond)
+	testwait.Until(t, 5*time.Second, "the gateway to end w1's connection", func() bool { return mqtt5Connections() < serving })
 	alone := post("alone", 6)
 	if got := drainMQTT5(t, w2, quiet); !slices.Equal(got, alone) {
 		t.Fatalf("the remaining member got %v, want %v", got, alone)

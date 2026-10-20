@@ -130,13 +130,17 @@ func (s *IRCSession) Close() {
 	})
 }
 
-// Connect uses one three-second budget for dial, TLS, CAP, SASL and welcome.
+// IRCSetupBudget bounds Connect, and then JoinRooms; a variable only so tests
+// can shorten it.
+var IRCSetupBudget = 3 * time.Second
+
+// Connect uses one IRCSetupBudget for dial, TLS, CAP, SASL and welcome.
 // Certificate/name verification cannot be bypassed through caller TLS options.
 func (s *IRCServer) Connect(parent context.Context) (*IRCSession, error) {
 	if s == nil || len(s.password) == 0 {
 		return nil, ErrAuthentication
 	}
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	ctx, cancel := context.WithTimeout(parent, IRCSetupBudget)
 	defer cancel()
 	raw, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.address)
 	if err != nil {

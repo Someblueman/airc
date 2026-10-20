@@ -99,7 +99,9 @@ func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, scope Check
 		}
 		// Nothing new: wait without holding a session slot.
 		b.release(lane, store.LookupAttempt)
+		b.countAwaiting(1)
 		woke, err = p.await(overall, client, wait)
+		b.countAwaiting(-1)
 		if !b.reacquire(lane) || err != nil || !woke {
 			return err
 		}
@@ -110,6 +112,21 @@ func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, scope Check
 		return core.CheckResult{}, err
 	}
 	return result, nil
+}
+
+// Awaiting is how many checks are waiting for news after an empty
+// snapshot, so tests can post only once a check waits: AIRC answered its
+// snapshot before the post, so the post can reach it only by waking it.
+func (b *Backend) Awaiting() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.awaiting
+}
+
+func (b *Backend) countAwaiting(delta int) {
+	b.mu.Lock()
+	b.awaiting += delta
+	b.mu.Unlock()
 }
 
 // CheckScope is what a check may show beyond its named rooms: the rooms

@@ -8,6 +8,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/xmppwire"
 )
 
+// xmppJoinDeadline bounds JoinRooms; a variable only so tests can shorten it.
+var xmppJoinDeadline = 3 * time.Second
+
 // JoinRooms serially requests only immutable provisioned rooms. One deadline
 // and stanza budget cover all confirmations. Failure closes and joins the
 // session; unconfirmed membership cannot be used as event authority.
@@ -21,7 +24,7 @@ func (x *XMPPSession) JoinRooms() error {
 			x.Close()
 		}
 	}()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(xmppJoinDeadline)
 	if x.conn.SetDeadline(deadline) != nil {
 		return ErrAuthentication
 	}

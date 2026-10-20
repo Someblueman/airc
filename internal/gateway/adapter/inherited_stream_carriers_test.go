@@ -3,14 +3,17 @@
 package adapter
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/testfs"
+	"github.com/Someblueman/airc/internal/testwait"
 	"golang.org/x/sys/unix"
 )
 
@@ -188,7 +191,7 @@ func TestInheritedStreamCarriers(t *testing.T) {
 				}
 				done := make(chan error, 1)
 				go func() { _, err := stream.Read(make([]byte, 1)); done <- err }()
-				time.Sleep(10 * time.Millisecond)
+				waitPolledRead(t)
 				if err := stream.Close(); err != nil {
 					t.Fatal(err)
 				}
@@ -206,4 +209,20 @@ func TestInheritedStreamCarriers(t *testing.T) {
 			})
 		})
 	}
+}
+
+// waitPolledRead waits until a read started in this file is parked in the
+// runtime poller, so a Close that follows interrupts it rather than preceding it.
+func waitPolledRead(t *testing.T) {
+	t.Helper()
+	testwait.Until(t, time.Second, "read parked in the poller", func() bool {
+		stacks := make([]byte, 1<<20)
+		stacks = stacks[:runtime.Stack(stacks, true)]
+		for _, g := range bytes.Split(stacks, []byte("\n\n")) {
+			if bytes.Contains(g, []byte(" [IO wait")) && bytes.Contains(g, []byte("inherited_stream_carriers_test.go")) {
+				return true
+			}
+		}
+		return false
+	})
 }

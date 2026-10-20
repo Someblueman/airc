@@ -6,6 +6,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func newDTLSPeerForTest(t *testing.T) (*dtlsPacketListener, *dtlsPeer, *net.UDPConn) {
@@ -49,8 +51,9 @@ func TestDTLSRawPeerPacketsDoNotRefreshAuthenticatedIdle(t *testing.T) {
 	application[13] = 7
 	for i := 0; i < 3; i++ {
 		sendDTLSTestPacket(t, client, l.Addr(), application)
-		time.Sleep(10 * time.Millisecond)
 	}
+	// Routed, they queue behind the ClientHello, which no one has read.
+	testwait.Until(t, time.Second, "raw packets queued to the peer", func() bool { return len(peer.packets) == 4 })
 	l.mu.Lock()
 	last := peer.lastActivity
 	l.mu.Unlock()

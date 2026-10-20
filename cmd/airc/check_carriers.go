@@ -225,12 +225,16 @@ func checkedHasNews(checked fallback.Checked) bool {
 	return false
 }
 
+// The first delay before a check waiting over another carrier redials
+// native IRC; a variable so tests can shorten it.
+var nativeRedialBackoff = time.Second
+
 // redialNative dials native IRC with backoff until a connection registers,
 // which it sends, or ctx ends.
 func redialNative(ctx context.Context, opt options) <-chan *irc.Client {
 	out := make(chan *irc.Client)
 	go func() {
-		retry := newBackoff(time.Second, 10*time.Second, true)
+		retry := newBackoff(nativeRedialBackoff, 10*time.Second, true)
 		for retry.wait(ctx) {
 			client, err := dialSession(ctx, opt, true)
 			if err != nil {

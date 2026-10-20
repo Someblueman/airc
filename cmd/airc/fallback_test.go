@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -31,12 +32,14 @@ import (
 // nativeProxy stands in for aircd's native port: it forwards to the daemon
 // until the test takes it down. With blackhole set it forwards the first
 // PRIVMSG and then goes silent and stops accepting, as when a connection
-// dies after a send landed.
+// dies after a send landed. observes counts the OBSERVE commands it
+// forwarded: native waits and watches beginning.
 type nativeProxy struct {
 	listener  net.Listener
 	upstream  string
 	blackhole bool
 	frozen    atomic.Bool // every connection silent, as when a link dies
+	observes  atomic.Int32
 	mu        sync.Mutex
 	conns     []net.Conn
 	closed    bool
@@ -111,6 +114,9 @@ func (p *nativeProxy) serve() {
 				if line != "" {
 					if _, werr := io.WriteString(server, line); werr != nil {
 						return
+					}
+					if strings.HasPrefix(line, "OBSERVE ") {
+						p.observes.Add(1)
 					}
 				}
 				if err != nil {
@@ -230,20 +236,62 @@ type fallbackFixture struct {
 	proxy  *nativeProxy
 	ports  map[string]int
 	sock   string // the gateway's Unix socket, not advertised
+	log    *observeLog
+}
+
+// observeLog counts the daemon's channel_observed records by nick and
+// channel, natively or through a gateway session, so a test can wait for a
+// reader to be waiting.
+type observeLog struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func (o *observeLog) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= slog.LevelInfo
+}
+func (o *observeLog) WithAttrs([]slog.Attr) slog.Handler { return o }
+func (o *observeLog) WithGroup(string) slog.Handler      { return o }
+
+func (o *observeLog) Handle(_ context.Context, r slog.Record) error {
+	if r.Message != "channel_observed" {
+		return nil
+	}
+	var nick, channel string
+	r.Attrs(func(a slog.Attr) bool {
+		switch a.Key {
+		case "nick":
+			nick = strings.ToLower(a.Value.String())
+		case "channel":
+			channel = a.Value.String()
+		}
+		return true
+	})
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.n[nick+" "+channel]++
+	return nil
+}
+
+// observed is how often nick has begun observing channel on the daemon.
+func (f *fallbackFixture) observed(nick, channel string) int {
+	f.log.mu.Lock()
+	defer f.log.mu.Unlock()
+	return f.log.n[strings.ToLower(nick)+" "+channel]
 }
 
 func newFallbackFixture(t *testing.T) *fallbackFixture {
 	t.Helper()
 	agentEnv(t)
 	t.Setenv("AIRC_CARRIERS", "")
-	f := &fallbackFixture{ports: map[string]int{}}
+	f := &fallbackFixture{ports: map[string]int{}, log: &observeLog{n: map[string]int{}}}
 	native := closedTCPPort(t)
 	for _, name := range []string{"http", "websocket", "framed"} {
 		f.ports[name] = closedTCPPort(t)
 	}
 	carriers := []protocol.Carrier{{Name: "irc", Port: native}, {Name: "http", Port: f.ports["http"]}, {Name: "websocket", Port: f.ports["websocket"]}}
 	accounts := filepath.Join(t.TempDir(), "accounts")
-	f.daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64, Carriers: carriers}, func(s *server.Server) error { return s.RestoreAccounts(accounts) })
+	f.daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64, Carriers: carriers, Logger: slog.New(f.log)}, func(s *server.Server) error { return s.RestoreAccounts(accounts) })
 	f.proxy = startNativeProxy(t, "127.0.0.1:"+strconv.Itoa(native), f.daemon)
 	dir, err := os.MkdirTemp("", "agw") // a socket path must stay short
 	if err != nil {
