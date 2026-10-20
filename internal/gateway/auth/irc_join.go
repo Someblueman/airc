@@ -20,7 +20,7 @@ func (s *IRCSession) JoinRooms() (err error) {
 			s.Close()
 		}
 	}()
-	if s.conn.SetDeadline(time.Now().Add(3*time.Second)) != nil {
+	if s.conn.SetDeadline(time.Now().Add(IRCSetupBudget)) != nil {
 		return ErrAuthentication
 	}
 	rooms := make([]string, 0, len(s.server.routes))

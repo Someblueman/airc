@@ -21,12 +21,16 @@ func (r *delayedXMPPRead) Read(p []byte) (int, error) {
 	n, err := r.reader.Read(p)
 	if n > 0 {
 		close(r.buffered)
-		time.Sleep(3100 * time.Millisecond)
+		time.Sleep(xmppJoinDeadline + 100*time.Millisecond)
 	}
 	return n, err
 }
 
 func TestXMPPBufferedJoinCannotClearExpiredDeadline(t *testing.T) {
+	// The fixture's read outlasts the join deadline; a short one keeps it brief.
+	deadline := xmppJoinDeadline
+	t.Cleanup(func() { xmppJoinDeadline = deadline })
+	xmppJoinDeadline = time.Second
 	s, _ := xmppSessionFixture(t, "join_valid")
 	x, err := s.Connect(context.Background())
 	if err != nil {

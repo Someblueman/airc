@@ -236,7 +236,7 @@ func writeIndex(seg *segment) error {
 		}
 		var mentions []string
 		if protocol.IsChannel(m.Target) {
-			mentions = protocol.Mentions(m.Body)
+			mentions = protocol.MessageMentions(m.Body, m.For)
 		}
 		indexKeys(&m, mentions, func(key string) {
 			if strings.HasPrefix(key, "thread:") || strings.HasPrefix(key, "child:") {

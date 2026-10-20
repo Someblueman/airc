@@ -70,10 +70,11 @@ func TestWaitingReadEmptyPreparedCancelledAndExpired(t *testing.T) {
 	if err := peer.Chat(irc.ChatRequest{Action: "prepare", Target: parent.Target, ID: parent.ID, Seconds: 1, Text: "short signal"}); err != nil {
 		t.Fatal(err)
 	}
-	next(t, peer, func(e *irc.ChatEvent) bool { return e.Action == "prepare" && e.ID == parent.ID })
+	short := next(t, peer, func(e *irc.ChatEvent) bool { return e.Action == "prepare" && e.ID == parent.ID })
 	next(t, peer, func(e *irc.EndOfChatEvent) bool { return true })
 	_ = peer.Close()
-	time.Sleep(1200 * time.Millisecond)
+	// Native signals end at their expiry; read once it has passed.
+	time.Sleep(time.Until(short.ExpiresAt))
 	afterExpiry := request
 	afterExpiry.RequestID = "waiting-after-expiry"
 	status, result = reactionHTTPCall(t, f, f.cred.token(t, afterExpiry, true))

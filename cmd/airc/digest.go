@@ -23,6 +23,7 @@ const (
 	digestThreads  = 3   // per room, busiest first
 	digestWaiting  = 20  // unanswered messages addressed to you
 	digestNotes    = 10  // corrections, polls, headers and pins each
+	digestRooms    = 8   // rooms whose open handoffs are listed
 )
 
 // digestItem is one message, cut to a preview.
@@ -37,6 +38,18 @@ type digestItem struct {
 	Kind       string    `json:"kind,omitempty"`
 	Options    []string  `json:"options,omitempty"`
 	ClosesAt   time.Time `json:"closes_at,omitzero"`
+}
+
+// digestHandoff is an open or accepted handoff that concerns the digest's
+// nick, whether or not anything about it is unread.
+type digestHandoff struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	From    string `json:"from"`
+	Target  string `json:"target"`
+	For     string `json:"for,omitempty"`
+	Holder  string `json:"holder,omitempty"`
+	Preview string `json:"preview"`
 }
 
 type digestSpeaker struct {
@@ -77,20 +90,22 @@ type digestHeader struct {
 // much where, what is addressed to you and still unanswered, and what
 // changed the record (corrections, polls, headers, pins).
 type digestSummary struct {
-	Type        string         `json:"type"`
-	Nick        string         `json:"nick"`
-	Unread      int            `json:"unread"`
-	Addressed   int            `json:"addressed"`
-	More        bool           `json:"more"`
-	MarkedRead  bool           `json:"marked_read"`
-	Rooms       []digestRoom   `json:"rooms"`
-	Waiting     []digestItem   `json:"waiting_on_you"`
-	WaitingMore int            `json:"waiting_omitted,omitempty"`
-	Corrections []digestItem   `json:"corrections,omitempty"`
-	Polls       []digestItem   `json:"open_polls,omitempty"`
-	Headers     []digestHeader `json:"headers,omitempty"`
-	Gaps        []string       `json:"gaps,omitempty"`
-	Warnings    []string       `json:"warnings,omitempty"`
+	Type         string          `json:"type"`
+	Nick         string          `json:"nick"`
+	Unread       int             `json:"unread"`
+	Addressed    int             `json:"addressed"`
+	More         bool            `json:"more"`
+	MarkedRead   bool            `json:"marked_read"`
+	Rooms        []digestRoom    `json:"rooms"`
+	Waiting      []digestItem    `json:"waiting_on_you"`
+	WaitingMore  int             `json:"waiting_omitted,omitempty"`
+	Corrections  []digestItem    `json:"corrections,omitempty"`
+	Polls        []digestItem    `json:"open_polls,omitempty"`
+	Handoffs     []digestHandoff `json:"handoffs,omitempty"`
+	HandoffsMore int             `json:"handoffs_omitted,omitempty"`
+	Headers      []digestHeader  `json:"headers,omitempty"`
+	Gaps         []string        `json:"gaps,omitempty"`
+	Warnings     []string        `json:"warnings,omitempty"`
 }
 
 func runDigestSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) (resultErr error) {
@@ -134,6 +149,11 @@ func runDigestSession(ctx context.Context, session *agentConnection, args []stri
 	if len(summary.Waiting) > digestWaiting {
 		summary.WaitingMore = len(summary.Waiting) - digestWaiting
 		summary.Waiting = summary.Waiting[:digestWaiting]
+	}
+	summary.Handoffs = openHandoffs(ctx, *opt, settings.channels, &summary.Warnings)
+	if len(summary.Handoffs) > digestWaiting {
+		summary.HandoffsMore = len(summary.Handoffs) - digestWaiting
+		summary.Handoffs = summary.Handoffs[:digestWaiting]
 	}
 	summary.MarkedRead = *markRead
 	if opt.json {
@@ -212,7 +232,8 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 		if m.Mentioned {
 			r.room.Mentions++
 			d.Addressed++
-			if !repliedTo[m.ID] {
+			// Handoffs are listed by state, and their steps need no reply.
+			if !repliedTo[m.ID] && !strings.HasPrefix(m.Kind, "handoff") {
 				d.Waiting = append(d.Waiting, item) // resolveAnswered asks the server about the rest
 			}
 		}
@@ -290,6 +311,49 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 	return slices.DeleteFunc(waiting, func(item digestItem) bool { return answered[item.ID] })
 }
 
+// openHandoffs lists the open and accepted handoffs that concern opt.nick,
+// then those open to anyone in the first digestRooms of rooms: a one-shot
+// command joins no room, so the daemon cannot know them. A daemon without
+// handoffs has none; other failures warn.
+func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestHandoff {
+	var out []digestHandoff
+	seen := map[string]bool{}
+	err := chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+		if !client.Supports("HANDOFF") {
+			return nil
+		}
+		requests := []irc.ChatRequest{{Action: "handoffs"}}
+		for _, room := range rooms[:min(len(rooms), digestRooms)] {
+			if room = channelName(room); protocol.IsChannel(room) {
+				requests = append(requests, irc.ChatRequest{Action: "handoffs", Target: room})
+			}
+		}
+		for i, r := range requests {
+			entries, err := irc.RequestChat(ctx, client, r, nil)
+			if err != nil {
+				return err
+			}
+			for _, e := range entries {
+				anyone := e.State == "open" && (e.Message == nil || e.Message.For == "") && !strings.EqualFold(e.From, opt.nick)
+				if seen[e.ID] || i > 0 && !anyone {
+					continue
+				}
+				seen[e.ID] = true
+				h := digestHandoff{ID: e.ID, State: e.State, From: e.From, Target: e.Target, Holder: e.Holder}
+				if e.Message != nil {
+					h.For, h.Preview = e.Message.For, preview(e.Message.Message)
+				}
+				out = append(out, h)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		*warnings = append(*warnings, "could not list your handoffs: "+err.Error())
+	}
+	return out
+}
+
 // preview is a message on one line, cut to digestPreview runes.
 func preview(text string) string {
 	return ellipsize(strings.Join(strings.Fields(cleanText(strings.NewReplacer("\n", " ", "\t", " ").Replace(text))), " "), digestPreview)
@@ -308,7 +372,7 @@ func unique(values []string) []string {
 // writeDigest prints a digest for a person or an agent without JSON. Like
 // unread, it prints nothing when there is nothing new, so a hook adds nothing.
 func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
-	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 {
+	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 && len(d.Handoffs) == 0 {
 		return nil
 	}
 	var b strings.Builder
@@ -367,6 +431,15 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	section("Open polls", d.Polls, func(i digestItem) string {
 		return fmt.Sprintf("[%s] %s %s: %q (%s), closes %s", i.ID, i.Target, i.From, i.Preview, strings.Join(i.Options, " / "), clock(i.ClosesAt, now))
 	})
+	if len(d.Handoffs) > 0 {
+		b.WriteString("Handoffs:\n")
+		for _, h := range d.Handoffs {
+			fmt.Fprintf(&b, "  [%s] %s in %s: %q\n", h.ID, handoffStanding(h, d.Nick), h.Target, h.Preview)
+		}
+		if d.HandoffsMore > 0 {
+			fmt.Fprintf(&b, "  and %d more; airc handoffs lists them\n", d.HandoffsMore)
+		}
+	}
 	for _, h := range d.Headers {
 		if h.Type == "pin" {
 			fmt.Fprintf(&b, "Pinned in %s [%s] by %s: %q\n", h.Target, h.ID, h.From, h.Preview)
@@ -390,6 +463,30 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	}
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+// handoffStanding says where a handoff stands for nick: who it is from or
+// for, and who holds it.
+func handoffStanding(h digestHandoff, nick string) string {
+	who := func(name string) string {
+		if strings.EqualFold(name, nick) {
+			return "you"
+		}
+		return name
+	}
+	text := "from " + who(h.From)
+	if strings.EqualFold(h.From, nick) {
+		text = "you handed over"
+		if h.For != "" {
+			text += " to " + h.For
+		}
+	} else if h.For != "" {
+		text += " for " + who(h.For)
+	}
+	if h.State == "accepted" {
+		return text + ", accepted by " + who(h.Holder)
+	}
+	return text + ", open"
 }
 
 // clock is a time as a person reads it: the time today, else the date too.

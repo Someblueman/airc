@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -52,22 +53,25 @@ func TestSessionCapsAndSendReserve(t *testing.T) {
 }
 
 // TestReadWaitsForSlot queues a read behind a busy session slot until the
-// slot frees, and refuses it once readSlotWait passes.
+// slot frees, and refuses it once readSlotWait passes. The bubble's fake
+// clock spares the test both waits in real time.
 func TestReadWaitsForSlot(t *testing.T) {
-	b := &Backend{active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: 2, authorLimit: 2}
-	if !b.acquireRead(t.Context(), "g:a") {
-		t.Fatal("first read refused")
-	}
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		b.release("g:a", store.LookupAttempt)
-	}()
-	start := time.Now()
-	if !b.acquireRead(t.Context(), "g:b") || time.Since(start) < 50*time.Millisecond {
-		t.Fatal("a read did not wait for the freed slot")
-	}
-	start = time.Now()
-	if b.acquireRead(t.Context(), "g:c") || time.Since(start) < readSlotWait {
-		t.Fatal("a read was admitted beyond the limit")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		b := &Backend{active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: 2, authorLimit: 2}
+		if !b.acquireRead(t.Context(), "g:a") {
+			t.Fatal("first read refused")
+		}
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			b.release("g:a", store.LookupAttempt)
+		}()
+		start := time.Now()
+		if !b.acquireRead(t.Context(), "g:b") || time.Since(start) < 50*time.Millisecond {
+			t.Fatal("a read did not wait for the freed slot")
+		}
+		start = time.Now()
+		if b.acquireRead(t.Context(), "g:c") || time.Since(start) < readSlotWait {
+			t.Fatal("a read was admitted beyond the limit")
+		}
+	})
 }

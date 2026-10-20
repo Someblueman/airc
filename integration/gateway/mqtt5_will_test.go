@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
 )
@@ -26,6 +27,7 @@ func TestMQTT5Wills(t *testing.T) {
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"})
 	g := startAuthorGateway(t, c)
 	address := g.addresses["mqtt"]
+	idle := mqtt5Connections()
 	observer := dial(t, socket, "m6-observer", "", false, false)
 	if err := observer.Join("#m6"); err != nil {
 		t.Fatal(err)
@@ -84,7 +86,9 @@ func TestMQTT5Wills(t *testing.T) {
 	delayed.delay = 2
 	client, _ = connect("m6-b", true, 600, &delayed)
 	_ = client.conn.Close()
-	time.Sleep(200 * time.Millisecond)
+	// Once every connection so far has ended, the gateway has scheduled the
+	// dropped link's will, and the session resumes within its delay.
+	testwait.Until(t, 5*time.Second, "the gateway to end every MQTT connection", func() bool { return mqtt5Connections() == idle })
 	resumed, connack := connect("m6-b", false, 600, nil)
 	if connack.body[0] != 1 {
 		t.Fatal("the session did not resume")

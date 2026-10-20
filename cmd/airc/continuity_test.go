@@ -74,11 +74,23 @@ func TestCheckContinuesRoomsOverAnotherCarrier(t *testing.T) {
 	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 0 {
 		t.Fatalf("read again: %v", got)
 	}
+	type outcome struct {
+		out, stderr string
+		err         error
+	}
+	done := make(chan outcome, 1)
+	observed := f.observed("bob", "#ops")
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		_, _, _ = cli(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "waited for")
+		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")
+		done <- outcome{out, stderr, err}
 	}()
-	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")); len(got) != 1 || got[0] != "waited for" {
+	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
+	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "waited for")
+	waited := <-done
+	if waited.err != nil {
+		t.Fatal(waited.err, waited.stderr)
+	}
+	if got := checkBodies(t, waited.out); len(got) != 1 || got[0] != "waited for" {
 		t.Fatalf("wait over a carrier: %v", got)
 	}
 	// Native IRC is back: it continues from the same cursor.
@@ -113,11 +125,23 @@ func TestCheckContinuesInboxOverAnotherCarrier(t *testing.T) {
 		t.Fatalf("footer %+v", footer)
 	}
 	// A direct message ends a wait.
+	type outcome struct {
+		out, stderr string
+		err         error
+	}
+	done := make(chan outcome, 1)
+	observed := f.observed("bob", "@bob")
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		_, _, _ = cli(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "waited for")
+		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")
+		done <- outcome{out, stderr, err}
 	}()
-	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")); len(got) != 1 || got[0] != "waited for" {
+	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "@bob") > observed })
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "waited for")
+	waited := <-done
+	if waited.err != nil {
+		t.Fatal(waited.err, waited.stderr)
+	}
+	if got := checkBodies(t, waited.out); len(got) != 1 || got[0] != "waited for" {
 		t.Fatalf("wait over a carrier: %v", got)
 	}
 	startNativeProxy(t, addr, f.daemon)
@@ -176,13 +200,14 @@ func TestCheckWaitSurvivesNativeIRCDying(t *testing.T) {
 		err error
 	}
 	done := make(chan outcome, 1)
+	observed := f.observed("bob", "#ops")
 	go func() {
 		out, _, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "15s", "--json")
 		done <- outcome{out, err}
 	}()
-	time.Sleep(500 * time.Millisecond) // the check is waiting natively
+	eventually(t, 10*time.Second, "the check to wait natively", func() bool { return f.observed("bob", "#ops") > observed })
 	f.proxy.close()
-	time.Sleep(500 * time.Millisecond)
+	eventually(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed+1 })
 	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "while down")
 	select {
 	case got := <-done:
@@ -336,12 +361,23 @@ func TestManyRoomsContinueOverAnotherCarrier(t *testing.T) {
 	f.proxy.close()
 	waitForOutput(t, out, "following rooms over")
 
+	type outcome struct {
+		out, stderr string
+		err         error
+	}
+	done := make(chan outcome, 1)
+	observed := f.observed("bob", "#r4")
 	go func() {
-		time.Sleep(300 * time.Millisecond)
-		_, _, _ = cli(t, addr, "send", "--nick", "writer", "--channel", "#r4", "--message", "late in #r4")
+		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", strings.Join(rooms, ","), "--wait", "8s", "--json")
+		done <- outcome{out, stderr, err}
 	}()
-	got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", strings.Join(rooms, ","), "--wait", "8s", "--json"))
-	if len(got) != 1 || got[0] != "late in #r4" {
+	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#r4") > observed })
+	mustCLI(t, addr, "send", "--nick", "writer", "--channel", "#r4", "--message", "late in #r4")
+	waited := <-done
+	if waited.err != nil {
+		t.Fatal(waited.err, waited.stderr)
+	}
+	if got := checkBodies(t, waited.out); len(got) != 1 || got[0] != "late in #r4" {
 		t.Fatalf("check over a carrier: %v", got)
 	}
 	waitForOutput(t, out, "late in #r4")
@@ -355,6 +391,9 @@ func TestManyRoomsContinueOverAnotherCarrier(t *testing.T) {
 // once it registers again, so a direct message wakes it.
 func TestCheckWaitReturnsToNativeIRC(t *testing.T) {
 	f := newFallbackFixture(t)
+	redial := nativeRedialBackoff
+	nativeRedialBackoff = 50 * time.Millisecond
+	t.Cleanup(func() { nativeRedialBackoff = redial })
 	addr := f.proxy.addr()
 	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "seen")
 	mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
@@ -364,13 +403,14 @@ func TestCheckWaitReturnsToNativeIRC(t *testing.T) {
 		err         error
 	}
 	done := make(chan outcome, 1)
+	observed := f.observed("bob", "#ops")
 	go func() {
 		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "15s", "--json")
 		done <- outcome{out, stderr, err}
 	}()
-	time.Sleep(time.Second) // waiting over the gateway
-	startNativeProxy(t, addr, f.daemon)
-	time.Sleep(3 * time.Second) // redialled
+	eventually(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
+	native := startNativeProxy(t, addr, f.daemon)
+	eventually(t, 10*time.Second, "the check to redial and wait natively", func() bool { return native.observes.Load() > 0 })
 	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "a direct message")
 	select {
 	case got := <-done:

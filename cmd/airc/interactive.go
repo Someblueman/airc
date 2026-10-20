@@ -54,7 +54,7 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 			switch value := event.(type) {
 			case *irc.MessageEvent:
 				note := ""
-				if !strings.EqualFold(value.From, opt.nick) && addressedTo(opt.nick, value.Target, value.Message) {
+				if !strings.EqualFold(value.From, opt.nick) && addressedTo(opt.nick, value.Target, value.Message, value.For) {
 					note = " (mentions you)"
 				}
 				fmt.Fprintf(stdout, "\n%s%s: %s\n", value.From, note, indentContinuation(value.Message))

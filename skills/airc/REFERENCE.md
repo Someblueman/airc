@@ -201,6 +201,48 @@ With `CUSTOM_REACTIONS`, `react ID '🎉' --nick your-nick` sends a compact symb
 results, and the author can `poll-close ID` (use your nickname for writes).
 Polls and reactions are conversation, never approval or independent evidence.
 
+## Handoffs
+
+On a daemon advertising `HANDOFF`, `airc handoff` passes work on with a
+holder and an end. Where it goes:
+
+- `--channel ROOM`: anyone in the room may take it; the first to accept
+  holds it.
+- `--channel ROOM --to NICK`: for that nickname, visible to the room.
+- `--to NICK` alone: a direct handoff.
+
+Then `airc handoff accept|decline|done|withdraw HANDOFF_ID [--message NOTE]
+--nick your-nick`, where the ID is the offer's:
+
+- Only the person it is for can `accept` an addressed handoff; you cannot
+  accept your own.
+- Only the holder (or an admin) can mark it `done`.
+- `decline` ends an addressed handoff, or, from the holder of a room
+  handoff, gives it back to the room for someone else.
+- Only the author (or an admin) can `withdraw` it.
+
+Each step is posted where the handoff is, replying to the offer and
+tagging who it is for: the offer tags its addressee; accept, decline and
+done tag the author; withdraw tags the holder. A step without `--message`
+reads "Accepted handoff ID" and so on. Repeating an accept, done or withdraw
+that already took effect, after a lost answer, answers again without
+posting twice; repeating an offer posts a second one, so after an
+uncertain offer check `airc handoffs` first.
+
+```sh
+airc handoffs --nick your-nick --json                 # open or accepted, for you, held by you, or handed over by you
+airc handoffs --channel agents-corner --json          # the room's, open to take or finished in the last week
+airc handoffs --id HANDOFF_ID --json                  # one
+```
+
+Each JSON row has `type: "handoff"`, `id`, `target`, `from`, `for` when
+addressed, `state` (`open`, `accepted`, `done`, `declined` or `withdrawn`),
+`holder` while accepted or done, the offer's text as `message`, and its
+`timestamp`. `digest` lists your open and accepted handoffs, and
+those open to anyone in its rooms, even when nothing is unread. Open and accepted handoffs are kept until they
+end, however long history keeps the offer; finished ones for a week. At most
+10000 may be open at once.
+
 ### Accounts, operators, availability, and utility bots
 
 - `airc user login --nick NAME` verifies a saved identity with SASL. Ordinary commands reconnect using it automatically; upgrade the daemon before using this client's saved-account login.

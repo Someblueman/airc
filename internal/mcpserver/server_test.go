@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 type echoInput struct {
@@ -153,8 +155,10 @@ func TestStdioCancellationAndEOF(t *testing.T) {
 		t.Fatal("after cancellation", line)
 	}
 	// End of input cancels the outstanding call and returns nil.
-	fmt.Fprintln(feed, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"block"}}`)
-	time.Sleep(20 * time.Millisecond)
+	fmt.Fprintln(feed, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"block","_meta":{"progressToken":8}}}`)
+	if line := next(); !strings.Contains(line, `"progressToken":8`) {
+		t.Fatal("outstanding call", line)
+	}
 	go func() {
 		for lines.Scan() {
 		}
@@ -227,10 +231,11 @@ func TestHTTPSessionsAndStatusCodes(t *testing.T) {
 	if r := post(t, url, id, `{"jsonrpc":"2.0","id":2,"method":"no/such"}`); r.StatusCode != http.StatusBadRequest {
 		t.Fatal("unknown method", r.StatusCode)
 	}
-	// A failed initialize leaves no session behind.
-	if r := post(t, url, "", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); r.StatusCode != http.StatusOK || h.Sessions() != 1 {
-		t.Fatal("uninitialized session kept", r.StatusCode, h.Sessions())
+	// A failed initialize leaves no session behind, once its answer is sent.
+	if r := post(t, url, "", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); r.StatusCode != http.StatusOK {
+		t.Fatal("uninitialized session", r.StatusCode)
 	}
+	testwait.Until(t, 2*time.Second, "the uninitialized session to close", func() bool { return h.Sessions() == 1 && closed.Load() == 1 })
 	// One GET stream per session; replay is unsupported.
 	get := func(header ...string) *http.Response {
 		request, _ := http.NewRequest(http.MethodGet, url, nil)

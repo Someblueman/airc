@@ -170,6 +170,9 @@ func chatEntryText(e irc.ChatEntry) string {
 	if e.Text != "" {
 		text.WriteString(": " + e.Text)
 	}
+	if e.State != "" {
+		text.WriteString("; " + handoffState(e))
+	}
 	if !e.ExpiresAt.IsZero() {
 		text.WriteString("; expires " + e.ExpiresAt.Format(time.RFC3339))
 	}

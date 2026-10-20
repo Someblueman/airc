@@ -12,6 +12,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -43,21 +44,25 @@ func TestBackendCheckRoomsAndWait(t *testing.T) {
 	}
 	first := post("#check-a", "a one")
 	post("#check-b", "b one")
-	check := func(r core.Request) (core.CheckResult, time.Duration) {
-		t.Helper()
+	timedCheck := func(r core.Request) (core.CheckResult, time.Duration, error) {
 		r.Version, r.RequestID, r.Operation = 1, "check", core.Check
 		grant, err := s.AuthorizeAuthorRead(context.Background(), reader, r, time.Now())
 		if err != nil {
-			t.Fatal(err)
+			return core.CheckResult{}, 0, err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
 		start := time.Now()
 		result, err := b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
+		return result, time.Since(start), err
+	}
+	check := func(r core.Request) (core.CheckResult, time.Duration) {
+		t.Helper()
+		result, took, err := timedCheck(r)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return result, time.Since(start)
+		return result, took
 	}
 	result, _ := check(core.Request{Limit: 10, Rooms: []core.CheckRoom{{Name: "#check-a", After: first}, {Name: "#check-b", After: "retained"}}})
 	if len(result.Rooms) != 2 || len(result.Rooms[0].Messages) != 0 || len(result.Rooms[1].Messages) != 1 || result.Rooms[1].Messages[0].Message != "b one" {
@@ -66,25 +71,47 @@ func TestBackendCheckRoomsAndWait(t *testing.T) {
 	latest := result.Rooms[1].Cursor
 	rooms := []core.CheckRoom{{Name: "#check-a", After: latest}, {Name: "#check-b", After: latest}}
 
-	sent := make(chan error, 1)
-	go func() {
-		time.Sleep(400 * time.Millisecond)
-		sent <- poster.Send("#check-a", "a two")
-	}()
-	result, took := check(core.Request{Limit: 10, WaitSeconds: 10, Rooms: rooms})
-	if err := <-sent; err != nil {
-		t.Fatal(err)
+	type answer struct {
+		result core.CheckResult
+		took   time.Duration
+		at     time.Time
+		err    error
 	}
-	if len(result.Rooms[0].Messages) != 1 || result.Rooms[0].Messages[0].Message != "a two" || took < 300*time.Millisecond || took > 2*time.Second {
-		t.Fatalf("waiting check: %+v after %v", result, took)
+	waited := make(chan answer, 1)
+	go func() {
+		result, took, err := timedCheck(core.Request{Limit: 10, WaitSeconds: 10, Rooms: rooms})
+		waited <- answer{result, took, time.Now(), err}
+	}()
+	sent := postWhileAwaiting(t, b, func() error { return poster.Send("#check-a", "a two") })
+	a := <-waited
+	if a.err != nil {
+		t.Fatal(a.err)
+	}
+	result = a.result
+	if len(result.Rooms[0].Messages) != 1 || result.Rooms[0].Messages[0].Message != "a two" || a.at.Before(sent) || a.took > 2*time.Second {
+		t.Fatalf("waiting check: %+v after %v", result, a.took)
 	}
 
 	// Nothing new: the wait ends before the 4 s request deadline, empty.
 	rooms = []core.CheckRoom{{Name: "#check-a", After: result.Rooms[0].Cursor}, {Name: "#check-b", After: result.Rooms[0].Cursor}}
-	result, took = check(core.Request{Limit: 10, WaitSeconds: 10, Rooms: rooms})
+	result, took := check(core.Request{Limit: 10, WaitSeconds: 10, Rooms: rooms})
 	if len(result.Rooms[0].Messages)+len(result.Rooms[1].Messages) != 0 || took < 2*time.Second || took > 4*time.Second {
 		t.Fatalf("quiet check: %+v after %v", result, took)
 	}
+}
+
+// postWhileAwaiting makes post once b has a check waiting for news after
+// its empty snapshot, and returns when it started posting. AIRC answered
+// that snapshot before the post, so the post can reach the check only by
+// waking it.
+func postWhileAwaiting(t *testing.T, b *backend.Backend, post func() error) time.Time {
+	t.Helper()
+	testwait.Until(t, 4*time.Second, "a check waiting for news", func() bool { return b.Awaiting() == 1 })
+	sent := time.Now()
+	if err := post(); err != nil {
+		t.Fatal(err)
+	}
+	return sent
 }
 
 // TestBackendCheckLongWait waits longer than an upstream session's 10 s read
@@ -176,18 +203,17 @@ func TestBackendCheckInbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sent := make(chan error, 1)
-	go func() {
-		time.Sleep(400 * time.Millisecond)
-		sent <- sender.Send("inbox-owner", "while waiting")
-	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	start := time.Now()
-	result, err = b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		result, err = b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
+		done <- err
+	}()
+	postWhileAwaiting(t, b, func() error { return sender.Send("inbox-owner", "while waiting") })
+	err = <-done
 	cancel()
-	if err := <-sent; err != nil {
-		t.Fatal(err)
-	}
 	if err != nil || len(result.Inbox.Messages) != 1 || result.Inbox.Messages[0].Message != "while waiting" || time.Since(start) > 2*time.Second {
 		t.Fatalf("waiting inbox: %+v %v after %v", result.Inbox, err, time.Since(start))
 	}
@@ -269,19 +295,17 @@ func TestBackendCheckThreads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sent := make(chan error, 1)
-	go func() {
-		time.Sleep(400 * time.Millisecond)
-		sent <- sender.Reply(room, "late child")
-	}()
 	ctx, cancel = context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 	start := time.Now()
-	result, err = b.Check(ctx, grant, backend.CheckScope{Readable: func(string) bool { return true }})
-	if err := <-sent; err != nil {
-		t.Fatal(err)
-	}
-	if err != nil || len(result.Threads) != 2 || len(result.Threads[0].Messages) != 1 || result.Threads[0].Messages[0].Message != "late child" || time.Since(start) > 2*time.Second {
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		result, err = b.Check(ctx, grant, backend.CheckScope{Readable: func(string) bool { return true }})
+		done <- err
+	}()
+	postWhileAwaiting(t, b, func() error { return sender.Reply(room, "late child") })
+	if err = <-done; err != nil || len(result.Threads) != 2 || len(result.Threads[0].Messages) != 1 || result.Threads[0].Messages[0].Message != "late child" || time.Since(start) > 2*time.Second {
 		t.Fatalf("waiting thread check: %+v %v after %v", result, err, time.Since(start))
 	}
 }

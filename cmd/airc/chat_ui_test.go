@@ -42,7 +42,7 @@ func TestUIThreadsSearchPinsCorrectionsAndLiveSignals(t *testing.T) {
 	h.until("correction", func() bool {
 		for _, e := range h.model.find("#room").items {
 			if m, ok := e.(*irc.MessageEvent); ok && m.ID == root.ID {
-				return strings.Contains(chatBody(m.ChatMetadata, m.ID, m.From, m.Message), "superseded")
+				return strings.Contains(chatBody(m.ChatMetadata, m.ID, m.ReplyTo, m.From, m.Message), "superseded")
 			}
 		}
 		return false
@@ -130,4 +130,32 @@ func TestUIModerationUsesCredentialAndEnforcesRules(t *testing.T) {
 	h.command("/unban writer")
 	h.until("unban", func() bool { s, _ := h.model.activeStatus(); return strings.HasPrefix(s, "unban writer") })
 	send(t, address, "writer", "#room", "returned")
+}
+
+func TestUIHandoffCommands(t *testing.T) {
+	address := chatServer(t, 64)
+	h := startUIBackend(t, address, "#room")
+	h.until("startup", func() bool { return h.model.connected })
+	h.command("/handoff @builder fix the parser")
+	var id string
+	h.until("offer", func() bool {
+		s, _ := h.model.activeStatus()
+		if fields := strings.Fields(s); len(fields) > 2 && fields[0] == "handoff" && strings.HasSuffix(s, "; open") {
+			id = fields[2]
+		}
+		return id != ""
+	})
+	offer := cliJSON[handoffRow](t, address, "handoffs", "--id", id)
+	if offer.For != "builder" || offer.Message != "fix the parser" {
+		t.Fatalf("the UI offered %+v", offer)
+	}
+	mustCLI(t, address, "handoff", "accept", id, "--nick", "builder")
+	h.until("accept", func() bool { return strings.Contains(h.texts("#room"), "builder: Accepted handoff "+id) })
+	h.command("/handoffs")
+	h.until("listing", func() bool {
+		s, _ := h.model.activeStatus()
+		return strings.Contains(s, "handoff "+id+" accepted by builder in #room from me for builder")
+	})
+	h.command("/withdraw " + id + " not needed")
+	h.until("withdraw", func() bool { s, _ := h.model.activeStatus(); return strings.HasSuffix(s, "; withdrawn") })
 }

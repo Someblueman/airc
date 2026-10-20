@@ -231,7 +231,7 @@ func waitReceipt(t *testing.T, base, id string, headers map[string]string) core.
 		if time.Now().After(deadline) {
 			t.Fatalf("receipt %s still %s", id, result.State)
 		}
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 }
 

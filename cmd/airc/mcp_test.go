@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 20 {
+	if len(tools.Tools) != 22 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -87,6 +87,22 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		t.Fatal("reply signal missing", string(encoded))
 	}
 	call("cancel", map[string]any{"id": id})
+	offered := call("handoff", map[string]any{"channel": "#room", "message": "triage the flaky test"})
+	data, _ = json.Marshal(offered.StructuredContent)
+	var handoff struct {
+		Rows []struct {
+			ID    string `json:"id"`
+			State string `json:"state"`
+		}
+	}
+	if err := json.Unmarshal(data, &handoff); err != nil || len(handoff.Rows) != 1 || handoff.Rows[0].State != "open" {
+		t.Fatal(string(data), err)
+	}
+	call("handoff", map[string]any{"step": "withdraw", "id": handoff.Rows[0].ID, "message": "not needed after all"})
+	data, _ = json.Marshal(call("handoffs", map[string]any{"channel": "#room"}).StructuredContent)
+	if !strings.Contains(string(data), `"state":"withdrawn"`) {
+		t.Fatal("handoff listing", string(data))
+	}
 	call("follow", map[string]any{"id": id})
 	call("unfollow", map[string]any{"id": id})
 	call("react", map[string]any{"id": id, "reaction": "agree"})

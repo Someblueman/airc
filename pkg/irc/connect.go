@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -63,18 +64,18 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	c.setEphemeral(false)
 	c.setAccountID("")
 	c.setFeatures(nil)
+	// Registration is one write: every line, the SASL login included, goes
+	// in the connection's first record. aircd reads its lines in order, so
+	// nothing waits on a reply, and a peer refusing the first line has read
+	// the rest by then, so its close cannot reset the connection before the
+	// refusal is read.
+	var flight strings.Builder
 	if c.cfg.GatewayToken != "" {
 		// First, so every later command is attributed to the client's source.
-		if err := c.writeLine("WEBIRC " + c.cfg.Source + " :" + c.cfg.GatewayToken + "\r\n"); err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
+		flight.WriteString("WEBIRC " + c.cfg.Source + " :" + c.cfg.GatewayToken + "\r\n")
 	}
 	if c.cfg.AccessToken != "" {
-		if err := c.writeLine("PASS :" + c.cfg.AccessToken + "\r\n"); err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
+		flight.WriteString("PASS :" + c.cfg.AccessToken + "\r\n")
 	}
 	deadline := time.Now().Add(c.cfg.ReadTimeout)
 	if until, ok := ctx.Deadline(); ok && until.Before(deadline) {
@@ -82,39 +83,29 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	_ = conn.SetReadDeadline(deadline)
 	scanner := newScanner(conn)
-	if c.cfg.IdentityToken != "" && !c.cfg.CreateAccount {
+	// pendingLogin holds until the server confirms the SASL login, whose
+	// replies arrive before registration completes.
+	pendingLogin := false
+	if c.cfg.IdentityToken != "" {
 		if !validIdentityToken(c.cfg.IdentityToken) {
 			_ = conn.Close()
 			return nil, nil, errors.New("invalid account credential")
 		}
-		if err := c.loginSASL(ctx, scanner); err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
-	}
-	if c.cfg.IdentityToken != "" && c.cfg.CreateAccount {
-		if !validIdentityToken(c.cfg.IdentityToken) {
-			_ = conn.Close()
-			return nil, nil, errors.New("invalid account credential")
-		}
-		name := "REGISTER"
-		line, err := commandLine(name, []string{c.currentNick()}, c.cfg.IdentityToken)
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
-		if err := c.writeLine(line); err != nil {
-			_ = conn.Close()
-			return nil, nil, err
+		if c.cfg.CreateAccount {
+			line, err := commandLine("REGISTER", []string{c.currentNick()}, c.cfg.IdentityToken)
+			if err != nil {
+				_ = conn.Close()
+				return nil, nil, err
+			}
+			flight.WriteString(line)
+		} else {
+			flight.WriteString(c.saslLogin())
+			pendingLogin = true
 		}
 	}
 	if c.cfg.Ephemeral {
-		// Sent first so the mode applies to registration itself.
-		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
-			c.clearConn(conn)
-			_ = conn.Close()
-			return nil, nil, err
-		}
+		// Before NICK and USER, so the mode applies to registration itself.
+		flight.WriteString("EPHEMERAL\r\n")
 	}
 	nick := c.currentNick()
 	c.mu.Lock()
@@ -128,29 +119,21 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			_ = conn.Close()
 			return nil, nil, err
 		}
-		if err := c.writeLine(line); err != nil {
-			c.clearConn(conn)
+		flight.WriteString(line)
+	}
+	for _, command := range [][]string{{"NICK", nick}, {"USER", c.cfg.Username, "0", "*"}} {
+		trailing := ""
+		if command[0] == "USER" {
+			trailing = c.cfg.RealName
+		}
+		line, err := commandLine(command[0], command[1:], trailing)
+		if err != nil {
 			_ = conn.Close()
 			return nil, nil, err
 		}
+		flight.WriteString(line)
 	}
-	nickLine, err := commandLine("NICK", []string{nick}, "")
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	if err := c.writeLine(nickLine); err != nil {
-		c.clearConn(conn)
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	userLine, err := commandLine("USER", []string{c.cfg.Username, "0", "*"}, c.cfg.RealName)
-	if err != nil {
-		c.clearConn(conn)
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	if err := c.writeLine(userLine); err != nil {
+	if err := c.writeLine(flight.String()); err != nil {
 		c.clearConn(conn)
 		_ = conn.Close()
 		return nil, nil, err
@@ -161,6 +144,15 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			c.clearConn(conn)
 			_ = conn.Close()
 			return nil, nil, err
+		}
+		if pendingLogin {
+			confirmed, err := saslReply(command)
+			if err != nil {
+				c.clearConn(conn)
+				_ = conn.Close()
+				return nil, nil, err
+			}
+			pendingLogin = !confirmed
 		}
 		if command.Name == "464" || command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && (c.cfg.IdentityToken != "" || c.cfg.AccessToken != "") || (command.Name == "461" || command.Name == "462") && c.cfg.GatewayToken != "" {
 			c.clearConn(conn)
@@ -191,6 +183,11 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
 		}
 		if command.Name == "001" {
+			if pendingLogin {
+				c.clearConn(conn)
+				_ = conn.Close()
+				return nil, nil, errors.New("server registered the connection without confirming its login")
+			}
 			if err := c.rejoin(); err != nil {
 				c.clearConn(conn)
 				_ = conn.Close()

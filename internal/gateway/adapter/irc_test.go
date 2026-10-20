@@ -111,9 +111,13 @@ func TestIRCOwnerRejectsMissingCapacity(t *testing.T) {
 // Real servers stay silent while a channel is quiet. The owner must keep that
 // session (no reconnect gap) and still join promptly on cancellation.
 func TestIRCOwnerIdleSessionStaysConnected(t *testing.T) {
+	// The silence outlasts the setup budget; a short one keeps it brief.
+	budget := auth.IRCSetupBudget
+	t.Cleanup(func() { auth.IRCSetupBudget = budget })
+	auth.IRCSetupBudget = time.Second
 	f := newBridgeAdapterFixture(t)
 	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
-		time.Sleep(3500 * time.Millisecond)
+		time.Sleep(auth.IRCSetupBudget + 500*time.Millisecond)
 		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
 		if _, err := io.WriteString(conn, "@account=alice;msgid=after-idle;time="+stamp+" :alice!u@h PRIVMSG #external :after idle\r\n"); err != nil {
 			t.Error(err)

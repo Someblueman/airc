@@ -298,7 +298,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 	switch e := event.(type) {
 	case *irc.MessageEvent:
-		if b.notifier != nil && !strings.EqualFold(e.From, b.nick) && addressedTo(b.nick, e.Target, e.Message) {
+		if b.notifier != nil && !strings.EqualFold(e.From, b.nick) && addressedTo(b.nick, e.Target, e.Message, e.For) {
 			if err := b.notifier.notify(ctx, e.From+" in "+e.Target, e.Message); err != nil {
 				b.emit(ctx, statusIn{text: "Notification failed: " + err.Error(), isError: true})
 			}

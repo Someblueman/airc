@@ -22,6 +22,7 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 var chatReadOnlyActions = map[string]bool{
 	"context": true, "pins": true, "waiting": true, "prepare": true,
 	"cancel": true, "typing": true, "thinking": true, "results": true,
+	"handoffs": true,
 }
 
 func (s *Server) chatLocked(client *session, command protocol.Command) {
@@ -56,6 +57,8 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 		err = s.chatPostLocked(client, r)
 	case "poll", "vote", "results", "close-poll":
 		err = s.pollLocked(client, r)
+	case "handoff", "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw", "handoffs":
+		err = s.handoffLocked(client, r)
 	default:
 		err = errors.New("unknown CHAT action")
 	}

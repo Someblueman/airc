@@ -12,6 +12,10 @@ import (
 
 var ErrStreamRenew = errors.New("stream lease expired")
 
+// StreamPageInterval is how often a quiet watch stream emits an empty page; a
+// variable only so tests can shorten it.
+var StreamPageInterval = 2 * time.Second
+
 // streamWatch owns one subscription for the whole authorized lease. The sink
 // must bound its writes and return errors synchronously; there is no send queue.
 func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadline time.Time, emit func(HistoryPage) error) (HistoryPage, error) {
@@ -76,7 +80,7 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 		delivered = len(buffer.messages) + len(buffer.events)
 	}
 	buffer = freshWatchBuffer(r, client, buffer)
-	timer := time.NewTicker(2 * time.Second)
+	timer := time.NewTicker(StreamPageInterval)
 	defer timer.Stop()
 	for {
 		select {

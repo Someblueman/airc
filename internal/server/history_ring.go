@@ -163,7 +163,7 @@ func (h *historyRing) add(message Message) []string {
 func newEntry(message Message) *entry {
 	e := &entry{Message: message}
 	if protocol.IsChannel(message.Target) {
-		e.mentions = protocol.Mentions(message.Body)
+		e.mentions = protocol.MessageMentions(message.Body, message.For)
 	}
 	e.bytes = e.size()
 	return e

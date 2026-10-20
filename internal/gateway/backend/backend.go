@@ -46,6 +46,9 @@ type Backend struct {
 	waitTotal  int
 	waitActive map[string]int
 	waitLimit  int
+	// awaiting counts checks waiting for news after an empty snapshot;
+	// see Awaiting.
+	awaiting int
 	// freed, made by a read waiting for a slot, is closed when one frees.
 	freed chan struct{}
 	// pool keeps sessions that finished a request cleanly for the same

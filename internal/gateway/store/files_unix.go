@@ -87,7 +87,10 @@ func (f *files) file(name string, create bool) (*os.File, error) {
 func (f *files) close() error {
 	var errs []error
 	if f.lock != nil {
-		errs = append(errs, f.lock.Close())
+		// Unlock before closing: a child forked meanwhile holds a copy of
+		// the descriptor until it execs, and a plain close leaves the lock
+		// held through that copy.
+		errs = append(errs, unix.Flock(int(f.lock.Fd()), unix.LOCK_UN), f.lock.Close())
 		f.lock = nil
 	}
 	if f.directory != nil {
