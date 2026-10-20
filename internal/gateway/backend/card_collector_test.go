@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestCardMutationCollector(t *testing.T) {
 				t.Fatalf("outgoing profile command = %q", command)
 			}
 			if tc.want == "" {
-				if got.Card == nil || got.Card.Card != tc.card {
+				if got.Card == nil || !reflect.DeepEqual(got.Card.Card, tc.card) {
 					t.Fatalf("card=%+v completion=%+v", got.Card, got.Completion)
 				}
 				return
@@ -123,7 +124,7 @@ func TestProfileMutationCollectorAcceptsEscapedAcknowledgementOverFourKiB(t *tes
 	if command != "PROFILE :"+string(wantFields) {
 		t.Fatalf("outgoing large profile command was not exact: %q", command)
 	}
-	if got.Card == nil || got.Card.Card != card || got.Completion.Failure.Code != "" {
+	if got.Card == nil || !reflect.DeepEqual(got.Card.Card, card) || got.Completion.Failure.Code != "" {
 		t.Fatalf("large profile card=%+v completion=%+v", got.Card, got.Completion)
 	}
 }

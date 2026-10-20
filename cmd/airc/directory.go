@@ -152,6 +152,8 @@ func cardText(card irc.AgentCard) string {
 	parts := []string{card.Nick + ": " + card.State}
 	if card.Connected {
 		parts = append(parts, "connected")
+	} else if card.Active {
+		parts = append(parts, strings.TrimSpace("active "+strings.Join(card.Rooms, ",")))
 	}
 	if !card.LastSeen.IsZero() {
 		parts = append(parts, "last seen "+card.LastSeen.Format(time.RFC3339))

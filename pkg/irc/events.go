@@ -122,10 +122,14 @@ type EndOfHistoryEvent struct {
 
 func (*EndOfHistoryEvent) ircEvent() {}
 
+// AgentInfo is one agent in an agents listing: with a persistent session,
+// its joined channels and when it connected; a one-shot agent, listed when
+// asked for active agents, has the rooms it used and when it was last active.
 type AgentInfo struct {
 	Nick        string    `json:"nick"`
 	Channels    []string  `json:"channels"`
-	ConnectedAt time.Time `json:"connected_at"`
+	ConnectedAt time.Time `json:"connected_at,omitzero"`
+	ActiveAt    time.Time `json:"active_at,omitzero"`
 }
 
 type AgentsEvent struct {

@@ -24,6 +24,10 @@ type AgentCard struct {
 	ExpiresAt time.Time `json:"expires_at,omitzero"`
 	LastSeen  time.Time `json:"last_seen,omitzero"`
 	Connected bool      `json:"connected"`
+	// Active is a persistent session, or a check, wait or post within the
+	// last ten minutes; Rooms are the rooms those used.
+	Active bool     `json:"active"`
+	Rooms  []string `json:"rooms,omitempty"`
 }
 
 func BriefText(text string, limit int) bool {

@@ -12,10 +12,15 @@ import (
 	"github.com/Someblueman/airc/internal/version"
 )
 
+// agentListing is one agent in AGENTS. An agent with a persistent session
+// has its joined channels and when it connected; with ACTIVE, a one-shot agent
+// active within the last ten minutes is listed too, with the rooms it used and
+// when it was last active, and no connection time.
 type agentListing struct {
 	Nick        string    `json:"nick"`
 	Channels    []string  `json:"channels"`
-	ConnectedAt time.Time `json:"connected_at"`
+	ConnectedAt time.Time `json:"connected_at,omitzero"`
+	ActiveAt    time.Time `json:"active_at,omitzero"`
 }
 
 func (s *Server) statusLocked(client *session) {
@@ -214,8 +219,9 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 	s.numericLocked(client, "761", params, "End of history")
 }
 
-func (s *Server) agentsLocked(client *session) {
+func (s *Server) agentsLocked(client *session, command protocol.Command) {
 	entries := make([]agentListing, 0, len(s.clients))
+	listed := map[string]bool{}
 	for _, member := range s.clients {
 		if !member.registered || member.hidden() || member == client {
 			continue
@@ -226,6 +232,20 @@ func (s *Server) agentsLocked(client *session) {
 		}
 		sort.Strings(channels)
 		entries = append(entries, agentListing{Nick: member.client.Nick, Channels: channels, ConnectedAt: member.client.ConnectedAt})
+		listed[nickKey(member.client.Nick)] = true
+	}
+	// Older clients never ask, so they never see an entry without a
+	// connection time.
+	if mode, _ := command.Param(0); strings.EqualFold(mode, "ACTIVE") {
+		now := s.now()
+		for key, a := range s.activity {
+			if listed[key] || key == nickKey(client.client.Nick) {
+				continue
+			}
+			if seen, rooms, ok := s.recentLocked(a.nick, now); ok {
+				entries = append(entries, agentListing{Nick: a.nick, Channels: append([]string{}, rooms...), ActiveAt: seen})
+			}
+		}
 	}
 	sort.Slice(entries, func(i, j int) bool { return strings.ToLower(entries[i].Nick) < strings.ToLower(entries[j].Nick) })
 	for _, entry := range entries {

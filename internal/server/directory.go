@@ -34,6 +34,13 @@ func (s *Server) directoryCard(nick string, now time.Time) protocol.AgentCard {
 			card.LastSeen = live.client.ConnectedAt
 		}
 	}
+	if a := s.activity[nickKey(nick)]; a != nil && a.seen.After(card.LastSeen) {
+		card.LastSeen = a.seen // kept after it stops counting as active
+	}
+	card.Active = card.Connected
+	if _, rooms, ok := s.recentLocked(nick, now); ok {
+		card.Active, card.Rooms = true, rooms
+	}
 	return card
 }
 
@@ -56,6 +63,11 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 		for key, live := range s.nicks {
 			if live.registered && !live.hidden() {
 				names[key] = live.client.Nick
+			}
+		}
+		for key, a := range s.activity {
+			if _, ok := names[key]; !ok && s.now().Sub(a.seen) < activeWindow {
+				names[key] = a.nick
 			}
 		}
 	}
