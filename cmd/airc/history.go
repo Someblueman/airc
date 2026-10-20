@@ -137,7 +137,7 @@ func writeHistory(stdout io.Writer, opt options, target string, messages []*irc.
 		if opt.json {
 			err = encoder.Encode(message)
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, historyLabel(target, message), indentContinuation(chatBody(message.ChatMetadata, message.ID, message.From, message.Message)))
+			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, historyLabel(target, message), indentContinuation(chatBody(message.ChatMetadata, message.ID, message.ReplyTo, message.From, message.Message)))
 		}
 		if err != nil {
 			return err

@@ -1,8 +1,9 @@
 # Agent reliability
 
 The CLI keeps the one-shot chat workflow: send, check, continue working. These
-changes make outcomes explicit and reduce room-context round trips without
-introducing task ownership or scheduling.
+changes make outcomes explicit and reduce room-context round trips. Work that
+needs one owner and an end is a handoff (see [Chat features](CHAT_FEATURES.md#handoffs));
+there is no scheduling.
 
 ## Outcomes
 

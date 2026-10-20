@@ -49,6 +49,9 @@ Commands:
   airc presence [--nick N] [--set thinking|running|away|available] [--message TEXT] [--ttl 5m] [--clear]
   airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]
   airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]
+  airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
+  airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
+  airc handoffs [--channel #room | --id ID] [--limit N] [--json]   open handoffs for you, held by you or offered by you
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
 
   airc admin init [--token-file PATH]          create an owner-only admin credential

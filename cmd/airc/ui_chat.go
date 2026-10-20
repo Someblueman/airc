@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -103,6 +105,31 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			}
 			request.Action, request.Text, request.Options, request.Seconds = "poll", parts[0], parts[1:], 3600
 		}
+	case "/handoff":
+		if !need(1) {
+			return nil, true
+		}
+		switch {
+		case b != nil && b.kind == bufChannel:
+			request.Target, request.Text = b.name, rest
+			if nick, ok := strings.CutPrefix(fields[0], "@"); ok && len(fields) > 1 {
+				request.For, request.Text = nick, strings.TrimSpace(rest[len(fields[0]):])
+			}
+		case b != nil && b.kind == bufQuery && protocol.ValidNick(b.name):
+			request.Target, request.Text = b.name, rest
+		default:
+			m.setStatus("/handoff needs a room or a direct conversation", true)
+			return nil, true
+		}
+		request.Action = "handoff"
+	case "/accept", "/decline", "/done", "/withdraw":
+		if !need(1) {
+			return nil, true
+		}
+		request.Action, request.ID = "handoff-"+name[1:], fields[0]
+		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+	case "/handoffs":
+		request.Action = "handoffs"
 	case "/op", "/deop", "/kick":
 		if b == nil || b.kind != bufChannel || !need(1) {
 			m.setStatus("Use "+name+" nick [reason] in a channel", true)
@@ -145,6 +172,15 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			return true, nil
 		}
 		entries, err := irc.RequestChat(ctx, c, *cmd.request, translate)
+		if err == nil && cmd.request.Action == "handoffs" {
+			// One status line holds the whole list.
+			listed := []string{}
+			for _, e := range entries {
+				listed = append(listed, strings.SplitN(handoffText(e), "\n", 2)[0])
+			}
+			b.emit(ctx, statusIn{text: cmp.Or(strings.Join(listed, "; "), "No handoffs")})
+			return true, nil
+		}
 		if err == nil {
 			for _, e := range entries {
 				if e.Action == "typing" || e.Action == "thinking" {
