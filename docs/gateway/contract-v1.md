@@ -189,7 +189,10 @@ wraps them.
 A mutation `result` describes the job. `state` is `queued`, `dispatching`,
 `retry_wait`, `uncertain`, `accepted`, `rejected`, `expired`, `blocked` or
 `credential_wait`. `accepted`, `persisted` and `recipient_connected` are
-nullable: null means unknown, and connected never means read. `message_id`
+nullable: null means unknown, and connected never means read.
+`recipient_active`, when present, is AIRC's: a direct message's recipient
+connected, or at work through one-shot commands in the last ten minutes;
+absent means unknown. `message_id`
 appears once AIRC accepts the message. `duplicate_risk` and
 `acceptance_uncertain` flag a send that may have reached AIRC before a
 failure. `next_action` (`send`, `lookup`, `await_receipt`,

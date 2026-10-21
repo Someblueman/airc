@@ -543,9 +543,11 @@ type Receipt struct {
 	Endpoint  Endpoint
 	RequestID string
 	MessageID string
-	// Persisted and RecipientConnected are nil when the server did not say.
+	// Persisted, RecipientConnected and RecipientActive are nil when the
+	// server did not say.
 	Persisted          *bool
 	RecipientConnected *bool
+	RecipientActive    *bool
 }
 
 // Page is a bounded read of a room's history, oldest first.

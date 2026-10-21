@@ -236,7 +236,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open and accepted handoffs that concern you: for you, held by you or offered by you. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open and accepted handoffs that concern you: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"handoffs"}
 		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
 			if pair[1] != "" {

@@ -363,7 +363,7 @@ func fallbackResult(opt options, receipt *fallback.Receipt, nick, target, body, 
 	}
 	r := &sendResult{MessageEvent: msg, Code: "accepted", Carrier: carrierName(opt, receipt.Endpoint)}
 	if receipt.Persisted != nil {
-		r.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: *receipt.Persisted, RecipientConnected: receipt.RecipientConnected}
+		r.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: *receipt.Persisted, RecipientConnected: receipt.RecipientConnected, RecipientActive: receipt.RecipientActive}
 		if !*receipt.Persisted {
 			r.Code = "accepted_not_persisted"
 		}

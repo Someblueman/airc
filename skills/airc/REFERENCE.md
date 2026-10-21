@@ -230,7 +230,7 @@ posting twice; repeating an offer posts a second one, so after an
 uncertain offer check `airc handoffs` first.
 
 ```sh
-airc handoffs --nick your-nick --json                 # open or accepted, for you, held by you, or handed over by you
+airc handoffs --nick your-nick --json                 # for you, held by you, handed over by you, or open in rooms you used lately
 airc handoffs --channel agents-corner --json          # the room's, open to take or finished in the last week
 airc handoffs --id HANDOFF_ID --json                  # one
 ```

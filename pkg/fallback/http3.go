@@ -33,7 +33,34 @@ func (c *Client) dialHTTP3(ctx context.Context, e Endpoint, progress func()) (*h
 
 // quicSessions is the TLS session cache every QUIC connection shares, keyed
 // by server name, so a redial resumes the session and may send 0-RTT.
-var quicSessions = tls.NewLRUClientSessionCache(64)
+var quicSessions = copiedSessions{tls.NewLRUClientSessionCache(64)}
+
+// copiedSessions hands each dial its own copy of a cached session: quic-go
+// writes to the session it resumes, and dials resume one at once (a hedged
+// follow's two legs, or a host's addresses raced).
+type copiedSessions struct{ tls.ClientSessionCache }
+
+func (s copiedSessions) Get(key string) (*tls.ClientSessionState, bool) {
+	cs, ok := s.ClientSessionCache.Get(key)
+	if !ok {
+		return nil, false
+	}
+	ticket, state, err := cs.ResumptionState()
+	if err != nil || state == nil {
+		return nil, false
+	}
+	data, err := state.Bytes()
+	if err != nil {
+		return nil, false
+	}
+	if state, err = tls.ParseSessionState(data); err != nil {
+		return nil, false
+	}
+	if cs, err = tls.NewResumptionState(ticket, state); err != nil {
+		return nil, false
+	}
+	return cs, true
+}
 
 func (c *Client) sessions() tls.ClientSessionCache { return quicSessions }
 

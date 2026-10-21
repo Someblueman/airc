@@ -94,6 +94,7 @@ type result struct {
 	MessageID           string   `json:"message_id"`
 	Persisted           *bool    `json:"persisted"`
 	RecipientConnected  *bool    `json:"recipient_connected"`
+	RecipientActive     *bool    `json:"recipient_active"`
 	DuplicateRisk       bool     `json:"duplicate_risk"`
 	AcceptanceUncertain bool     `json:"acceptance_uncertain"`
 	Failure             *failure `json:"error"`
@@ -237,7 +238,7 @@ func (c *Client) follow(ctx context.Context, k *Conn, d detached) (*Receipt, err
 		}
 		switch r.State {
 		case "accepted":
-			return &Receipt{Endpoint: k.Endpoint, RequestID: r.RequestID, MessageID: r.MessageID, Persisted: r.Persisted, RecipientConnected: r.RecipientConnected}, nil
+			return &Receipt{Endpoint: k.Endpoint, RequestID: r.RequestID, MessageID: r.MessageID, Persisted: r.Persisted, RecipientConnected: r.RecipientConnected, RecipientActive: r.RecipientActive}, nil
 		case "rejected", "expired", "blocked":
 			f := failure{Code: r.State}
 			if r.Failure != nil {

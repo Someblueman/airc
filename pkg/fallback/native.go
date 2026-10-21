@@ -81,7 +81,7 @@ func receiptOf(e Endpoint, event *irc.SendReceiptEvent) *Receipt {
 	if event.Receipt != nil {
 		persisted := event.Receipt.Persisted
 		r.Persisted = &persisted
-		r.RecipientConnected = event.Receipt.RecipientConnected
+		r.RecipientConnected, r.RecipientActive = event.Receipt.RecipientConnected, event.Receipt.RecipientActive
 	}
 	if r.RecipientConnected == nil && !protocol.IsChannel(event.Target) {
 		connected := !event.Queued

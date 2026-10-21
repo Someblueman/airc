@@ -63,7 +63,11 @@ func TestHandoffThroughTheCLI(t *testing.T) {
 	if d := cliJSON[digestSummary](t, address, "digest", "--nick", "reviewer", "--channel", "work"); len(d.Handoffs) != 1 || d.Handoffs[0].ID != open.ID {
 		t.Fatalf("reviewer's digest %+v", d.Handoffs)
 	}
-	if d := cliJSON[digestSummary](t, address, "digest", "--nick", "reviewer", "--channel", "elsewhere"); len(d.Handoffs) != 0 {
+	// Having just checked #work, the reviewer's own listing has it too.
+	if mine := jsonLines[handoffRow](t, mustCLI(t, address, "handoffs", "--nick", "reviewer", "--json")); len(mine) != 1 || mine[0].ID != open.ID {
+		t.Fatalf("reviewer's handoffs %+v", mine)
+	}
+	if d := cliJSON[digestSummary](t, address, "digest", "--nick", "stranger", "--channel", "elsewhere"); len(d.Handoffs) != 0 {
 		t.Fatalf("a digest of another room lists %+v", d.Handoffs)
 	}
 	mustCLI(t, address, "handoff", "withdraw", open.ID, "--nick", "planner")

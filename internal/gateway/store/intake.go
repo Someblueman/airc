@@ -404,6 +404,10 @@ func readJob(ctx context.Context, tx *txn, scope, requestID string) (Job, error)
 				value := *connected
 				j.Result.RecipientConnected = &value
 			}
+			if active := r.Receipt.RecipientActive; active != nil {
+				value := *active
+				j.Result.RecipientActive = &value
+			}
 			j.Result.MessageID = r.ID
 		}
 	}

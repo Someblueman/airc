@@ -5,6 +5,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,4 +134,44 @@ func TestHTTP3RecoversFromRejected0RTT(t *testing.T) {
 	if err := read("c"); err != nil {
 		t.Fatalf("the request after: %v", err)
 	}
+}
+
+// Dials that resume the same cached session at once (a hedged follow's two
+// legs, or a host's addresses raced) each resume their own copy of it:
+// quic-go writes to the session it resumes.
+func TestHTTP3ConcurrentDialsResumeTheSameSession(t *testing.T) {
+	g := newFakeGateway(t)
+	port, trust := serveHTTP3(t, g)
+	e, _ := ParseEndpoint("http3:localhost:" + strconv.Itoa(port))
+	c := &Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: trust, Endpoints: []Endpoint{e}}
+	k, err := c.Connect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.gateway.call(t.Context(), request{RequestID: "a", Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for _, ok := quicSessions.Get("localhost"); !ok && time.Now().Before(deadline); _, ok = quicSessions.Get("localhost") {
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = k.Close()
+	var wg sync.WaitGroup
+	for i := range 4 {
+		wg.Go(func() {
+			k, err := c.Connect(t.Context())
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer k.Close()
+			if _, err := k.gateway.call(t.Context(), request{RequestID: strconv.Itoa(i), Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
+				t.Error(err)
+			}
+			if !k.gateway.(*http3Conn).Resumed0RTT() {
+				t.Error("a concurrent dial did not resume the session")
+			}
+		})
+	}
+	wg.Wait()
 }

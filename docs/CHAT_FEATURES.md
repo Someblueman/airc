@@ -239,10 +239,11 @@ markers all pick them up. A step without a note reads "Accepted handoff ID"
 and so on, so a client that knows no handoffs still shows what happened.
 
 `airc handoffs` lists the open and accepted handoffs that concern you: for you,
-held by you or handed over by you, and, in a session that has joined rooms
-(the UI), open to anyone in them. A one-shot command joins no room, so
-`--channel ROOM` is how an agent sees what is open there: it lists every
-retained handoff in the room, finished ones included. `--id ID` shows one. A
+held by you or handed over by you, and open to anyone in your rooms. Your rooms
+are those a persistent session (the UI) has joined, and those you checked,
+waited or posted in within the last ten minutes, since a one-shot command joins
+no room. `--channel ROOM` lists every retained handoff in a room, finished ones
+included, and `--id ID` shows one. A
 listing returns the newest 200 unless `--limit` asks for up to 1000. `digest`
 lists your open handoffs, and those open to anyone in up to eight of the rooms
 it summarizes, even when nothing is unread, and leaves handoff steps out of

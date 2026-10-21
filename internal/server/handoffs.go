@@ -459,6 +459,8 @@ func describeHandoff(h handoff) string {
 // listHandoffsLocked answers one handoff by id, every retained handoff in a
 // room, or, by default, the open and accepted handoffs that concern client:
 // for it, held by it, offered by it, or open to anyone in a room it is in.
+// A one-shot agent joins no room, so the rooms it checked, waited or posted
+// in within the activity window count as its rooms.
 func (s *Server) listHandoffsLocked(client *session, r protocol.ChatRequest) error {
 	if r.Target != "" && !validChannel(r.Target) {
 		return errors.New("list a room's handoffs by its channel name")
@@ -468,6 +470,7 @@ func (s *Server) listHandoffsLocked(client *session, r protocol.ChatRequest) err
 	}
 	limit := cmp.Or(r.Limit, handoffPage)
 	now := s.now()
+	_, recent, _ := s.recentLocked(client.client.Nick, now)
 	var out []handoff
 	for _, h := range sortedHandoffs(s.handoffs) {
 		if !h.live() && now.Sub(h.Updated) > handoffKeep {
@@ -487,6 +490,7 @@ func (s *Server) listHandoffsLocked(client *session, r protocol.ChatRequest) err
 				continue
 			}
 			_, joined := client.channels[h.Offer.Target]
+			joined = joined || slices.Contains(recent, h.Offer.Target)
 			mine := h.Offer.For != "" && s.isNickLocked(client, h.Offer.For) || holdsHandoff(client, h) || authored(client, h.Offer) ||
 				h.State == handoffOpen && h.Offer.For == "" && joined
 			if !mine {
