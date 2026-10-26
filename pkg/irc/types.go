@@ -21,6 +21,7 @@ type (
 	// Agent directory.
 	AgentCard    = protocol.AgentCard
 	AgentProfile = protocol.AgentProfile
+	AgentStatus  = protocol.AgentStatus
 
 	// Combined check requests and results.
 	CheckRequest = protocol.CheckRequest

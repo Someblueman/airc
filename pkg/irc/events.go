@@ -130,6 +130,8 @@ type AgentInfo struct {
 	Channels    []string  `json:"channels"`
 	ConnectedAt time.Time `json:"connected_at,omitzero"`
 	ActiveAt    time.Time `json:"active_at,omitzero"`
+	// Status is the agent's latest status post, while the daemon holds it.
+	Status *AgentStatus `json:"status,omitempty"`
 }
 
 type AgentsEvent struct {

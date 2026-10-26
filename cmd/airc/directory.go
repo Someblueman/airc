@@ -196,5 +196,8 @@ func cardText(card irc.AgentCard) string {
 			parts = append(parts, field.label+": "+field.text)
 		}
 	}
+	if s := card.Status; s != nil {
+		parts = append(parts, strings.TrimSpace("status: ["+s.State+"] "+s.Task+" in "+s.Target+" "+s.Link))
+	}
 	return strings.Join(parts, "; ")
 }

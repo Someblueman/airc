@@ -91,6 +91,7 @@ func TestChatReadOnlyActionsAppendNothing(t *testing.T) {
 		"results":   {ID: pollID},
 		"handoffs":  {},
 		"decisions": {},
+		"statuses":  {Target: "#room"},
 	}
 	size, bytes := s.history.size, s.history.bytes
 	for _, action := range chatActionTable {

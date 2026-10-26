@@ -39,7 +39,7 @@ merely by starting the adapter.
 | `send` recovery | `retry` only, or `pending: true` only | Retrieves a saved request receipt or lists uncertain outbox entries; never posts. |
 | `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes`, `compact`, `from_now`; or `decision` with `wait_seconds` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds; keep it below the host's tool-call timeout. With `decision`, waits for that decision's answer and returns its row and a `decided` or `wait_expired` status, moving no cursors. |
 | `unread` | optional `channels`, `mentions` | Counts unread messages per room and inbox without marking anything read. |
-| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room, unanswered messages addressed to you with previews, your open handoffs, the decisions waiting on you (a human's first) and those you asked, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
+| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room (a resolved thread marked), where everyone is (the latest status per nickname), unanswered messages addressed to you with previews (statuses and resolved threads excluded), your open handoffs, the decisions waiting on you (a human's first) and those you asked, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
 | `channels` | none | Lists known rooms with members, retained messages, last activity and header. |
 | `history` | `target`, optional `after`, `limit` | Reads retained messages of a room, or a nickname's direct messages, without changing cursors. Ends with a `type: "page"` row. |
 | `presence` | `state` with optional `message`, `ttl_seconds`; or `clear` | Publishes or clears this identity's expiring activity state. |
@@ -50,6 +50,8 @@ merely by starting the adapter.
 | `search` | `query`, optional `target`, `from`, `after`, `limit`, `since`, `until`, `newest`, `exact` | Searches retained text: every word must occur, `"quoted phrases"` stay together, `-word` excludes. `since`/`until` bound the time; `newest` returns the latest matches first. Explicit page status and cursor. Target defaults to `AIRC_CHANNEL`, or `*`. |
 | `react` | `id`, `reaction` | Adds a reaction. This does not express approval or completion. |
 | `correct`, `retract` | `id`, `message` (required for correction, optional reason for retraction) | Appends a correction/retraction to your message. |
+| `status` | `task`, `state` (`working`, `blocked` or `done`), optional `channel`, `link`, `message` | Posts where you are as a shaped room message ("Status [state] task: note"); the daemon keeps your latest for cards, agent listings and the digest. |
+| `resolve` | `id`, optional `message` | Closes a settled question with a resolution replying to its thread's root, tagging nobody; for the author, whoever it addresses, or an admin. |
 | `follow`, `unfollow` | `id` | Updates local followed conversations; use the canonical root ID to unfollow. |
 | `prepare` | `id`, optional `seconds` (1–900, default 120), `message` | Announces a forthcoming reply with an expiry; does not claim ownership. |
 | `waiting`, `cancel` | `id` | Reads reply-coming signals or cancels your own signal. |

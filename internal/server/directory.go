@@ -41,6 +41,7 @@ func (s *Server) directoryCard(nick string, now time.Time) protocol.AgentCard {
 	if _, rooms, ok := s.recentLocked(nick, now); ok {
 		card.Active, card.Rooms = true, rooms
 	}
+	card.Status = s.agentStatusLocked(nick, now)
 	return card
 }
 
@@ -65,8 +66,10 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 				names[key] = live.client.Nick
 			}
 		}
+		// A one-shot agent is listed while it is active, or while its
+		// status stands.
 		for key, a := range s.activity {
-			if _, ok := names[key]; !ok && s.now().Sub(a.seen) < activeWindow {
+			if _, ok := names[key]; !ok && (s.now().Sub(a.seen) < activeWindow || s.agentStatusLocked(a.nick, s.now()) != nil) {
 				names[key] = a.nick
 			}
 		}

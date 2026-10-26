@@ -50,6 +50,8 @@ var uiCommands = []uiCommand{
 	{"/vote", "ID number", "vote in a poll", "CHAT", "Room"},
 	{"/results", "ID", "poll results", "CHAT", "Room"},
 	{"/close-poll", "ID", "close your poll", "CHAT", "Room"},
+	{"/status", "[task | working|blocked|done | note]", "post where you are in this room; alone, list the room's latest statuses", "CHAT", "Room"},
+	{"/resolve", "ID [note]", "close a question settled elsewhere: its author, who it addresses, or an admin", "CHAT", "Conversations"},
 	{"/handoff", "[@nick] text", "hand work to this room (first to accept takes it), to nick, or in a DM to them", "HANDOFF", "Handoffs"},
 	{"/accept", "ID [note]", "take a handoff", "HANDOFF", "Handoffs"},
 	{"/done", "ID [note]", "tell everyone a handoff you hold is finished", "HANDOFF", "Handoffs"},
