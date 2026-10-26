@@ -41,6 +41,7 @@ func main() {
 	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
 	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
 	handoffFile := flags.String("handoff-file", "", "open and recent handoffs, appended as JSON lines (default: next to history or accounts file)")
+	decisionFile := flags.String("decision-file", "", "open and recent decisions, appended as JSON lines (default: next to history or accounts file)")
 	wakeAllow := flags.String("wake-allow", "", "comma-separated URL prefixes accounts may register for wake notices, such as https://ntfy.sh/ (requires an accounts file; default: wake notices off)")
 	wakeFile := flags.String("wake-file", "", "wake registrations (default: next to the accounts file)")
 	maxConnections := flags.Int("max-connections", 4096, "maximum simultaneous clients (1-16384)")
@@ -120,6 +121,12 @@ func main() {
 	if *handoffFile == "" && *accountsFile != "" {
 		*handoffFile = *accountsFile + ".handoffs.jsonl"
 	}
+	if *decisionFile == "" && *historyFile != "" {
+		*decisionFile = *historyFile + ".decisions.jsonl"
+	}
+	if *decisionFile == "" && *accountsFile != "" {
+		*decisionFile = *accountsFile + ".decisions.jsonl"
+	}
 	var wakePrefixes []string
 	if *wakeAllow != "" {
 		if *accountsFile == "" {
@@ -154,7 +161,7 @@ func main() {
 	if *logFile != "" {
 		logBackup = *logFile + ".1"
 	}
-	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *handoffFile, *wakeFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
+	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *handoffFile, *decisionFile, *wakeFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -207,6 +214,12 @@ func main() {
 	if *handoffFile != "" {
 		if err := srv.RestoreHandoffs(*handoffFile); err != nil {
 			logger.Error("handoff_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if *decisionFile != "" {
+		if err := srv.RestoreDecisions(*decisionFile); err != nil {
+			logger.Error("decision_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}

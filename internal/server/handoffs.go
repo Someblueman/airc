@@ -209,11 +209,12 @@ func (s *Server) handoffBody(text, fallback string) (string, error) {
 	return body, nil
 }
 
-// handoffTargetLocked checks that client may post a handoff step to target
-// and returns the target as the step's message names it.
-func (s *Server) handoffTargetLocked(client *session, target string) (string, error) {
+// chatTargetLocked checks that client may post a handoff or decision step
+// (what names which) to target and returns the target as the step's message
+// names it.
+func (s *Server) chatTargetLocked(client *session, target, what string) (string, error) {
 	if !validChannel(target) && !protocol.ValidNick(target) {
-		return "", errors.New("a handoff needs a room or a nickname")
+		return "", errors.New("a " + what + " needs a room or a nickname")
 	}
 	if !s.postAllowedLocked(client, target) {
 		return "", errChatDenied
@@ -251,7 +252,7 @@ func (s *Server) offerHandoffLocked(client *session, r protocol.ChatRequest) err
 	if err != nil {
 		return err
 	}
-	target, err := s.handoffTargetLocked(client, r.Target)
+	target, err := s.chatTargetLocked(client, r.Target, "handoff")
 	if err != nil {
 		return err
 	}
@@ -344,7 +345,7 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 			target = cmp.Or(h.Holder, h.Offer.For)
 		}
 	}
-	if target, err = s.handoffTargetLocked(client, target); err != nil {
+	if target, err = s.chatTargetLocked(client, target, "handoff"); err != nil {
 		return err
 	}
 	if strings.EqualFold(notify, client.client.Nick) {

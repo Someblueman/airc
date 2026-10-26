@@ -60,7 +60,7 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	return &Server{
-		chat: newChatState(), handoffs: map[string]handoff{}, activity: map[string]*activity{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
+		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, activity: map[string]*activity{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time), failedAddresses: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
@@ -218,6 +218,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.handoffLog != nil {
 		_ = s.handoffLog.file.Close() // every save completes under mu
 		s.handoffLog = nil
+	}
+	if s.decisionLog != nil {
+		_ = s.decisionLog.file.Close()
+		s.decisionLog = nil
 	}
 	if s.histStop != nil {
 		close(s.histStop) // the janitor stops between segments
