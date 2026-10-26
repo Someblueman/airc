@@ -38,6 +38,9 @@ type ChatMetadata struct {
 	// an answer chose, 0 when it gave only a note.
 	Choices []string `json:"choices,omitempty"`
 	Choice  int      `json:"choice,omitempty"`
+	// Paste describes the paste a message shares (PasteTag), whose
+	// reference line ends the body.
+	Paste *PasteInfo `json:"paste,omitempty"`
 }
 
 // DecisionStepText is the body a decision step carries. An answer names its
@@ -173,6 +176,18 @@ type ChatRequest struct {
 	For      string   `json:"for,omitempty"`
 	// Link is where a finished handoff's result is, on handoff-done.
 	Link string `json:"link,omitempty"`
+	// Pastes: paste-begin names the upload (Name, Language, Size, Lines)
+	// under a client-chosen Token; paste-chunk adds Data, base64 of at most
+	// PasteChunkBytes, as chunk Seq of that Token; paste-end finishes it;
+	// paste-get reads paste ID from Offset, at most Limit entries.
+	Name     string `json:"name,omitempty"`
+	Language string `json:"language,omitempty"`
+	Size     int    `json:"size,omitempty"`
+	Lines    int    `json:"lines,omitempty"`
+	Token    string `json:"token,omitempty"`
+	Seq      int    `json:"seq,omitempty"`
+	Data     string `json:"data,omitempty"`
+	Offset   int    `json:"offset,omitempty"`
 }
 
 type ChatEntry struct {
@@ -200,6 +215,15 @@ type ChatEntry struct {
 	Message       *MessageMetadata `json:"message,omitempty"`
 	// Answer is a decision's answer message once it has one.
 	Answer *MessageMetadata `json:"answer,omitempty"`
+	// Pastes: Token acknowledges an upload step; Paste, Created and
+	// Referenced describe a stored paste, with From and AccountID its
+	// author; Data is base64 of the paste's bytes from Offset.
+	Token      string     `json:"token,omitempty"`
+	Paste      *PasteInfo `json:"paste,omitempty"`
+	Created    time.Time  `json:"created,omitzero"`
+	Referenced time.Time  `json:"referenced,omitzero"`
+	Data       string     `json:"data,omitempty"`
+	Offset     int        `json:"offset,omitempty"`
 }
 
 func CustomReaction(kind string) bool {
