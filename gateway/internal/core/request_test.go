@@ -256,6 +256,51 @@ func TestConversationReadSelectors(t *testing.T) {
 	}
 }
 
+// A send or reply may carry a run label, which the gateway relays as the
+// +airc/run tag; the label is validated as AIRC validates it, and no other
+// operation takes one.
+func TestRunLabelOnPosts(t *testing.T) {
+	room := &Target{Kind: "room", Name: "#room"}
+	parent := strings.Repeat("a", 32)
+	for _, r := range []Request{
+		{Version: 1, RequestID: "send", Operation: Send, Target: room, Message: "hello", Run: "run-2026.10_26"},
+		{Version: 1, RequestID: "reply", Operation: Reply, Target: room, Message: "hello", ParentID: parent, Run: strings.Repeat("r", 64)},
+	} {
+		if err := r.Normalize(); err != nil {
+			t.Fatalf("%s with a run label: %v", r.Operation, err)
+		}
+	}
+	decoded, err := Decode([]byte(`{"version":1,"request_id":"send","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello","run":"run-1"}`))
+	if err != nil || decoded.Run != "run-1" {
+		t.Fatalf("decoded run label %q: %v", decoded.Run, err)
+	}
+	plain := Request{Version: 1, RequestID: "send", Operation: Send, Target: room, Message: "hello"}
+	labelled := plain
+	labelled.Run = "run-1"
+	a, _ := plain.Fingerprint()
+	b, _ := labelled.Fingerprint()
+	if a == b {
+		t.Fatal("the run label is part of the request's intent")
+	}
+	for _, label := range []string{"bad label", strings.Repeat("r", 65), "run/1", "ü"} {
+		r := plain
+		r.Run = label
+		if err := r.Normalize(); err == nil {
+			t.Fatalf("accepted run label %q", label)
+		}
+	}
+	for _, r := range []Request{
+		{Version: 1, RequestID: "react", Operation: ReactionAdd, Target: room, ParentID: parent, Reaction: "+1", Run: "run-1"},
+		{Version: 1, RequestID: "topic", Operation: TopicSet, Target: room, Topic: new(string), Run: "run-1"},
+		{Version: 1, RequestID: "history", Operation: HistoryRead, Target: room, Limit: 10, Run: "run-1"},
+		{Version: 1, RequestID: "caps", Operation: CapabilitiesGet, Run: "run-1"},
+	} {
+		if err := r.Normalize(); err == nil {
+			t.Fatalf("%s accepted a run label", r.Operation)
+		}
+	}
+}
+
 func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"version":1,"request_id":"r","operation":"receipt.get","lookup_id":"a"}`))
 	f.Fuzz(func(t *testing.T, data []byte) {

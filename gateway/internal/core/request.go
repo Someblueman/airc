@@ -34,13 +34,17 @@ type Target struct {
 // credentials are deliberately absent (see Submission). Times are integer
 // Unix seconds; pointers distinguish omitted defaults from explicit values.
 type Request struct {
-	Version        int               `json:"version"`
-	RequestID      string            `json:"request_id"`
-	Operation      Operation         `json:"operation"`
-	Target         *Target           `json:"target,omitempty"`
-	Message        string            `json:"message,omitempty"`
-	Reaction       string            `json:"reaction,omitempty"`
-	ParentID       string            `json:"parent_id,omitempty"`
+	Version   int       `json:"version"`
+	RequestID string    `json:"request_id"`
+	Operation Operation `json:"operation"`
+	Target    *Target   `json:"target,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
+	ParentID  string    `json:"parent_id,omitempty"`
+	// Run is the run label a send or reply carries: the gateway relays it
+	// to AIRC as the +airc/run tag, which AIRC keeps in the message's
+	// metadata as run (docs/PROTOCOL.md).
+	Run            string            `json:"run,omitempty"`
 	PollID         string            `json:"poll_id,omitempty"`
 	ThreadMode     string            `json:"thread_mode,omitempty"`
 	LookupID       string            `json:"lookup_id,omitempty"`
@@ -87,6 +91,12 @@ func (r *Request) Normalize() error {
 	r.Message = irc.NormalizeMessage(r.Message)
 	if !utf8.ValidString(r.Message) || strings.ContainsRune(r.Message, 0) || len(r.Message) > 4096 {
 		return errors.New("invalid message")
+	}
+	if r.Run != "" && !protocol.ValidRunID(r.Run) {
+		return errors.New("invalid run label")
+	}
+	if r.Run != "" && r.Operation != Send && r.Operation != Reply {
+		return errors.New("run label on an operation that keeps none")
 	}
 	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || !ValidStart(r.Start) || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
