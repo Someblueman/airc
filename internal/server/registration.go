@@ -176,6 +176,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		features = append(features, "WAKE=1")
 	}
 	features = append(features, chatFeatures...)
+	features = append(features, fmt.Sprintf("PASTE_BYTES=%d", s.cfg.PasteBytes))
 	if s.cfg.HistoryLimit > 0 {
 		features = append(features, "IDEMPOTENCY=1", "SAFE_RETRY=1")
 	}

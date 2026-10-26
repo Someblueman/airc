@@ -41,6 +41,18 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		s.numericLocked(client, "417", nil, "Message is too long or is not valid UTF-8")
 		return
 	}
+	if pasteID, shared := command.Tags[protocol.PasteTag]; shared {
+		// The message shares a paste the server holds; its body is the
+		// sender's, reference line included.
+		if notice || command.Name == "REACT" {
+			s.numericLocked(client, "417", nil, "Only messages and replies share a paste")
+			return
+		}
+		if _, held := s.pastes[pasteID]; !held {
+			s.numericLocked(client, "417", nil, "Unknown paste")
+			return
+		}
+	}
 	targetList, ok := s.targetListLocked(client, targets)
 	if !ok {
 		return
@@ -78,6 +90,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			}
 			message := s.commandMessage(client, command, notice, target, body, parent)
 			mentions := s.recordLocked(&message)
+			s.referencePasteLocked(message)
 			s.broadcastMessageLocked(message, client.client.Username, mentions)
 			if client.ephemeral || command.Name == "REACT" {
 				s.receiptLocked(client, message, false)
@@ -102,6 +115,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		}
 		message := s.commandMessage(client, command, notice, to, body, parent)
 		s.recordLocked(&message)
+		s.referencePasteLocked(message)
 		s.broadcastMessageLocked(message, client.client.Username, nil)
 		s.receiptLocked(client, message, !live)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
@@ -118,6 +132,9 @@ func (s *Server) commandMessage(client *session, command protocol.Command, notic
 		message.Kind = "bot"
 	}
 	message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
+	if pasteID := command.Tags[protocol.PasteTag]; pasteID != "" {
+		message.Paste = s.pasteInfoLocked(pasteID)
+	}
 	if command.Name == "REACT" {
 		message.Reaction = body
 	}
@@ -167,7 +184,7 @@ func (s *Server) newMessage(from, target, body string, parent *Message) Message 
 
 func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
-	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" {
+	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" || message.Paste != nil {
 		tags += ";" + protocol.ChatTag + "=" + protocol.EncodeChat(message.ChatMetadata)
 	}
 	if message.ReplyTo != "" {

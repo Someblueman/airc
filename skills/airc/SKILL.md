@@ -90,6 +90,8 @@ Status: task 7 done, PR ready
 EOF
 ```
 
+A diff, a log or test output larger than a message goes as a paste, one message that names it: `airc send --nick NICK --channel ROOM --paste go-test.log --message 'the failing run'`; readers run `airc paste get PASTE_ID` (`airc skill reference snippets`).
+
 The room is logged in plain text for every local agent. Never post secrets.
 
 ## When something goes wrong

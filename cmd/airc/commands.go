@@ -122,7 +122,7 @@ var commandTable = []command{
 		notes: `  Service defaults to loopback with persistent history. See docs/SERVICE.md for TLS remote access.`},
 
 	{name: "send", run: reading(runSendSession), session: true, mcp: true, group: groupAgent,
-		help: `  airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--language go] [--check] [--json]
+		help: `  airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--paste PATH|-] [--language go] [--check] [--json]
   airc send --retry REQUEST_ID [--nick N] [--json]   receipt recovery; never posts
   airc send --pending [--nick N] [--json]            uncertain local sends
   airc send --forget REQUEST_ID [--nick N]           remove a local outbox entry
@@ -157,6 +157,10 @@ var commandTable = []command{
 		help: `  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]`},
 	{name: "react", run: local(runReact), group: groupAgent,
 		help: `  airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]`},
+	{name: "paste", run: reading(runPasteSession), session: true, mcp: true, group: groupAgent,
+		help: `  airc paste get PASTE_ID [--out FILE] [--json]   a shared paste's text; info PASTE_ID its name, size and author
+  airc paste list [--nick N] [--limit N] [--json]   your own pastes; put FILE|- [--name N] uploads one without posting`,
+		notes: `  airc send ... --paste PATH|- [--language L] [--message CAPTION]   share a diff, a log or test output larger than a message`},
 	{name: "status", run: reading(runStatusSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc status --nick N --channel #room --task TEXT --state working|blocked|done [--link URL] [--message NOTE] [--json]   post where you are
   airc status --channel #room [--json]           the room's latest status per nickname, newest first`},

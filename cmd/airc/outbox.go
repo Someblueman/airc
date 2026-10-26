@@ -25,6 +25,9 @@ type outboundMessage struct {
 	ReplyTo   string      `json:"reply_to,omitempty"`
 	Body      string      `json:"body"`
 	Result    *sendResult `json:"result,omitempty"`
+	// Paste is the paste the message shares; such a send is only recovered
+	// over native IRC, never reposted through another carrier.
+	Paste string `json:"paste,omitempty"`
 }
 
 // How long a send waits for another send on the same identity; a variable so

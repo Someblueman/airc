@@ -44,7 +44,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 	}
 	request := irc.ChatRequest{}
 	switch name {
-	case "/context", "/thread", "/follow", "/unfollow":
+	case "/context", "/thread", "/follow", "/unfollow", "/paste":
 		if !need(1) {
 			return nil, true
 		}
@@ -247,7 +247,19 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		// A board has no pages; /next and /first redraw it.
 		cmd = uiCmd{kind: "board", target: strings.TrimPrefix(cmd.target, "board:"), text: "refresh"}
 	}
+	if (cmd.kind == "query-next" || cmd.kind == "query-first") && strings.HasPrefix(cmd.target, "paste:") {
+		// A paste view holds the whole paste; its pages are the model's.
+		b.emit(ctx, pastePageIn{name: cmd.target, first: cmd.kind == "query-first"})
+		return true, nil
+	}
 	switch cmd.kind {
+	case "paste":
+		meta, content, err := irc.FetchPaste(ctx, c, cmd.target, translate)
+		if err != nil {
+			return true, err
+		}
+		b.emit(ctx, pasteIn{entry: meta, content: content})
+		return true, nil
 	case "board":
 		return true, b.refreshBoard(ctx, c, cmd.target, cmd.text == "refresh", translate)
 	case "close-query":

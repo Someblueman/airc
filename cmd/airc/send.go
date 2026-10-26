@@ -47,8 +47,10 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
 	maxBytes := fs.Int("max-bytes", 32768, "maximum combined send/check output bytes (1024-1048576)")
 	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
-	file := fs.String("file", "", "share a UTF-8 file as a code block; - reads stdin; --message adds a caption")
-	language := fs.String("language", "", "code-block language (inferred for --file); formats --message as code when used alone")
+	file := fs.String("file", "", "share a UTF-8 file as a code block, or as a paste when it would not fit a message; - reads stdin; --message adds a caption")
+	paste := fs.String("paste", "", "share a UTF-8 text file larger than a message as a paste (64 KiB by default); - reads stdin; --message adds a caption")
+	name := fs.String("name", "", "the paste's name, for --paste - or to rename a file")
+	language := fs.String("language", "", "code-block or paste language (inferred for --file and --paste); formats --message as code when used alone")
 	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
 	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
 		return err
@@ -67,7 +69,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		if *forget != "" {
 			modes++
 		}
-		if modes != 1 || *channel != "" || *to != "" || *replyTo != "" || *message != "" || *file != "" || *language != "" || *requestID != "" || *reaction != "" || *check {
+		if modes != 1 || *channel != "" || *to != "" || *replyTo != "" || *message != "" || *file != "" || *paste != "" || *name != "" || *language != "" || *requestID != "" || *reaction != "" || *check {
 			return errors.New("choose one of --retry, --pending or --forget; omit message, target and --check flags")
 		}
 		if err := identity(opt); err != nil {
@@ -101,7 +103,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		if *requestID != "" {
 			return errors.New("--request-id applies to messages and replies; omit it for reactions")
 		}
-		if *replyTo == "" || !protocol.ValidReaction(*reaction) || *message != "" || *file != "" || *language != "" {
+		if *replyTo == "" || !protocol.ValidReaction(*reaction) || *message != "" || *file != "" || *paste != "" || *language != "" {
 			return errors.New("a reaction requires --reply-to and a single symbol; omit message/file/language")
 		}
 		if *to != "" {
@@ -110,7 +112,8 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		*message = *reaction
 	}
 	var err error
-	if *message, err = sendBody(*file, *language, *message, stdin); err != nil {
+	var pasteSrc *pasteSource // text to upload as a paste before posting
+	if *message, pasteSrc, err = resolveShare(*file, *paste, *name, *language, *message, stdin, stderr); err != nil {
 		return err
 	}
 	if err := identity(opt); err != nil {
@@ -135,7 +138,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	}
 	var client *irc.Client
 	nativeCarrier := "" // the gateway tunnel native IRC came through, if one
-	if *replyTo == "" || conversation != "" {
+	if pasteSrc == nil && (*replyTo == "" || conversation != "") {
 		// Race native IRC against the server's other carriers, and post over
 		// whichever connects first. A reply or reaction needs its
 		// conversation named to go over another carrier. --check reads over
@@ -168,6 +171,17 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			return err
 		}
 	}
+	pasteID := ""
+	if pasteSrc != nil {
+		// Uploaded before the message, which shares it by ID; the same text
+		// uploaded again is the same paste.
+		info, err := pasteSrc.upload(ctx, client)
+		if err != nil {
+			return err
+		}
+		pasteID = info.ID
+		*message = protocol.PasteMessageBody(*message, info)
+	}
 	var box *outbox
 	var entry *outboundMessage
 	var result *sendResult
@@ -185,6 +199,10 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		*requestID = entry.RequestID
 		result = entry.Result
+		if entry.Paste == "" {
+			entry.Paste = pasteID
+		}
+		pasteID = entry.Paste
 	}
 	if result == nil {
 		awaited := false
@@ -192,8 +210,12 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			err = client.RetryRequest(*requestID)
 		} else if *reaction != "" {
 			err = client.React(*replyTo, *reaction)
+		} else if *replyTo != "" && pasteID != "" {
+			err = client.ReplyPaste(*replyTo, *message, *requestID, pasteID)
 		} else if *replyTo != "" {
 			err = client.ReplyWithID(*replyTo, *message, *requestID)
+		} else if pasteID != "" {
+			err = client.SendPaste(target, *message, *requestID, pasteID)
 		} else {
 			err = client.SendWithID(target, *message, *requestID)
 		}
@@ -210,7 +232,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		if err != nil && entry != nil && failure(err, "send").Retryable && !rejectedSend(err) && ctx.Err() == nil {
 			_ = client.Close()
 			lookup = true // recovery failures do not prove that the first send was rejected
-			if fb, _, raceErr := racingClient(*opt, nativeOrder); raceErr == nil && fb != nil && (entry.ReplyTo == "" || conversation != "") && !*check {
+			if fb, _, raceErr := racingClient(*opt, nativeOrder); raceErr == nil && fb != nil && (entry.ReplyTo == "" || conversation != "") && !*check && entry.Paste == "" {
 				// Native IRC stopped answering after the send may have
 				// landed: post again with the same request ID over whichever
 				// carrier connects first, native IRC included. Either answers
@@ -227,7 +249,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 				// Native IRC went away after the send may have landed: retry
 				// on the server's other carriers with the same request ID,
 				// which resolves to that message if it exists.
-				if fb, ok := fallbackFor(*opt, err); ok && (entry.ReplyTo == "" || conversation != "") && ctx.Err() == nil {
+				if fb, ok := fallbackFor(*opt, err); ok && (entry.ReplyTo == "" || conversation != "") && ctx.Err() == nil && entry.Paste == "" {
 					result, _, err = postViaFallback(ctx, *opt, fb.Post, entry, conversation)
 					checkClient = nil
 				}

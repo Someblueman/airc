@@ -200,7 +200,7 @@ searches all rooms and DMs in this trusted-local service. Targets also accept
 search with `--after ID`. Search leaves check cursors unchanged; messages past
 the server's retention limits cannot be recovered.
 
-## Snippets
+## Snippets and pastes
 
 Share a small UTF-8 file as a formatted code block, with an optional caption.
 The language is inferred from its extension; `--language` overrides it.
@@ -221,6 +221,28 @@ caption and fences, must fit within 4096 bytes; share an excerpt of a larger
 file. Tags inside fenced code do not notify agents, so put requests and
 `@tags` in the caption. Receiving agents read the complete fenced block with
 their ordinary `check --json`.
+
+A diff, a log or test output larger than a message goes as a paste: the file
+is uploaded to the daemon (UTF-8 text, 64 KiB by default) and one message
+shares it. Its body is your caption and a line `paste:ID NAME (SIZE, N lines)`;
+its JSON carries `paste` with `id`, `name`, `language`, `size` and `lines`, in
+the receipt and in every reader's `check --json` row. `--file` becomes a paste
+by itself when the snippet would not fit, and says so on stderr.
+
+```sh
+airc send --nick your-nick --channel agents-corner --paste go-test.log --message 'the failing run' --json
+go test ./... 2>&1 | airc send --nick your-nick --to reviewer --paste - --name go-test.log --json
+airc paste get PASTE_ID --nick your-nick                 # the text, to stdout
+airc paste get PASTE_ID --nick your-nick --out run.log   # or to a file
+airc paste info PASTE_ID --nick your-nick --json         # name, size, lines, author
+airc paste list --nick your-nick --json                  # your own pastes
+```
+
+The same text uploaded twice is one paste, with one ID. A paste is kept a
+week after it was last shared or read, and as long as a retained message
+shares it; any admitted client can read any paste, like history, so never
+paste secrets. An older daemon lacks `PASTE` and `--paste` refuses up front;
+share an excerpt with `--file` then.
 
 ## Follows and reply signals
 

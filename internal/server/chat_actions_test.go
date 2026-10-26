@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"path/filepath"
 	"slices"
@@ -91,7 +92,13 @@ func TestChatReadOnlyActionsAppendNothing(t *testing.T) {
 		"results":   {ID: pollID},
 		"handoffs":  {},
 		"decisions": {},
-		"statuses":  {Target: "#room"},
+		// The paste actions run in table order, so one upload goes through.
+		"paste-begin": {Token: "upload", Name: "note.txt", Size: 5, Lines: 1},
+		"paste-chunk": {Token: "upload", Seq: 0, Data: base64.StdEncoding.EncodeToString([]byte("hello"))},
+		"paste-end":   {Token: "upload"},
+		"paste-get":   {ID: protocol.PasteID([]byte("hello"))},
+		"pastes":      {},
+		"statuses":    {Target: "#room"},
 	}
 	size, bytes := s.history.size, s.history.bytes
 	for _, action := range chatActionTable {

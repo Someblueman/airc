@@ -163,6 +163,11 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	if b.cacheLines != nil && b.cacheWidth == width && b.cacheVersion == b.version {
 		return b.cacheLines
 	}
+	if isPasteView(b) {
+		lines := renderPasteLines(b, max(width-1, 10))
+		b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
+		return lines
+	}
 	if b.kind == bufHelp || isBoard(b) {
 		lines := renderHelp(b.help, max(width-1, 10))
 		for i := range lines {
@@ -173,6 +178,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	}
 	view := newRenderer(true, width, b.kind != bufChannel)
 	view.kinds = m.kinds
+	view.pasteHint = "/paste "
 	for _, event := range b.items {
 		if message, ok := event.(*irc.MessageEvent); ok {
 			view.reserve(message.From)
