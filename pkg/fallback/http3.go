@@ -37,8 +37,19 @@ var quicSessions = copiedSessions{tls.NewLRUClientSessionCache(64)}
 
 // copiedSessions hands each dial its own copy of a cached session: quic-go
 // writes to the session it resumes, and dials resume one at once (a hedged
-// follow's two legs, or a host's addresses raced).
+// follow's two legs, or a host's addresses raced). It also keeps a session
+// that a failed dial would evict: crypto/tls forgets a session when a
+// handshake resuming it fails, and in a race the losing address's dial
+// fails or is cancelled by the winner, which must not forget the session
+// the other dials are resuming. A session the gateway no longer accepts
+// costs a full handshake, whose ticket replaces it.
 type copiedSessions struct{ tls.ClientSessionCache }
+
+func (s copiedSessions) Put(key string, cs *tls.ClientSessionState) {
+	if cs != nil {
+		s.ClientSessionCache.Put(key, cs)
+	}
+}
 
 func (s copiedSessions) Get(key string) (*tls.ClientSessionState, bool) {
 	cs, ok := s.ClientSessionCache.Get(key)
