@@ -21,8 +21,8 @@ import (
 const authorTestToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 // routeFixture is a real journal, an author upstream that is never dialled and
-// a cursor codec, for dispatchers of author and route-owned carriers:
-// requests name their authors.
+// a cursor codec, for dispatchers of author carriers: requests name their
+// authors.
 type routeFixture struct {
 	c        config.Config
 	s        *store.Store
@@ -82,36 +82,6 @@ func (f *routeFixture) listener(t *testing.T, l config.Listener) *dispatch.Dispa
 		t.Fatal("listener dispatcher", err)
 	}
 	return d
-}
-
-// route returns a route-owned ingress's dispatcher.
-func (f *routeFixture) route(t *testing.T, id string, ops ...core.Operation) *dispatch.Dispatcher {
-	t.Helper()
-	d, err := dispatch.ForRoute(f.s, f.reader, f.cursors, id, ops)
-	if err != nil || !d.AuthorAccess() {
-		t.Fatal("route dispatcher", err)
-	}
-	return d
-}
-
-// author loads a route author policy, writing a bound author's token file.
-func (f *routeFixture) author(t *testing.T, nick string, registered, guests bool) dispatch.RouteAuthor {
-	t.Helper()
-	var bound *config.BoundAuthor
-	if nick != "" {
-		bound = &config.BoundAuthor{Nick: nick}
-		if registered {
-			bound.AccountTokenFile = filepath.Join(f.root, nick+".token")
-			if err := os.WriteFile(bound.AccountTokenFile, []byte(authorTestToken+"\n"), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	a, err := dispatch.NewRouteAuthor(bound, guests)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return a
 }
 
 // jobs counts journal rows for a request ID under every author scope, so a

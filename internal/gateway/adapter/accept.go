@@ -41,18 +41,3 @@ func ServeAccepted(parent context.Context, l net.Listener, accept func(ctx conte
 		}
 	}
 }
-
-// slotted runs serve while holding one of slots, or closes conn and drops it
-// when every slot is taken.
-func slotted(slots chan struct{}, conn net.Conn, serve func()) func() {
-	select {
-	case slots <- struct{}{}:
-	default:
-		closeMQTTConnection(conn)
-		return nil
-	}
-	return func() {
-		defer func() { <-slots }()
-		serve()
-	}
-}

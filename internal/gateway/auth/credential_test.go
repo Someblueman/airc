@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"golang.org/x/sys/unix"
 )
 
@@ -120,6 +119,3 @@ func privateTemp(t *testing.T) string {
 	}
 	return root
 }
-
-// fixtureTarget is the room the provider-verification fixtures route to.
-var fixtureTarget = core.Target{Kind: "room", Name: "#Allowed"}

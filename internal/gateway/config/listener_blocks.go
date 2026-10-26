@@ -13,18 +13,7 @@ type block uint8
 const (
 	localREPBlock block = iota
 	fileMailboxBlock
-	bundleProtocolBlock
-	amqpBlock
-	stompBlock
-	snmpBlock
-	signedSyslogBlock
-	syslogBlock
 	mqttBlock
-	mqttSNBlock
-	offlineBundleBlock
-	uartBlock
-	fifoBlock
-	oscoreBlock
 	webRTCBlock
 )
 
@@ -35,21 +24,10 @@ var listenerBlocks = [...]struct {
 	misuse   string
 	validate func(Config, Listener) error
 }{
-	localREPBlock:       {validate: Config.validateLocalREP},
-	fileMailboxBlock:    {validate: Config.validateFileMailbox},
-	bundleProtocolBlock: {func(l Listener) bool { return l.BundleProtocol != nil }, "bundle_protocol requires bpv7 protocol", Config.validateBundleProtocol},
-	amqpBlock:           {func(l Listener) bool { return l.AMQP != nil }, "AMQP options require amqp protocol", Config.validateAMQP},
-	stompBlock:          {func(l Listener) bool { return l.STOMP != nil }, "STOMP options require stomp protocol", Config.validateSTOMP},
-	snmpBlock:           {func(l Listener) bool { return l.SNMP != nil }, "SNMP options require snmp_v3 protocol", Config.validateSNMP},
-	signedSyslogBlock:   {func(l Listener) bool { return l.SignedSyslog != nil }, "signed syslog options require syslog_signed protocol", Config.validateSignedSyslog},
-	syslogBlock:         {func(l Listener) bool { return l.Syslog != nil }, "syslog options require a TLS syslog protocol", Config.validateSyslog},
-	mqttBlock:           {func(l Listener) bool { return l.MQTT != nil }, "MQTT options require mqtt protocol", Config.validateMQTT},
-	mqttSNBlock:         {func(l Listener) bool { return l.MQTTSN != nil }, "mqtt_sn options require mqtt_sn protocol", Config.validateMQTTSN},
-	offlineBundleBlock:  {validate: Config.validateOfflineBundle},
-	uartBlock:           {validate: Config.validateUART},
-	fifoBlock:           {validate: Config.validateFIFO},
-	oscoreBlock:         {func(l Listener) bool { return l.OSCORE != nil }, "OSCORE options require a coap_oscore listener", Config.validateOSCORE},
-	webRTCBlock:         {func(l Listener) bool { return l.WebRTC != nil }, "WebRTC options require a WebRTC listener", Config.validateWebRTCListener},
+	localREPBlock:    {validate: Config.validateLocalREP},
+	fileMailboxBlock: {validate: Config.validateFileMailbox},
+	mqttBlock:        {func(l Listener) bool { return l.MQTT != nil }, "MQTT options require mqtt protocol", Config.validateMQTT},
+	webRTCBlock:      {func(l Listener) bool { return l.WebRTC != nil }, "WebRTC options require a WebRTC listener", Config.validateWebRTCListener},
 }
 
 func (Config) validateWebRTCListener(l Listener) error {

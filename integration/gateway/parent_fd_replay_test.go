@@ -23,23 +23,12 @@ func TestInheritedUnixAcceptedReplayAfterFreshChild(t *testing.T) {
 	localStreamAcceptedReplayAfterFreshChild(t, "inherited")
 }
 
-func TestFIFOAcceptedReplayAfterFreshChild(t *testing.T) {
-	localStreamAcceptedReplayAfterFreshChild(t, "fifo")
-}
-
 func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	t.Helper()
 	binary := currentGatewayBinary(t)
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
-	if protocol == "fifo" {
-		c = configureFIFOFixture(t, c)
-	}
 	start := func(signal syscall.Signal) (adapter.FramedStream, func()) {
-		if protocol == "fifo" {
-			peer, stop, _ := startFIFO(t, binary, c, signal, false)
-			return peer, stop
-		}
 		conn, stop, _ := startParentFD(t, binary, c, protocol, signal, false)
 		return conn, stop
 	}

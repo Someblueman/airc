@@ -12,7 +12,7 @@ import (
 )
 
 func TestAppendLogMailboxSealSkipsDispatch(t *testing.T) {
-	f, _, _ := oscoreRPCFixture(t)
+	f, _ := frameFixture(t)
 	path, m := appendMailboxFixture(t, "\n")
 	if err := ProcessAppendLogMailbox(t.Context(), m, f.d, nil); err != nil {
 		t.Fatal(err)
@@ -24,7 +24,7 @@ func TestAppendLogMailboxSealSkipsDispatch(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(path, "response.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("seal published response", err)
 	}
-	if _, err := f.lookup(t, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.lookup(t, "frame-message"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("seal reached journal", err)
 	}
 }

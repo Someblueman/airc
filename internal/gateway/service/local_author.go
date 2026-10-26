@@ -8,7 +8,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 // loadBoundAuthor reads a local listener's bound author once at startup:
@@ -30,43 +29,6 @@ func loadBoundAuthor(bound *config.BoundAuthor) (*dispatch.BoundAuthor, error) {
 
 type packetDriver interface {
 	Serve(context.Context, net.PacketConn) error
-}
-
-// newLocalPacketDriver serves plain author requests on a local queue, shared
-// memory or mapped file listener and returns its reply destination, if any,
-// as the only response queue for the owner to open.
-func newLocalPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (packetDriver, []net.Addr, error) {
-	bound, err := loadBoundAuthor(l.BoundAuthor)
-	if err != nil {
-		return nil, nil, err
-	}
-	var reply net.Addr
-	switch {
-	case l.ReplyTo == "":
-	case l.Protocol == "posix_mqueue":
-		reply = &adapter.POSIXQueueAddr{Name: l.ReplyTo}
-	case l.Protocol == "system_v_queue":
-		key, err := config.SystemVQueueKey(l.ReplyTo)
-		if err != nil {
-			return nil, nil, err
-		}
-		reply = &adapter.SystemVQueueAddr{Key: key}
-	case l.Protocol == "shared_memory":
-		reply = &adapter.SharedMemoryAddr{Name: l.ReplyTo}
-	case l.Protocol == "mapped_file":
-		reply = &adapter.MappedFileAddr{Directory: l.ReplyTo}
-	default:
-		return nil, nil, store.ErrInvalid
-	}
-	driver, err := adapter.NewLocalAuthorPackets(d, bound, reply, slots, requests)
-	if err != nil {
-		return nil, nil, err
-	}
-	var replies []net.Addr
-	if reply != nil {
-		replies = append(replies, reply)
-	}
-	return driver, replies, nil
 }
 
 // newUnixgramOwner binds a Unix datagram listener: the socket keeps its

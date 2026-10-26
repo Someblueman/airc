@@ -10,9 +10,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// newUDPOwner binds a UDP-family listener: it carries plain author requests
-// and replies to each request's source. CoAP over UDP is served as ordinary
-// CoAP request/response.
+// newUDPOwner binds a UDP listener: it carries plain author requests and
+// replies to each request's source. CoAP over UDP is served as ordinary CoAP
+// request/response.
 func newUDPOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
 	address, err := net.ResolveUDPAddr("udp", l.Address)
 	if err != nil {
@@ -29,21 +29,10 @@ func newUDPOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan
 	if err != nil {
 		return nil, err
 	}
-	var conn net.PacketConn
-	switch l.Protocol {
-	case "udp_lite":
-		conn, err = adapter.ListenUDPLite(address)
-	case "ipv4_multicast":
-		conn, err = adapter.ListenIPv4Multicast(address, l.IPv4Multicast.Interface)
-	case "ipv4_broadcast":
-		conn, err = adapter.ListenIPv4Broadcast(address, l.IPv4Broadcast.Interface, l.IPv4Broadcast.Subnet)
-	case "ipv6_multicast":
-		conn, err = adapter.ListenIPv6Multicast(address, l.IPv6Multicast.Interface)
-	case "udp":
-		conn, err = net.ListenUDP("udp", address)
-	default:
+	if l.Protocol != "udp" {
 		return nil, store.ErrInvalid
 	}
+	conn, err := net.ListenUDP("udp", address)
 	if err != nil {
 		return nil, err
 	}

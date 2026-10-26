@@ -54,7 +54,7 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	for spec, message := range map[string]string{
-		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, irc_websocket, irc_connect, grpc, mqtt, mqtt_websocket, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp, http3`,
+		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, irc_websocket, irc_connect, grpc, mqtt, mqtt_websocket, coap_udp, zeromq, nng, udp, http3`,
 		"http,http=81":      "listed twice",
 		"http=0":            "port 1-65535",
 		"http=70000":        "port 1-65535",
@@ -69,7 +69,7 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 	}
 }
 
-// Every listed carrier, brokers included, parses on its own with its default
+// Every listed carrier, MQTT included, parses on its own with its default
 // port and all of them together in one install.
 func TestEachListedCarrierParses(t *testing.T) {
 	dir := "/home/a/.local/state/airc"
@@ -85,7 +85,7 @@ func TestEachListedCarrierParses(t *testing.T) {
 	if got := SupportedCarriers(); len(got) != len(carrierSpecs) {
 		t.Fatalf("supported %v", got)
 	}
-	for _, name := range []string{"mqtt", "mqtt_websocket", "amqp", "stomp", "grpc", "coap_udp", "coap_tcp", "zeromq", "nng", "udp"} {
+	for _, name := range []string{"mqtt", "mqtt_websocket", "grpc", "coap_udp", "zeromq", "nng", "udp"} {
 		if !slices.Contains(SupportedCarriers(), name) {
 			t.Errorf("%s is not offered", name)
 		}
@@ -101,18 +101,9 @@ func TestEachListedCarrierParses(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, l := range loaded.Listeners {
-		switch l.Protocol {
-		case "mqtt", "mqtt_websocket":
+		if l.Protocol == "mqtt" || l.Protocol == "mqtt_websocket" {
 			if len(l.MQTT.Routes) != 1 || l.MQTT.Routes[0].Topic != gwconfig.DefaultMQTTTopic {
 				t.Errorf("mqtt routes %+v", l.MQTT.Routes)
-			}
-		case "amqp":
-			if len(l.AMQP.Routes) != 1 || l.AMQP.Routes[0].RequestAddress != "airc.requests" || l.AMQP.Routes[0].ResponseAddress != "airc.responses" {
-				t.Errorf("amqp routes %+v", l.AMQP.Routes)
-			}
-		case "stomp":
-			if len(l.STOMP.Routes) != 1 || l.STOMP.Routes[0].RequestDestination != "airc.requests" || l.STOMP.Routes[0].ResponseDestination != "airc.responses" {
-				t.Errorf("stomp routes %+v", l.STOMP.Routes)
 			}
 		}
 	}
@@ -370,7 +361,7 @@ func TestHTTP3UsesAircdsCertificateAndSharesHTTPsPort(t *testing.T) {
 	if _, err := ParseCarriers("http,framed=6680", "127.0.0.1", t.TempDir()); err == nil {
 		t.Fatal("two TCP carriers shared a port")
 	}
-	for name, want := range map[string]string{"http3": "udp", "udp": "udp", "coap_udp": "udp", "coap_tcp": "tcp", "http": "tcp"} {
+	for name, want := range map[string]string{"http3": "udp", "udp": "udp", "coap_udp": "udp", "zeromq": "tcp", "http": "tcp"} {
 		if got := CarrierNetwork(name); got != want {
 			t.Errorf("%s listens on %s, not %s", name, got, want)
 		}

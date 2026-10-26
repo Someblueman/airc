@@ -42,21 +42,20 @@ type carrierSpec struct {
 // carrierSpecs are the carriers install can configure with no settings beyond
 // an address. A carrier is offered only while the gateway accepts plain author
 // requests on it (gwconfig.AuthorCarrier) or tunnels aircd's own protocol
-// (gwconfig.NativeCarrier). MQTT, AMQP and STOMP take requests on their
-// default topic (airc/requests) or addresses (airc.requests, with results on
-// airc.responses).
+// (gwconfig.NativeCarrier). MQTT takes requests on its default topic
+// (airc/requests).
 var carrierSpecs = []carrierSpec{
 	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
 	{"irc_websocket", 6689}, {"irc_connect", 6690},
-	{"grpc", 6684}, {"mqtt", 1883}, {"mqtt_websocket", 8083}, {"amqp", 5672}, {"stomp", 61613},
-	{"coap_udp", 5683}, {"coap_tcp", 6685}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
+	{"grpc", 6684}, {"mqtt", 1883}, {"mqtt_websocket", 8083},
+	{"coap_udp", 5683}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
 	{"http3", 6680}, // UDP, so it shares http's port number
 }
 
 // carrierTLS reports whether a carrier uses aircd's certificate when aircd
 // has TLS: a carrier whose TLS is optional or required. Those with no TLS
-// form (the Unix socket, datagrams, CoAP over TCP, ZeroMQ, NNG) stay
-// cleartext, as IRC allows.
+// form (the Unix socket, datagrams, ZeroMQ, NNG) stay cleartext, as IRC
+// allows.
 func carrierTLS(name string) bool {
 	t, _ := gwconfig.Lookup(name)
 	return t.TLS == gwconfig.TLSOptional || t.TLS == gwconfig.TLSRequired
