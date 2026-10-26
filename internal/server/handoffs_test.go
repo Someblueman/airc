@@ -438,3 +438,153 @@ func TestOneShotAgentListsOpenHandoffsInRoomsItUses(t *testing.T) {
 		}
 	}
 }
+
+// A holder marks a handoff blocked with a reason, which tags the author and
+// is readable without knowing handoffs, takes it up again with accept, and
+// finishes it with a link to the result.
+func TestBlockedHandoffResumesAndFinishesWithALink(t *testing.T) {
+	address, srv := startServer(t, Config{HistoryLimit: 64, PingInterval: time.Hour}, nil)
+	planner := handoffClient(t, address, "planner", "#work")
+	builder := handoffClient(t, address, "builder", "#work")
+	reviewer := handoffClient(t, address, "reviewer", "#work")
+	offer := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "port the fix to the release branch"})
+	if _, _, err := handoffChat(t, builder, protocol.ChatRequest{Action: "handoff-blocked", ID: offer.ID, Text: "not yet"}); err == nil || !strings.Contains(err.Error(), "still open") {
+		t.Fatal("an open handoff was blocked:", err)
+	}
+	mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID})
+	nextMessage(t, planner, "handoff-accept")
+	if _, _, err := handoffChat(t, reviewer, protocol.ChatRequest{Action: "handoff-blocked", ID: offer.ID, Text: "CI is red"}); err == nil || !strings.Contains(err.Error(), "only builder") {
+		t.Fatal("someone other than the holder blocked it:", err)
+	}
+	if _, _, err := handoffChat(t, builder, protocol.ChatRequest{Action: "handoff-blocked", ID: offer.ID, Text: " \n"}); err == nil || !strings.Contains(err.Error(), "say why") {
+		t.Fatal("a blocked step without a reason was accepted:", err)
+	}
+	if _, _, err := handoffChat(t, builder, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID, Link: "https://example.com/pr/1"}); err == nil || !strings.Contains(err.Error(), "a link goes with done") {
+		t.Fatal("a link rode along on an accept:", err)
+	}
+
+	blocked := mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-blocked", ID: offer.ID, Text: "waiting on the CI fix in #91"})
+	if blocked.State != "blocked" || blocked.Holder != "builder" || blocked.BlockedReason != "waiting on the CI fix in #91" || blocked.BlockedAt.IsZero() {
+		t.Fatalf("blocked %+v", blocked)
+	}
+	m := nextMessage(t, planner, "handoff-blocked")
+	if m.From != "builder" || m.ReplyTo != offer.ID || m.For != "planner" || m.Message != "Blocked handoff "+offer.ID+": waiting on the CI fix in #91" {
+		t.Fatalf("the author was told %+v", m)
+	}
+	if !slices.Contains(mentionsOf(srv, m.ID), "planner") {
+		t.Fatal("the blocked step is not a mention of the author")
+	}
+	srv.mu.Lock()
+	before := srv.history.size
+	srv.mu.Unlock()
+	if again := mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-blocked", ID: offer.ID, Text: "still waiting"}); again.State != "blocked" || again.BlockedReason != blocked.BlockedReason {
+		t.Fatalf("repeat %+v", again)
+	}
+	srv.mu.Lock()
+	after := srv.history.size
+	srv.mu.Unlock()
+	if after != before {
+		t.Fatal("a repeated blocked step posted again")
+	}
+	if _, _, err := handoffChat(t, reviewer, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID}); err == nil || !strings.Contains(err.Error(), "blocked by builder: waiting on the CI fix") {
+		t.Fatal("someone else took a blocked handoff:", err)
+	}
+	if mine, _, err := handoffChat(t, planner, protocol.ChatRequest{Action: "handoffs"}); err != nil || len(mine) != 1 || mine[0].State != "blocked" || mine[0].BlockedReason == "" {
+		t.Fatalf("the author's listing %+v: %v", mine, err)
+	}
+
+	// The holder's accept takes it up again.
+	resumed := mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID})
+	if resumed.State != "accepted" || resumed.Holder != "builder" || resumed.BlockedReason != "" || !resumed.BlockedAt.IsZero() {
+		t.Fatalf("resumed %+v", resumed)
+	}
+	if m := nextMessage(t, planner, "handoff-accept"); m.Message != "Resumed handoff "+offer.ID || m.For != "planner" {
+		t.Fatalf("the author was told %+v", m)
+	}
+
+	// Done records where the result is, after checking the link.
+	// A 401-byte URL is one too long.
+	for _, link := range []string{"/pr/54", "javascript:alert(1)", "https://example.com/" + strings.Repeat("x", protocol.MaxLinkBytes-19), "https://exa mple.com/", "ftp://example.com/x"} {
+		if _, _, err := handoffChat(t, builder, protocol.ChatRequest{Action: "handoff-done", ID: offer.ID, Link: link}); err == nil || !strings.Contains(err.Error(), "absolute http(s) URL") {
+			t.Fatalf("link %q was accepted: %v", link, err)
+		}
+	}
+	link := "https://github.com/o/r/pull/54"
+	done := mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-done", ID: offer.ID, Link: link})
+	if done.State != "done" || done.Link != link || done.Holder != "builder" {
+		t.Fatalf("done %+v", done)
+	}
+	if m := nextMessage(t, planner, "handoff-done"); m.Message != "Finished handoff "+offer.ID+": "+link || m.Link != link || m.For != "planner" {
+		t.Fatalf("the room saw %+v", m)
+	}
+	if room, _, err := handoffChat(t, reviewer, protocol.ChatRequest{Action: "handoffs", Target: "#work"}); err != nil || len(room) != 1 || room[0].Link != link || room[0].State != "done" {
+		t.Fatalf("room listing %+v: %v", room, err)
+	}
+}
+
+// A blocked handoff is restored as blocked, with its reason, and the
+// caller's listing names blocked handoffs before the rest.
+func TestBlockedHandoffsSurviveRestartsAndLeadTheListing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "handoffs.jsonl")
+	cfg := Config{HistoryLimit: 64, PingInterval: time.Hour}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	first := New(cfg)
+	if err := first.RestoreHandoffs(path); err != nil {
+		t.Fatal(err)
+	}
+	listener := listen(t)
+	served := make(chan error, 1)
+	go func() { served <- first.Serve(listener) }()
+	address := listener.Addr().String()
+	planner := handoffClient(t, address, "planner", "#work")
+	builder := handoffClient(t, address, "builder", "#work")
+	moving := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "moving along"})
+	stuck := mustHandoff(t, planner, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "stuck"})
+	mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-accept", ID: moving.ID})
+	mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-accept", ID: stuck.ID})
+	mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-blocked", ID: stuck.ID, Text: "needs a credential"})
+	for _, c := range []*irc.Client{planner, builder} {
+		mine, _, err := handoffChat(t, c, protocol.ChatRequest{Action: "handoffs"})
+		if err != nil || len(mine) != 2 || mine[0].ID != stuck.ID || mine[0].State != "blocked" || mine[1].ID != moving.ID {
+			t.Fatalf("%s's listing %+v: %v", c.Nick(), mine, err)
+		}
+	}
+	// The room's listing keeps the offers' order.
+	if room, _, err := handoffChat(t, planner, protocol.ChatRequest{Action: "handoffs", Target: "#work"}); err != nil || len(room) != 2 || room[0].ID != moving.ID {
+		t.Fatalf("room listing %+v: %v", room, err)
+	}
+	if err := first.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+
+	second := New(cfg)
+	if err := second.RestoreHandoffs(path); err != nil {
+		t.Fatal(err)
+	}
+	restored := second.handoffs[stuck.ID]
+	if restored.State != handoffBlocked || restored.Holder != "builder" || restored.BlockedReason != "needs a credential" || restored.BlockedAt.IsZero() {
+		t.Fatalf("restored %+v", restored)
+	}
+	listener = listen(t)
+	go func() { served <- second.Serve(listener) }()
+	address = listener.Addr().String()
+	builder = handoffClient(t, address, "builder", "#work")
+	// Given back from blocked, it is open again with no reason left on it.
+	if open := mustHandoff(t, builder, protocol.ChatRequest{Action: "handoff-decline", ID: stuck.ID}); open.State != "open" || open.Holder != "" || open.BlockedReason != "" || !open.BlockedAt.IsZero() {
+		t.Fatalf("given back %+v", open)
+	}
+	if err := second.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := readHandoffs(path)
+	if err != nil || loaded[stuck.ID].State != handoffOpen || loaded[stuck.ID].BlockedReason != "" {
+		t.Fatalf("saved %+v: %v", loaded[stuck.ID], err)
+	}
+}

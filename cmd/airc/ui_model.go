@@ -62,9 +62,14 @@ type (
 		channel string
 		nicks   []string
 	}
-	channelsIn     struct{ list []irc.ChannelInfo }
-	decisionsIn    struct{ entries []irc.ChatEntry } // the open decisions that concern this user
-	directoryIn    struct{ cards []irc.AgentCard }   // every card, for who is a human
+	channelsIn  struct{ list []irc.ChannelInfo }
+	decisionsIn struct{ entries []irc.ChatEntry } // the open decisions that concern this user
+	boardIn     struct {                          // a room's handoffs, for its /board view
+		room    string
+		entries []irc.ChatEntry
+		refresh bool // a live step changed the room; redraw an open board without switching to it
+	}
+	directoryIn    struct{ cards []irc.AgentCard } // every card, for who is a human
 	auditIn        struct{ available bool }
 	capabilitiesIn struct{ features map[string]string } // the daemon's 005 tokens
 	statusIn       struct {
@@ -385,6 +390,10 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		switch e := v.event.(type) {
 		case *irc.MessageEvent:
 			m.route(e, v.history)
+			// A live handoff step in a room redraws its open board.
+			if !v.history && strings.HasPrefix(e.Kind, "handoff") && m.find(boardName(e.Target)) != nil {
+				cmds = append(cmds, uiCmd{kind: "board", target: e.Target, text: "refresh"})
+			}
 		case *irc.JoinEvent:
 			if b := m.find(e.Channel); b != nil && b.add(e) {
 				m.notify(b, false)
@@ -424,6 +433,8 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			}
 			m.decisions[e.ID] = d
 		}
+	case boardIn:
+		m.showBoard(v)
 	case directoryIn:
 		for _, card := range v.cards {
 			m.noteKind(card.Nick, card.Kind)

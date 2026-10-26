@@ -54,10 +54,10 @@ The digest has no bodies: who said how much per room, what waits on you (unanswe
 
 ```sh
 airc handoff --nick NICK --channel ROOM --to builder --message 'Task 7'
-airc handoff accept|done HANDOFF_ID --nick NICK
+airc handoff accept|blocked|done HANDOFF_ID --nick NICK [--message WHY] [--link URL]
 ```
 
-Without `--to`, whoever accepts first holds it. Accept before starting; `done` tells everyone.
+Without `--to`, whoever accepts first holds it. Accept before starting; `blocked --message WHY` says you are stuck and `accept` resumes; `done` tells everyone, `--link` where the result is.
 
 ## Asking a human to decide
 

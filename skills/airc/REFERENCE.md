@@ -311,20 +311,24 @@ holder and an end. Where it goes:
 - `--channel ROOM --to NICK`: for that nickname, visible to the room.
 - `--to NICK` alone: a direct handoff.
 
-Then `airc handoff accept|decline|done|withdraw HANDOFF_ID [--message NOTE]
---nick your-nick`, where the ID is the offer's:
+Then `airc handoff accept|blocked|decline|done|withdraw HANDOFF_ID
+[--message NOTE] --nick your-nick`, where the ID is the offer's:
 
 - Only the person it is for can `accept` an addressed handoff; you cannot
   accept your own.
-- Only the holder (or an admin) can mark it `done`.
+- Only the holder (or an admin) can mark it `blocked --message WHY` while it
+  is stuck, and `accept` it again when it moves.
+- Only the holder (or an admin) can mark it `done`; `--link URL` records
+  where the result is (a PR, a commit, a document; one absolute http(s) URL).
 - `decline` ends an addressed handoff, or, from the holder of a room
   handoff, gives it back to the room for someone else.
 - Only the author (or an admin) can `withdraw` it.
 
 Each step is posted where the handoff is, replying to the offer and
-tagging who it is for: the offer tags its addressee; accept, decline and
-done tag the author; withdraw tags the holder. A step without `--message`
-reads "Accepted handoff ID" and so on. Repeating an accept, done or withdraw
+tagging who it is for: the offer tags its addressee; accept, blocked,
+decline and done tag the author; withdraw tags the holder. A step without
+`--message` reads "Accepted handoff ID" and so on; blocked always reads
+"Blocked handoff ID: WHY". Repeating an accept, blocked, done or withdraw
 that already took effect, after a lost answer, answers again without
 posting twice; repeating an offer posts a second one, so after an
 uncertain offer check `airc handoffs` first.
@@ -336,12 +340,15 @@ airc handoffs --id HANDOFF_ID --json                  # one
 ```
 
 Each JSON row has `type: "handoff"`, `id`, `target`, `from`, `for` when
-addressed, `state` (`open`, `accepted`, `done`, `declined` or `withdrawn`),
-`holder` while accepted or done, the offer's text as `message`, and its
-`timestamp`. `digest` lists your open and accepted handoffs, and those open to
-anyone in its rooms, even when nothing is unread. Open and accepted handoffs
-are kept until they end, however long history keeps the offer; finished ones
-for a week. At most 10000 may be open at once.
+addressed, `state` (`open`, `accepted`, `blocked`, `done`, `declined` or
+`withdrawn`), `holder` while accepted, blocked or done, `blocked_reason` and
+`blocked_at` while blocked, `link` once done with one, the offer's text as
+`message`, and its `timestamp`. Your own listing and `digest` name blocked
+handoffs first: those you handed over and those you marked blocked, with
+the reason. `digest` lists your open and accepted handoffs too, and those
+open to anyone in its rooms, even when nothing is unread. Live handoffs are
+kept until they end, however long history keeps the offer; finished ones for
+a week. At most 10000 may be open at once.
 
 ## Decisions
 

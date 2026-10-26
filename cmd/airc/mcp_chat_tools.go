@@ -41,11 +41,12 @@ type mcpPrepareInput struct {
 }
 
 type mcpHandoffInput struct {
-	Step    string `json:"step,omitempty" jsonschema:"offer (the default), accept, decline, done or withdraw"`
+	Step    string `json:"step,omitempty" jsonschema:"offer (the default), accept, blocked, decline, done or withdraw"`
 	ID      string `json:"id,omitempty" jsonschema:"The handoff's ID, for every step but offer"`
 	Channel string `json:"channel,omitempty" jsonschema:"Offer: the room to hand the work to, or to post it in; defaults to AIRC_CHANNEL"`
 	To      string `json:"to,omitempty" jsonschema:"Offer: the nickname the work is for; without channel, a direct handoff"`
-	Message string `json:"message,omitempty" jsonschema:"Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered"`
+	Message string `json:"message,omitempty" jsonschema:"Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered; blocked: why it is stuck, required"`
+	Link    string `json:"link,omitempty" jsonschema:"Done: where the result is, an absolute http(s) URL of a PR, a commit or a document, up to 400 bytes"`
 }
 type mcpHandoffsInput struct {
 	Channel string `json:"channel,omitempty" jsonschema:"Every handoff in this room, finished ones from the last week included"`
@@ -238,8 +239,11 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 			return a.call(ctx, args, "", 15*time.Second, false)
 		})
 	}
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"handoff"}
+		if in.Link != "" && in.Step != "done" {
+			return nil, mcpOutput{}, errors.New("link applies to done")
+		}
 		switch in.Step {
 		case "", "offer":
 			if in.ID != "" {
@@ -250,20 +254,26 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 					args = append(args, pair[0]+"="+pair[1])
 				}
 			}
-		case "accept", "decline", "done", "withdraw":
+		case "accept", "blocked", "decline", "done", "withdraw":
 			if !protocol.ValidMessageID(in.ID) || in.Channel != "" || in.To != "" {
 				return nil, mcpOutput{}, errors.New(in.Step + " takes the handoff's id and no channel or to")
 			}
+			if in.Step == "blocked" && in.Message == "" {
+				return nil, mcpOutput{}, errors.New("blocked takes a message saying why")
+			}
 			args = append(args, in.Step, in.ID)
+			if in.Link != "" {
+				args = append(args, "--link="+in.Link)
+			}
 		default:
-			return nil, mcpOutput{}, errors.New("step is offer, accept, decline, done or withdraw")
+			return nil, mcpOutput{}, errors.New("step is offer, accept, blocked, decline, done or withdraw")
 		}
 		if in.Message != "" {
 			args = append(args, "--message="+in.Message)
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open and accepted handoffs that concern you: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"handoffs"}
 		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
 			if pair[1] != "" {

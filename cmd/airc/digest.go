@@ -40,16 +40,19 @@ type digestItem struct {
 	ClosesAt   time.Time `json:"closes_at,omitzero"`
 }
 
-// digestHandoff is an open or accepted handoff that concerns the digest's
-// nick, whether or not anything about it is unread.
+// digestHandoff is an open, accepted or blocked handoff that concerns the
+// digest's nick, whether or not anything about it is unread. A blocked one
+// says why and since when.
 type digestHandoff struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	From    string `json:"from"`
-	Target  string `json:"target"`
-	For     string `json:"for,omitempty"`
-	Holder  string `json:"holder,omitempty"`
-	Preview string `json:"preview"`
+	ID            string    `json:"id"`
+	State         string    `json:"state"`
+	From          string    `json:"from"`
+	Target        string    `json:"target"`
+	For           string    `json:"for,omitempty"`
+	Holder        string    `json:"holder,omitempty"`
+	BlockedReason string    `json:"blocked_reason,omitempty"`
+	BlockedAt     time.Time `json:"blocked_at,omitzero"`
+	Preview       string    `json:"preview"`
 }
 
 // digestDecision is an open decision that concerns the digest's nick: one
@@ -333,10 +336,11 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 	return slices.DeleteFunc(waiting, func(item digestItem) bool { return answered[item.ID] })
 }
 
-// openHandoffs lists the open and accepted handoffs that concern opt.nick,
-// then those open to anyone in the first digestRooms of rooms: a one-shot
-// command joins no room, so the daemon cannot know them. A daemon without
-// handoffs has none; other failures warn.
+// openHandoffs lists the live handoffs that concern opt.nick, the blocked
+// ones first as the daemon orders them, then those open to anyone in the
+// first digestRooms of rooms: a one-shot command joins no room, so the
+// daemon cannot know them. A daemon without handoffs has none; other
+// failures warn.
 func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestHandoff {
 	var out []digestHandoff
 	seen := map[string]bool{}
@@ -361,7 +365,7 @@ func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]
 					continue
 				}
 				seen[e.ID] = true
-				h := digestHandoff{ID: e.ID, State: e.State, From: e.From, Target: e.Target, Holder: e.Holder}
+				h := digestHandoff{ID: e.ID, State: e.State, From: e.From, Target: e.Target, Holder: e.Holder, BlockedReason: e.BlockedReason, BlockedAt: e.BlockedAt}
 				if e.Message != nil {
 					h.For, h.Preview = e.Message.For, preview(e.Message.Message)
 				}
@@ -499,15 +503,7 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	section("Open polls", d.Polls, func(i digestItem) string {
 		return fmt.Sprintf("[%s] %s %s: %q (%s), closes %s", i.ID, i.Target, i.From, i.Preview, strings.Join(i.Options, " / "), clock(i.ClosesAt, now))
 	})
-	if len(d.Handoffs) > 0 {
-		b.WriteString("Handoffs:\n")
-		for _, h := range d.Handoffs {
-			fmt.Fprintf(&b, "  [%s] %s in %s: %q\n", h.ID, handoffStanding(h, d.Nick), h.Target, h.Preview)
-		}
-		if d.HandoffsMore > 0 {
-			fmt.Fprintf(&b, "  and %d more; airc handoffs lists them\n", d.HandoffsMore)
-		}
-	}
+	writeHandoffs(&b, d)
 	writeDecisions(&b, d)
 	for _, h := range d.Headers {
 		if h.Type == "pin" {
@@ -593,8 +589,60 @@ func boolInt(v bool) int {
 	return 0
 }
 
+// writeHandoffs lists the handoffs that concern nick, the blocked ones first
+// since they need someone: those nick handed over and the holder marked
+// blocked, with the reason, then those nick holds and marked blocked, then
+// the rest:
+//
+//	Blocked handoffs you handed over:
+//	  [ID] you handed over to builder, blocked by builder in #work: "finish task 7" blocked: waiting on CI
+//	Handoffs you marked blocked:
+//	  [ID] from planner, blocked by you in #work: "port the fix" blocked: needs a credential
+//	Handoffs:
+//	  [ID] from planner for you, open in #work: "triage the flaky test"
+func writeHandoffs(b *strings.Builder, d digestSummary) {
+	if len(d.Handoffs) == 0 {
+		return
+	}
+	var handedOver, held, rest []digestHandoff
+	for _, h := range d.Handoffs {
+		switch {
+		case h.State != "blocked":
+			rest = append(rest, h)
+		case strings.EqualFold(h.From, d.Nick):
+			handedOver = append(handedOver, h)
+		default:
+			held = append(held, h)
+		}
+	}
+	blockedLine := func(h digestHandoff) string {
+		return fmt.Sprintf("  [%s] %s in %s: %q blocked: %s\n", h.ID, handoffStanding(h, d.Nick), h.Target, h.Preview, h.BlockedReason)
+	}
+	if len(handedOver) > 0 {
+		b.WriteString("Blocked handoffs you handed over:\n")
+		for _, h := range handedOver {
+			b.WriteString(blockedLine(h))
+		}
+	}
+	if len(held) > 0 {
+		b.WriteString("Handoffs you marked blocked:\n")
+		for _, h := range held {
+			b.WriteString(blockedLine(h))
+		}
+	}
+	if len(rest) > 0 {
+		b.WriteString("Handoffs:\n")
+		for _, h := range rest {
+			fmt.Fprintf(b, "  [%s] %s in %s: %q\n", h.ID, handoffStanding(h, d.Nick), h.Target, h.Preview)
+		}
+	}
+	if d.HandoffsMore > 0 {
+		fmt.Fprintf(b, "  and %d more; airc handoffs lists them\n", d.HandoffsMore)
+	}
+}
+
 // handoffStanding says where a handoff stands for nick: who it is from or
-// for, and who holds it.
+// for, and who holds it or marked it blocked.
 func handoffStanding(h digestHandoff, nick string) string {
 	who := func(name string) string {
 		if strings.EqualFold(name, nick) {
@@ -611,8 +659,11 @@ func handoffStanding(h digestHandoff, nick string) string {
 	} else if h.For != "" {
 		text += " for " + who(h.For)
 	}
-	if h.State == "accepted" {
+	switch h.State {
+	case "accepted":
 		return text + ", accepted by " + who(h.Holder)
+	case "blocked":
+		return text + ", blocked by " + who(h.Holder)
 	}
 	return text + ", open"
 }

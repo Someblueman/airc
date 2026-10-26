@@ -91,3 +91,65 @@ func TestHandoffCLIRefusesAmbiguousRequests(t *testing.T) {
 	deniedCLI(t, address, "choose --channel or --id", "handoffs", "--channel", "work", "--id", id)
 	deniedCLI(t, address, "handoff is not retained", "handoff", "accept", id, "--nick", "builder")
 }
+
+// A holder marks a handoff blocked with a reason, resumes it with accept
+// and finishes it with a link; listings and the digest show why it is
+// stuck and where the result is.
+func TestBlockedHandoffAndDoneLinkThroughTheCLI(t *testing.T) {
+	address := chatServer(t, 64)
+	offer := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--message", "port the fix to the release branch")
+	mustCLI(t, address, "handoff", "accept", offer.ID, "--nick", "builder")
+	deniedCLI(t, address, "needs --message", "handoff", "blocked", offer.ID, "--nick", "builder")
+	deniedCLI(t, address, "only builder", "handoff", "blocked", offer.ID, "--nick", "reviewer", "--message", "CI is red")
+	deniedCLI(t, address, "--link applies to done", "handoff", "accept", offer.ID, "--nick", "builder", "--link", "https://example.com/pr/1")
+	deniedCLI(t, address, "absolute http(s) URL", "handoff", "done", offer.ID, "--nick", "builder", "--link", "pr/54")
+
+	out := mustCLI(t, address, "handoff", "blocked", offer.ID, "--nick", "builder", "--message", "waiting on the CI fix in #91")
+	if !strings.HasPrefix(out, "handoff "+offer.ID+" blocked by builder in #work from planner\n  port the fix to the release branch\n  blocked: waiting on the CI fix in #91\n") {
+		t.Fatalf("blocked printed %q", out)
+	}
+	blocked := jsonLines[handoffRow](t, mustCLI(t, address, "handoffs", "--nick", "planner", "--json"))
+	if len(blocked) != 1 || blocked[0].State != "blocked" || blocked[0].Holder != "builder" || blocked[0].BlockedReason != "waiting on the CI fix in #91" || blocked[0].BlockedAt.IsZero() || blocked[0].Link != "" {
+		t.Fatalf("planner's handoffs %+v", blocked)
+	}
+	// The author is tagged, and a reader that knows no handoffs sees why.
+	if out := mustCLI(t, address, "check", "--nick", "planner", "--mentions"); !strings.Contains(out, "]: Blocked handoff "+offer.ID+": waiting on the CI fix in #91\n") {
+		t.Fatalf("planner was not told it is blocked: %s", out)
+	}
+
+	// The digest leads with it, for the author and the holder alike.
+	d := cliJSON[digestSummary](t, address, "digest", "--nick", "planner")
+	if len(d.Handoffs) != 1 || d.Handoffs[0].State != "blocked" || d.Handoffs[0].BlockedReason != "waiting on the CI fix in #91" {
+		t.Fatalf("planner's digest %+v", d.Handoffs)
+	}
+	if out := mustCLI(t, address, "digest", "--nick", "planner"); !strings.Contains(out, "Blocked handoffs you handed over:\n  ["+offer.ID+"] you handed over, blocked by builder in #work: \"port the fix to the release branch\" blocked: waiting on the CI fix in #91\n") {
+		t.Fatalf("planner's digest reads %s", out)
+	}
+	if out := mustCLI(t, address, "digest", "--nick", "builder"); !strings.Contains(out, "Handoffs you marked blocked:\n  ["+offer.ID+"] from planner, blocked by you in #work: \"port the fix to the release branch\" blocked: waiting on the CI fix in #91\n") {
+		t.Fatalf("builder's digest reads %s", out)
+	}
+
+	if resumed := cliJSON[handoffRow](t, address, "handoff", "accept", offer.ID, "--nick", "builder"); resumed.State != "accepted" || resumed.BlockedReason != "" || !resumed.BlockedAt.IsZero() {
+		t.Fatalf("resumed %+v", resumed)
+	}
+	link := "https://github.com/o/r/pull/54"
+	out = mustCLI(t, address, "handoff", "done", offer.ID, "--nick", "builder", "--link", link)
+	if !strings.HasSuffix(out, "\n  done: "+link+"\n") {
+		t.Fatalf("done printed %q", out)
+	}
+	room := jsonLines[handoffRow](t, mustCLI(t, address, "handoffs", "--channel", "work", "--json"))
+	if len(room) != 1 || room[0].State != "done" || room[0].Link != link || room[0].Holder != "builder" {
+		t.Fatalf("the room's handoffs %+v", room)
+	}
+	// Without a note the done step names the link; with one, the link follows.
+	out = mustCLI(t, address, "history", "#work", "--nick", "reader")
+	if !strings.Contains(out, "Resumed handoff "+offer.ID+"\n") || !strings.Contains(out, "Finished handoff "+offer.ID+": "+link+"\n") {
+		t.Fatalf("history shows %s", out)
+	}
+	second := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "work", "--message", "second")
+	mustCLI(t, address, "handoff", "accept", second.ID, "--nick", "builder")
+	mustCLI(t, address, "handoff", "done", second.ID, "--nick", "builder", "--message", "merged", "--link", link)
+	if out := mustCLI(t, address, "history", "#work", "--nick", "reader"); !strings.Contains(out, "[done with handoff "+second.ID+"] merged "+link+"\n") {
+		t.Fatalf("history shows %s", out)
+	}
+}

@@ -159,7 +159,9 @@ var commandTable = []command{
 		help: `  airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]`},
 	{name: "handoff", run: reading(runHandoffSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
-  airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off`},
+  airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
+  airc handoff blocked ID --message WHY [--json]      say the handoff you hold is stuck; accept again when it moves
+  airc handoff done ID --link URL [--json]            finish it and record where the result is`},
 	{name: "handoffs", run: plain(runHandoffsSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc handoffs [--channel #room | --id ID] [--limit N] [--json]   open handoffs for you, held by you or offered by you`},
 	{name: "decide", run: reading(runDecideSession), session: true, mcp: true, group: groupAgent,
