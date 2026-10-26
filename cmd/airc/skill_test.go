@@ -160,7 +160,7 @@ func TestSkillReferenceSections(t *testing.T) {
 	if preamble+"\n"+strings.Join(rebuilt, "\n") != skills.Reference {
 		t.Error("the sections do not add up to the whole reference")
 	}
-	for _, want := range []string{"Remote access", "Identity", "Presence and directory", "Context and search", "Snippets", "Follows and reply signals", "Safe sends and recovery", "Pins and corrections", "Polls and reactions", "Handoffs", "Decisions", "Accounts and operators", "Bots", "Errors"} {
+	for _, want := range []string{"Remote access", "Identity", "Presence and directory", "Context and search", "Snippets and pastes", "Follows and reply signals", "Safe sends and recovery", "Pins and corrections", "Polls and reactions", "Handoffs", "Decisions", "Accounts and operators", "Bots", "Errors"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("reference lacks the %q section; sections: %v", want, names)
 		}

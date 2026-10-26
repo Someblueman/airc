@@ -78,7 +78,7 @@ Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A ni
 
 ## Extensions
 
-The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 SEARCH_TERMS=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`, and for the chat actions `CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 CUSTOM_REACTIONS=1 HANDOFF=1 DECISION=1`); clients check these rather than guessing, so a newer client degrades cleanly against an older server. A service installed with a bundled gateway also advertises `CARRIERS=` its ordered transports (for example `CARRIERS=irc:6667,framed:6683,http:6680`), repeated as the `carriers` array of `770` STATUS; the format is in [SERVICE.md](SERVICE.md#carrier-discovery).
+The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 SEARCH_TERMS=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`, and for the chat actions `CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 CUSTOM_REACTIONS=1 HANDOFF=1 DECISION=1 PASTE=1 PASTE_BYTES=N`); clients check these rather than guessing, so a newer client degrades cleanly against an older server. A service installed with a bundled gateway also advertises `CARRIERS=` its ordered transports (for example `CARRIERS=irc:6667,framed:6683,http:6680`), repeated as the `carriers` array of `770` STATUS; the format is in [SERVICE.md](SERVICE.md#carrier-discovery).
 
 | Command | Purpose | Replies |
 |---|---|---|
@@ -210,7 +210,8 @@ that owned the nickname when the message was stored, so a reader can tell whose
 inbox it was after the nickname changes hands.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
-`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`. Unknown fields are rejected;
+`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`, `link`, and for
+pastes `name`, `language`, `size`, `lines`, `token`, `seq`, `data`, `offset`. Unknown fields are rejected;
 requests are at most 7000 UTF-8 JSON bytes and wire lines at most 8192 bytes.
 Text may travel in the existing `+airc/body` tag instead of JSON. `777` returns
 one JSON `ChatEntry` per result, then `778` ends the response; malformed/invalid
@@ -237,6 +238,11 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `decision-answer` | Offer `id`; `choice` numbered from 1 when the offer has options, and/or a note `text` (required without options). The decider, by account when registered, or an admin. Posts the answer as a reply to the offer where the offer is (a direct decision's steps go to the other side), its body "Decided N (option)" with ": note" appended, or the note alone, its `choice` in the metadata and `for` the asker; the decision is `answered`. A repeat by the same answerer answers again without posting. |
 | `decision-withdraw` | Offer `id`, optional note `text`. The author or an admin, while open. Posts the withdrawal (body the note, else "Withdrew decision ID") with `for` the decider; the decision is `withdrawn`. A repeat by the author answers again without posting. |
 | `decisions` | Read-only. With `id`, one decision; with room `target`, every retained decision there; otherwise the open decisions that concern the caller: for it to decide, asked by it, or asked in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
+| `paste-begin` | Requires `PASTE=1`. Starts an upload under a client-chosen `token` (1–64 letters, digits, `-`, `_`): the paste's `name` (1–120 bytes of printable text, no path separators), optional `language` (up to 30 characters of letters, digits and `_+.-#`), its `size` in bytes (1 through `PASTE_BYTES`, 65536 by default) and `lines` (advisory; the server counts). At most 4 uploads are in flight per connection; one not ended within 60 seconds, or whose connection drops, is discarded. Answers `{"action":"paste-begin","token":...}`. |
+| `paste-chunk` | Upload `token`, chunk `seq` counted from 0 in order, `data` standard base64 of 1–4096 raw bytes. Exceeding the declared size discards the upload. Answers the token and the bytes held so far as `offset`. |
+| `paste-end` | Upload `token`. The server checks the size against the declaration, refuses anything but UTF-8 text without NUL (binary), and stores the content under its ID, the first 32 hex digits of its SHA-256, so the same text uploaded again is the same paste and is not stored twice. Answers a paste entry: `action: "paste"`, `id`, `from`, `account_id`, `paste` (`id`, `name`, `language`, `size`, `lines`), `created`, `referenced`. |
+| `paste-get` | Read-only. Paste `id`, optional `offset` (bytes) and `limit` (1–16 chunks, default 16). Answers entries with `action: "paste-get"`, each `offset` and `data` (standard base64 of at most 4096 bytes), the first of every page also carrying the paste entry's fields; a client reads until `offset` plus the data's length reaches `size`. A read counts as a reference. |
+| `pastes` | Read-only. With `id`, one paste entry, whoever made it; otherwise the caller's own pastes, oldest first, the newest `limit` (1–1000, default 200). |
 
 `CONTEXT_BYTES=1` permits `max_bytes` on context requests. Omission or zero retains
 the legacy response. A nonzero budget counts every `777` line and the final `778`,
@@ -283,13 +289,20 @@ tag unchanged, so one ID retried by the same author over native IRC and any
 gateway carrier is one message. `NOTICE` and multi-target tagged sends are rejected. Room
 slow mode returns `486` with a retry delay; reactions/identical retries bypass it.
 
+A message shares a paste by carrying the paste's ID in the `+airc/paste` tag on
+`PRIVMSG` or `REPLY` (not `NOTICE` or `REACT`); an unknown ID is refused with
+`417`. The server adds `paste` (`id`, `name`, `language`, `size`, `lines`) to
+the message's metadata, and the sender writes the body so that it ends with the
+line `paste:ID NAME (SIZE, N lines)`, which is all a client that knows no pastes
+sees. The paste is then kept while that message is retained in history.
+
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
 `retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-blocked`,
 `handoff-decline`, `handoff-done`, `handoff-withdraw`, `decision` and its steps
 `decision-answer`, `decision-withdraw`), `supersedes`, `superseded_by`,
 `retracted`, `poll_options`, `poll_closes_at`, `for`, `link` (where a done
-handoff's result is), `choices` (a decision's options) and `choice` (the
-option an answer chose). A room message with `for` counts as a mention of
+handoff's result is), `choices` (a decision's options), `choice` (the
+option an answer chose) and `paste` (the paste a message shares). A room message with `for` counts as a mention of
 that nickname, as `@nick` in its body would: an offer's addressee or decider,
 the author of an accept, blocked, decline, done or answer, and the decider a
 withdrawn decision names. Live messages encode them and `account_id` in the base64url JSON

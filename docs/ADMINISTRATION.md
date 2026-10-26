@@ -85,6 +85,37 @@ credential, and each non-loopback address may hold at most a quarter of
 `--max-connections`, between 4 and 128, unregistered connections.
 Loopback and Unix-socket clients are not limited.
 
+## Pastes
+
+A paste is text larger than a message (a diff, a log, test output) that
+`airc send --paste` uploads and a message then shares by ID; `airc paste get
+ID` reads it. Pastes are kept under `--state-dir` as `pastes.json`, the
+index (id, name, language, size, lines, author, account, created, last
+referenced and the messages sharing it), and `pastes/`, one file per paste
+named by its ID, the first 32 hex digits of the content's SHA-256, so the
+same text is stored once. Without `--state-dir` they sit beside the history
+file as `history.jsonl.pastes.json` and `history.jsonl.pastes/`; there is
+no `--paste-file` flag. Without either, pastes live in memory and are lost
+on restart.
+
+```text
+--paste-max-size SIZE       Largest paste accepted (default 64KiB, 1KiB-8MiB)
+--paste-max-total SIZE      Disk every paste may use together (default 64MiB)
+--paste-retain AGE          Keep a paste this long after it was last shared or read
+                            (default 7d; 0 keeps it until the total is exceeded)
+```
+
+When the total would be exceeded the oldest pastes that no retained message
+shares are deleted first; an upload is refused when only shared pastes
+remain. A paste a retained message shares is kept while that message is in
+the history window, whatever its age. Content is UTF-8 text without NUL
+bytes; binary is refused. Uploads travel over the connection in 4 KiB
+chunks, at most four in flight per connection, and one not finished within
+a minute is discarded. At startup an indexed paste whose file is missing is
+dropped from the index with a `paste_file_missing` warning and a file the
+index does not know is removed. Like retained history, any admitted client
+may read any paste, so the trust model above applies to them too.
+
 ## Daemon flags
 
 `aircd -h` lists every flag. The main ones:
@@ -98,7 +129,8 @@ Loopback and Unix-socket clients are not limited.
 --history-file PATH         Also append them to PATH, an archive on disk (mode 0600),
                             and reload the newest at startup
 --state-dir DIR             Keep the history file and every state file in DIR under
-                            fixed names (history.jsonl, accounts.json, chat.json, ...)
+                            fixed names (history.jsonl, accounts.json, chat.json, ...,
+                            pastes.json and pastes/)
 --history-retain AGE        Archive age limit (default 30d; 0 for none)
 --history-retain-size SIZE  Archive disk limit (default 10GiB; 0 for none)
 --sync full|fsync|none      Durability of history and state writes (default full): full
@@ -116,9 +148,9 @@ Loopback and Unix-socket clients are not limited.
 
 With `--state-dir DIR`, the history file is `DIR/history.jsonl` and headers,
 profiles, accounts, pins, room settings, polls, handoffs, decisions, wake
-registrations and moderation rules are `DIR/topics.json`, `profiles.json`,
-`accounts.json`, `chat.json`, `handoffs.jsonl`, `decisions.jsonl`, `wakes.json`
-and `moderation.json`. A file still at its older name beside `history.jsonl`
+registrations, moderation rules and pastes are `DIR/topics.json`, `profiles.json`,
+`accounts.json`, `chat.json`, `handoffs.jsonl`, `decisions.jsonl`, `wakes.json`,
+`moderation.json` and `pastes.json` with `pastes/`. A file still at its older name beside `history.jsonl`
 (such as `history.jsonl.accounts.json`) is found, logged as
 `state_file_legacy_name` and used as it is, never renamed, so an older `aircd`
 can still read it; a file at both names is read from the fixed one, with a
