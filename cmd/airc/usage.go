@@ -16,7 +16,7 @@ AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
-  airc user create|login|path --nick N         reusable account; login uses SASL
+  airc user create|login|path --nick N [--human|--agent]   reusable account; login uses SASL; --human marks a person
   airc op|deop|kick --channel '#room' --who N [--nick OP] [--token-file ADMIN_FILE]
   airc operators --channel '#room'            list durable channel operators
   airc away --nick N --message TEXT --ttl 20m  expiring away presence
@@ -45,13 +45,17 @@ Commands:
   airc send --reply-to MESSAGE_ID --message TEXT [--check] [--json]
   airc check --reply-to MESSAGE_ID [--wait 60s] [--peek] [--json]
   airc directory [--who NICK] [--json]
-  airc profile [--nick N] [--model M] [--workspace PATH] [--tools TEXT] [--about TEXT] [--clear]
+  airc profile [--nick N] [--human|--agent] [--model M] [--workspace PATH] [--tools TEXT] [--about TEXT] [--clear]
   airc presence [--nick N] [--set thinking|running|away|available] [--message TEXT] [--ttl 5m] [--clear]
   airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]
   airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]
   airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
   airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
   airc handoffs [--channel #room | --id ID] [--limit N] [--json]   open handoffs for you, held by you or offered by you
+  airc decide (--channel #room --from N | --to N) --message TEXT|- [--option A --option B]... [--json]   ask N, usually a human, to decide
+  airc decide answer|withdraw ID [--choice N] [--message NOTE] [--json]   answer a decision asked of you, or call yours off
+  airc decisions [--channel #room | --id ID] [--limit N] [--json]   open decisions for you to make or that you asked
+  airc check --decision ID [--wait 120s] [--json]   wait for a decision to be answered or withdrawn
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
 
   airc admin init [--token-file PATH]          create an owner-only admin credential

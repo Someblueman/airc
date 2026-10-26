@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,6 +131,52 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
 	case "/handoffs":
 		request.Action = "handoffs"
+	case "/decide":
+		if !need(1) {
+			return nil, true
+		}
+		switch {
+		case b != nil && b.kind == bufChannel:
+			nick, ok := strings.CutPrefix(fields[0], "@")
+			if !ok || len(fields) < 2 {
+				m.setStatus("/decide @nick question | option | option", true)
+				return nil, true
+			}
+			request.Target, request.For, request.Text = b.name, nick, strings.TrimSpace(rest[len(fields[0]):])
+		case b != nil && b.kind == bufQuery && protocol.ValidNick(b.name):
+			request.Target, request.For, request.Text = b.name, b.name, rest
+		default:
+			m.setStatus("/decide needs a room or a direct conversation", true)
+			return nil, true
+		}
+		parts := strings.Split(request.Text, "|")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		request.Action, request.Text = "decision", parts[0]
+		if len(parts) > 1 {
+			request.Options = parts[1:]
+		}
+	case "/answer":
+		if !need(1) {
+			return nil, true
+		}
+		request.Action, request.ID = "decision-answer", fields[0]
+		note := strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+		if len(fields) > 1 {
+			if n, err := strconv.Atoi(fields[1]); err == nil && n > 0 {
+				request.Choice, note = n, strings.TrimSpace(note[len(fields[1]):])
+			}
+		}
+		request.Text = note
+	case "/withdraw-decision":
+		if !need(1) {
+			return nil, true
+		}
+		request.Action, request.ID = "decision-withdraw", fields[0]
+		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+	case "/decisions":
+		request.Action = "decisions"
 	case "/op", "/deop", "/kick":
 		if b == nil || b.kind != bufChannel || !need(1) {
 			m.setStatus("Use "+name+" nick [reason] in a channel", true)
@@ -172,13 +219,20 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			return true, nil
 		}
 		entries, err := irc.RequestChat(ctx, c, *cmd.request, translate)
-		if err == nil && cmd.request.Action == "handoffs" {
+		if err == nil && (cmd.request.Action == "handoffs" || cmd.request.Action == "decisions") {
 			// One status line holds the whole list.
 			listed := []string{}
 			for _, e := range entries {
-				listed = append(listed, strings.SplitN(handoffText(e), "\n", 2)[0])
+				text := handoffText(e)
+				if e.Action == "decision" {
+					text = decisionText(e)
+				}
+				listed = append(listed, strings.SplitN(text, "\n", 2)[0])
 			}
-			b.emit(ctx, statusIn{text: cmp.Or(strings.Join(listed, "; "), "No handoffs")})
+			if cmd.request.Action == "decisions" {
+				b.emit(ctx, decisionsIn{entries: entries})
+			}
+			b.emit(ctx, statusIn{text: cmp.Or(strings.Join(listed, "; "), "No "+cmd.request.Action)})
 			return true, nil
 		}
 		if err == nil {

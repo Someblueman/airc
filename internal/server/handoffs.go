@@ -1,13 +1,9 @@
 package server
 
 import (
-	"bufio"
-	"bytes"
 	"cmp"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,7 +11,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -75,17 +70,6 @@ func validHandoff(h handoff) error {
 	return nil
 }
 
-// handoffLog appends each handoff's new state as one JSON line; the newest
-// line for an offer wins. records counts the lines, superseded ones
-// included. dirty marks a failed append, which may have left part of a
-// line: the log is rewritten before anything more is appended.
-type handoffLog struct {
-	path    string
-	file    *os.File
-	records int
-	dirty   bool
-}
-
 // RestoreHandoffs loads the handoff log at path, keeping every open and
 // accepted handoff and finished ones for a week, compacts it and appends
 // to it from then on. A torn last line, from a crash mid-write, is dropped.
@@ -106,73 +90,24 @@ func (s *Server) RestoreHandoffs(path string) error {
 		return fmt.Errorf("handoffs %s: more than %d open", path, maxLiveHandoffs)
 	}
 	s.handoffs = loaded
-	s.handoffLog = &handoffLog{path: path}
+	s.handoffLog = &appendLog[handoff]{path: path}
 	return s.compactHandoffsLocked()
 }
 
 func readHandoffs(path string) (map[string]handoff, error) {
-	loaded := map[string]handoff{}
-	f, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return loaded, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	r := bufio.NewReaderSize(f, maxHandoffRecord)
-	for n := 1; ; n++ {
-		line, err := r.ReadSlice('\n')
-		if errors.Is(err, io.EOF) {
-			return loaded, nil // nothing more, or a torn last line
-		}
-		if errors.Is(err, bufio.ErrBufferFull) {
-			return nil, fmt.Errorf("line %d is too long", n)
-		}
-		if err != nil {
-			return nil, err
-		}
-		var h handoff
-		if err := decodeStrict(bytes.NewReader(line), &h); err != nil {
-			return nil, fmt.Errorf("line %d: %w", n, err)
-		}
-		if err := validHandoff(h); err != nil {
-			return nil, fmt.Errorf("line %d: %w", n, err)
-		}
-		loaded[h.Offer.ID] = h
-	}
+	return readLog(path, maxHandoffRecord, func(h handoff) (string, error) { return h.Offer.ID, validHandoff(h) })
 }
 
 // compactHandoffsLocked drops handoffs finished more than a week ago and
 // rewrites the log with one line per handoff, then appends to the new file.
 func (s *Server) compactHandoffsLocked() error {
-	l := s.handoffLog
 	now := s.now()
 	for id, h := range s.handoffs {
 		if !h.live() && now.Sub(h.Updated) > handoffKeep {
 			delete(s.handoffs, id)
 		}
 	}
-	var data []byte
-	for _, h := range sortedHandoffs(s.handoffs) {
-		line, err := json.Marshal(h)
-		if err != nil {
-			return err
-		}
-		data = append(append(data, line...), '\n')
-	}
-	if err := atomicfile.Write(l.path, data, 0o600, s.cfg.Sync); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(l.path, os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return err
-	}
-	if l.file != nil {
-		_ = l.file.Close()
-	}
-	l.file, l.records, l.dirty = file, len(s.handoffs), false
-	return nil
+	return s.handoffLog.rewrite(sortedHandoffs(s.handoffs), s.cfg.Sync)
 }
 
 // saveHandoffLocked records h's new state before it takes effect, and
@@ -184,22 +119,12 @@ func (s *Server) saveHandoffLocked(h handoff) error {
 				return err
 			}
 		}
-		line, err := json.Marshal(h)
-		if err != nil {
+		if err := l.append(h, s.cfg.Sync); err != nil {
 			return err
 		}
-		if _, err := l.file.Write(append(line, '\n')); err != nil {
-			l.dirty = true
-			return err
-		}
-		if err := atomicfile.File(l.file, s.cfg.Sync); err != nil {
-			l.dirty = true
-			return err
-		}
-		l.records++
 	}
 	s.handoffs[h.Offer.ID] = h
-	if l := s.handoffLog; l != nil && l.records > 2*len(s.handoffs)+64 {
+	if l := s.handoffLog; l != nil && l.crowded(len(s.handoffs)) {
 		if err := s.compactHandoffsLocked(); err != nil {
 			s.logger.Warn("handoff_compaction_failed", "error", err)
 		}
@@ -284,11 +209,12 @@ func (s *Server) handoffBody(text, fallback string) (string, error) {
 	return body, nil
 }
 
-// handoffTargetLocked checks that client may post a handoff step to target
-// and returns the target as the step's message names it.
-func (s *Server) handoffTargetLocked(client *session, target string) (string, error) {
+// chatTargetLocked checks that client may post a handoff or decision step
+// (what names which) to target and returns the target as the step's message
+// names it.
+func (s *Server) chatTargetLocked(client *session, target, what string) (string, error) {
 	if !validChannel(target) && !protocol.ValidNick(target) {
-		return "", errors.New("a handoff needs a room or a nickname")
+		return "", errors.New("a " + what + " needs a room or a nickname")
 	}
 	if !s.postAllowedLocked(client, target) {
 		return "", errChatDenied
@@ -326,7 +252,7 @@ func (s *Server) offerHandoffLocked(client *session, r protocol.ChatRequest) err
 	if err != nil {
 		return err
 	}
-	target, err := s.handoffTargetLocked(client, r.Target)
+	target, err := s.chatTargetLocked(client, r.Target, "handoff")
 	if err != nil {
 		return err
 	}
@@ -419,7 +345,7 @@ func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) erro
 			target = cmp.Or(h.Holder, h.Offer.For)
 		}
 	}
-	if target, err = s.handoffTargetLocked(client, target); err != nil {
+	if target, err = s.chatTargetLocked(client, target, "handoff"); err != nil {
 		return err
 	}
 	if strings.EqualFold(notify, client.client.Nick) {

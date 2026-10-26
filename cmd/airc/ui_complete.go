@@ -56,6 +56,10 @@ var uiCommands = []uiCommand{
 	{"/decline", "ID [note]", "turn a handoff down, or give one you hold back to the room", "HANDOFF", "Handoffs"},
 	{"/withdraw", "ID [note]", "call off your handoff", "HANDOFF", "Handoffs"},
 	{"/handoffs", "", "handoffs for you, held by you or handed over by you", "HANDOFF", "Handoffs"},
+	{"/decide", "@nick text | option | option", "ask nick (in a DM, the other person) to decide; options after | are numbered", "DECISION", "Decisions"},
+	{"/answer", "ID [N] [note]", "answer a decision asked of you: the option number, a note, or both", "DECISION", "Decisions"},
+	{"/withdraw-decision", "ID [note]", "call off your decision", "DECISION", "Decisions"},
+	{"/decisions", "", "decisions waiting on you and those you asked", "DECISION", "Decisions"},
 	{"/away", "[reason]", "publish one-hour away presence, or clear it", "", "Presence and operators"},
 	{"/op", "nick", "grant channel operator with your account", "CHANNEL_OPERATORS", "Presence and operators"},
 	{"/deop", "nick", "revoke channel operator", "CHANNEL_OPERATORS", "Presence and operators"},
@@ -103,6 +107,7 @@ func (m *uiModel) helpLines() []helpLine {
 	lines := []helpLine{{head: "Keys"}}
 	lines = append(lines, uiKeys...)
 	lines = append(lines, helpLine{body: "Commands take `last` in place of an ID for the newest message in the view."})
+	lines = append(lines, helpLine{body: "Members: ☺ marks a human, ● a connected session. A registered author's <nick> is bold, a guest's dim; humans are blue."})
 	if m.features == nil {
 		lines = append(lines, helpLine{body: "Not connected yet: which commands the daemon supports is unknown."})
 	}

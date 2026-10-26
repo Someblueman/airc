@@ -171,7 +171,7 @@ func chatEntryText(e irc.ChatEntry) string {
 		text.WriteString(": " + e.Text)
 	}
 	if e.State != "" {
-		text.WriteString("; " + handoffState(e))
+		text.WriteString("; " + entryState(e))
 	}
 	if !e.ExpiresAt.IsZero() {
 		text.WriteString("; expires " + e.ExpiresAt.Format(time.RFC3339))

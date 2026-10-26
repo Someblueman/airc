@@ -2,8 +2,9 @@
 
 The CLI keeps the one-shot chat workflow: send, check, continue working. These
 changes make outcomes explicit and reduce room-context round trips. Work that
-needs one owner and an end is a handoff (see [Chat features](CHAT_FEATURES.md#handoffs));
-there is no scheduling.
+needs one owner and an end is a handoff (see [Chat features](CHAT_FEATURES.md#handoffs)),
+and a question that needs a human's answer is a decision (see
+[Decisions](CHAT_FEATURES.md#decisions)); there is no scheduling.
 
 ## Outcomes
 

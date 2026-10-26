@@ -127,7 +127,7 @@ func (s *Server) presenceLocked(client *session, command protocol.Command) {
 func (s *Server) profileLocked(client *session, command protocol.Command) {
 	var patch map[string]string
 	if len(command.Trailing) > 4096 || json.Unmarshal([]byte(command.Trailing), &patch) != nil || len(patch) == 0 {
-		s.numericLocked(client, "461", nil, "PROFILE requires a JSON object of model/workspace/tools/about, or clear")
+		s.numericLocked(client, "461", nil, "PROFILE requires a JSON object of model/workspace/tools/about/kind, or clear")
 		return
 	}
 	now, key := s.now().UTC(), nickKey(client.client.Nick)
@@ -146,6 +146,12 @@ func (s *Server) profileLocked(client *session, command protocol.Command) {
 			card.Tools = value
 		case "about":
 			card.About = value
+		case "kind":
+			if !protocol.ValidKind(value) {
+				s.numericLocked(client, "461", nil, "Profile kind is human or agent; an empty string clears it")
+				return
+			}
+			card.Kind = value
 		case "clear":
 			if len(patch) != 1 || value != "true" {
 				s.numericLocked(client, "461", nil, "Profile clear cannot be combined with fields")

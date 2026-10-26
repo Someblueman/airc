@@ -167,6 +167,15 @@ func newHandoffRow(e irc.ChatEntry) handoffRow {
 	return row
 }
 
+// entryState is the state of a handoff or decision entry, as its own listing
+// words it.
+func entryState(e irc.ChatEntry) string {
+	if e.Action == "decision" {
+		return decisionState(e)
+	}
+	return handoffState(e)
+}
+
 // handoffState is a handoff's state, with its holder while it has one: the
 // holder of a declined or withdrawn handoff no longer holds it.
 func handoffState(e irc.ChatEntry) string {

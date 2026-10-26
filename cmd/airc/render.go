@@ -45,7 +45,15 @@ type renderer struct {
 	// long paragraphs do not run together while short chat stays compact.
 	afterMessage bool
 	prevTall     bool
+
+	// kinds, when set, says who is a human, drawn in humanColor rather than
+	// the hashed palette. Nil, as in watch and the CLI, draws everyone alike.
+	kinds *nickKinds
 }
+
+// humanColor is the one colour humans are drawn in, outside the palette the
+// agents' nicknames are hashed into.
+const humanColor = 117
 
 // reserve widens the nickname column for a name before anything is printed, so
 // a longer name appearing later does not shift the text of earlier lines.
@@ -176,7 +184,7 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 	}
 	label := "<" + from + ">"
 	column := strings.Repeat(" ", r.nickWidth-utf8.RuneCountInString(from)) + label
-	styledColumn := strings.Repeat(" ", r.nickWidth-utf8.RuneCountInString(from)) + r.dim("<") + r.bold(r.fg(nickColor(m.From), from)) + r.dim(">")
+	styledColumn := strings.Repeat(" ", r.nickWidth-utf8.RuneCountInString(from)) + r.nickLabel(m, from)
 
 	prefixWidth := timeColumn + 1 + utf8.RuneCountInString(column) + 1
 	prefix := r.header(m.Timestamp) + " "
@@ -195,7 +203,7 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		// Leave room for the text: 9 columns go to "12:00 <" ">" and spaces.
 		from = ellipsize(from, max(min(12, r.width-minBodyWidth-9), 3))
 		prefixWidth = 5 + 1 + utf8.RuneCountInString(from) + 2 + 1
-		prefix = r.dim(m.Timestamp.Local().Format("15:04")) + " " + r.dim("<") + r.bold(r.fg(nickColor(m.From), from)) + r.dim(">") + " "
+		prefix = r.dim(m.Timestamp.Local().Format("15:04")) + " " + r.nickLabel(m, from) + " "
 		if dm != "" {
 			room := max(r.width-prefixWidth-minBodyWidth-1, 3)
 			dm = "[dm -> " + cleanText(m.Target) + "]"
@@ -225,6 +233,22 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		out.WriteString(strings.Repeat(" ", prefixWidth) + line + "\n")
 	}
 	return out.String()
+}
+
+// nickLabel is the <nick> column of a message: the name in its hashed colour,
+// or in humanColor when the directory says the author is a human; the
+// brackets bold for a registered author and dim for a guest, so who is who
+// can be told at a glance.
+func (r *renderer) nickLabel(m *irc.MessageEvent, from string) string {
+	bracket := r.dim
+	if m.AccountID != "" {
+		bracket = r.bold
+	}
+	color := nickColor(m.From)
+	if r.kinds.kind(m.From) == "human" {
+		color = humanColor
+	}
+	return bracket("<") + r.bold(r.fg(color, from)) + bracket(">")
 }
 
 func (r *renderer) notice(at time.Time, marker string, color int, text string) string {
@@ -279,7 +303,7 @@ func (r *renderer) dayRule(at time.Time) string {
 }
 
 // chatBody renders a message body with the markers its chat metadata calls
-// for. replyTo names the handoff a handoff step belongs to.
+// for. replyTo names the handoff or decision a step belongs to.
 func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 	body := text
 	switch m.Kind {
@@ -307,6 +331,19 @@ func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 	case "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw":
 		// A step without a note already says what it did.
 		if label := protocol.HandoffStepText(m.Kind, replyTo); body != label {
+			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
+		}
+	case "decision":
+		body = "[decision " + id + " for " + m.For + "] " + body
+		for i, option := range m.Choices {
+			body += fmt.Sprintf("\n%d. %s", i+1, option)
+		}
+	case "decision-answer":
+		// The body names the choice itself ("Decided 2 (option)"), so the
+		// marker names only the decision.
+		body = "[answer to decision " + replyTo + "] " + body
+	case "decision-withdraw":
+		if label := protocol.DecisionStepText(m.Kind, replyTo, 0, "", ""); body != label {
 			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
 		}
 	}

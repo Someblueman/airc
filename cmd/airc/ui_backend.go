@@ -110,6 +110,11 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 			return false, err
 		}
 	}
+	for _, refresh := range []func(context.Context, *irc.Client, func(irc.Event)) error{b.refreshDecisions, b.refreshDirectory} {
+		if err := refresh(ctx, client, translate); err != nil {
+			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+		}
+	}
 	online := true
 	for id := range b.threads {
 		if err := b.subscribe(ctx, client, []string{"thread:" + id}, translate); err != nil {
@@ -198,12 +203,59 @@ func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, tra
 		err = client.Names(cmd.target)
 	case "channels":
 		err = client.Channels()
+	case "decisions":
+		err = b.refreshDecisions(cmdCtx, client, translate)
+	case "directory":
+		err = b.refreshDirectory(cmdCtx, client, translate)
 	case "observe":
 		return b.attach(ctx, client, []string{cmd.target}, translate)
 	}
 	if err != nil {
 		b.emit(ctx, statusIn{text: err.Error(), isError: true})
 	}
+	return nil
+}
+
+// refreshDecisions gives the model the open decisions that concern this
+// user, so the status bar can say who is waiting. other sees unrelated events.
+func (b *uiBackend) refreshDecisions(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
+	if !client.Supports("DECISION") {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "decisions"}, other)
+	if err != nil {
+		return err
+	}
+	b.emit(ctx, decisionsIn{entries: entries})
+	return nil
+}
+
+// refreshDirectory gives the model every card, so humans are drawn as such.
+func (b *uiBackend) refreshDirectory(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
+	if !client.Supports("DIRECTORY") {
+		return nil
+	}
+	if err := client.Directory(""); err != nil {
+		return err
+	}
+	var cards []irc.AgentCard
+	err := awaitEvent(ctx, client, requestTimeout, "reading the directory", "timed out reading the directory", func(event irc.Event) (bool, error) {
+		switch e := event.(type) {
+		case *irc.DirectoryEvent:
+			cards = append(cards, e.AgentCard)
+		case *irc.EndOfDirectoryEvent:
+			return true, nil
+		default:
+			other(event)
+		}
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+	b.emit(ctx, directoryIn{cards: cards})
 	return nil
 }
 

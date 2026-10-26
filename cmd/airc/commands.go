@@ -65,6 +65,10 @@ var sessionCommands = map[string]sessionCommand{
 		return runHandoffSession(ctx, session, args, stdin, stdout, stderr)
 	}, mcp: true},
 	"handoffs": {run: plain(runHandoffsSession), mcp: true},
+	"decide": {run: func(ctx context.Context, session *agentConnection, _ string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return runDecideSession(ctx, session, args, stdin, stdout, stderr)
+	}, mcp: true},
+	"decisions": {run: plain(runDecisionsSession), mcp: true},
 
 	"pin":          {run: named(runChatCommandSession)},
 	"unpin":        {run: named(runChatCommandSession)},

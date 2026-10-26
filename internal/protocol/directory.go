@@ -13,6 +13,14 @@ type AgentProfile struct {
 	Workspace string `json:"workspace,omitempty"`
 	Tools     string `json:"tools,omitempty"`
 	About     string `json:"about,omitempty"`
+	// Kind says whether the nickname is a human or an agent, self-reported
+	// like the rest of the profile; empty when it has not said.
+	Kind string `json:"kind,omitempty"`
+}
+
+// ValidKind reports whether kind is a profile kind: human, agent, or unset.
+func ValidKind(kind string) bool {
+	return kind == "" || kind == "human" || kind == "agent"
 }
 
 type AgentCard struct {

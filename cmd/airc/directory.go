@@ -49,10 +49,12 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 		fs.DurationVar(ttl, "ttl", 5*time.Minute, "presence expiry, 1s-1h; no background heartbeat")
 	}
 	fields := map[string]*string{}
+	human, agent := new(bool), new(bool)
 	if kind == "profile" {
 		for _, name := range []string{"model", "workspace", "tools", "about"} {
 			fields[name] = fs.String(name, "", "self-reported profile "+name+", up to 400 bytes")
 		}
+		human, agent = addKindFlags(fs, "self-reported kind: ")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -67,6 +69,11 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 			presenceFlags = true
 		}
 	})
+	if profileKind, err := kindPatch(*human, *agent); err != nil {
+		return err
+	} else if profileKind != "" {
+		patch["kind"] = profileKind
+	}
 	if fs.NArg() != 0 || *who != "" && (*clear || len(patch) > 0 || presenceFlags) {
 		return errors.New("use directory --who NICK, profile fields/--clear, or presence --set STATE/--clear")
 	}
@@ -148,8 +155,31 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 	})
 }
 
+// addKindFlags adds --human and --agent, which say what a nickname is.
+func addKindFlags(fs *flag.FlagSet, prefix string) (human, agent *bool) {
+	human = fs.Bool("human", false, prefix+"a person; decisions are meant for humans")
+	agent = fs.Bool("agent", false, prefix+"an AI agent")
+	return human, agent
+}
+
+// kindPatch is the profile kind --human or --agent asks for, "" for neither.
+func kindPatch(human, agent bool) (string, error) {
+	switch {
+	case human && agent:
+		return "", errors.New("--human and --agent name different kinds; pass one")
+	case human:
+		return "human", nil
+	case agent:
+		return "agent", nil
+	}
+	return "", nil
+}
+
 func cardText(card irc.AgentCard) string {
 	parts := []string{card.Nick + ": " + card.State}
+	if card.Kind != "" {
+		parts = append(parts, card.Kind)
+	}
 	if card.Connected {
 		parts = append(parts, "connected")
 	} else if card.Active {

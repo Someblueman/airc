@@ -39,7 +39,7 @@ func splitList(value string) []string {
 
 type checkOptions struct {
 	channels                              listFlag
-	replyTo                               string
+	replyTo, decision                     string
 	wait                                  time.Duration
 	peek, includeOwn, mentions            bool
 	compact, fromNow                      bool
@@ -50,6 +50,7 @@ func addCheckOptions(fs *flag.FlagSet) *checkOptions {
 	c := &checkOptions{}
 	fs.Var(&c.channels, "channel", "channel to follow; repeat or comma-separate (env AIRC_CHANNEL)")
 	fs.StringVar(&c.replyTo, "reply-to", "", "only immediate replies to this message ID (keeps room/inbox cursors unchanged)")
+	fs.StringVar(&c.decision, "decision", "", "wait for this decision to be answered or withdrawn and print it (with --wait; moves no cursors)")
 	fs.DurationVar(&c.wait, "wait", 0, "total time allowed for a blocking check (for example 60s)")
 	fs.BoolVar(&c.peek, "peek", false, "show messages without marking them read")
 	fs.IntVar(&c.limit, "limit", 100, "legacy history page size (1-1000); combined checks use the output budget")
@@ -148,6 +149,15 @@ func runCheckSession(ctx context.Context, session *agentConnection, args []strin
 	if err := identity(opt); err != nil {
 		return err
 	}
+	if settings.decision != "" {
+		if err := settings.decisionOnly(fs); err != nil {
+			return err
+		}
+		// The wait bounds the watch; the lookups around it get their own time.
+		ctx, cancel := context.WithTimeout(ctx, settings.wait+requestTimeout)
+		defer cancel()
+		return waitForDecision(ctx, *opt, settings.decision, settings.wait, stdout)
+	}
 	timeout := requestTimeout
 	if settings.wait > 0 {
 		timeout = settings.wait
@@ -161,6 +171,91 @@ func runCheckSession(ctx context.Context, session *agentConnection, args []strin
 		return checkFromNow(ctx, *opt, settings, stdout, stderr)
 	}
 	return checkWithClient(ctx, *opt, settings, nil, stdout, stderr)
+}
+
+// decisionOnly checks that --decision came with nothing but --wait: it reads
+// one decision rather than cursors, so every other check option is a mistake.
+func (c *checkOptions) decisionOnly(fs *flag.FlagSet) error {
+	others := false
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "channel", "reply-to", "peek", "limit", "initial", "max-messages", "max-bytes", "include-own", "mentions", "compact", "from-now":
+			others = true
+		}
+	})
+	if others || !protocol.ValidMessageID(c.decision) || c.wait < 0 {
+		return errors.New("--decision requires a message ID and cannot be combined with --channel, --mentions, --reply-to or other check options")
+	}
+	return nil
+}
+
+// waitForDecision prints decision id, waiting up to wait for it to be
+// answered or withdrawn first: one connection, the place its steps are
+// posted observed, and the row read again once a step arrives, so an answer
+// that raced the observation is not missed. The decision outlives the
+// history ring, so the wait watches the room, or this nick's inbox for a
+// direct decision, rather than the offer's thread, which the server no
+// longer knows once the offer has been evicted. With --json the row is
+// followed by a status: decided when it is final, wait_expired when it is
+// still open.
+func waitForDecision(ctx context.Context, opt options, id string, wait time.Duration, stdout io.Writer) error {
+	return chatRequestWithContext(ctx, opt, "DECISION", func(ctx context.Context, client *irc.Client) error {
+		fetch := func() (irc.ChatEntry, error) {
+			entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "decisions", ID: id}, nil)
+			if err != nil {
+				return irc.ChatEntry{}, err
+			}
+			if len(entries) != 1 {
+				return irc.ChatEntry{}, errors.New("decision is not retained")
+			}
+			return entries[0], nil
+		}
+		entry, err := fetch()
+		if err != nil {
+			return err
+		}
+		if entry.State == "open" && wait > 0 {
+			target := entry.Target
+			if !protocol.IsChannel(target) {
+				target = "@" + opt.nick
+			}
+			if err := client.Observe(target); err != nil {
+				return err
+			}
+			if err := awaitObservationWith(ctx, client, 1, nil, false); err != nil {
+				return err
+			}
+			if entry, err = fetch(); err != nil {
+				return err
+			}
+		}
+		if entry.State == "open" && wait > 0 {
+			err := awaitEvent(ctx, client, wait, "waiting for the decision", "", func(event irc.Event) (bool, error) {
+				m, ok := event.(*irc.MessageEvent)
+				return ok && m.ReplyTo == id && (m.Kind == "decision-answer" || m.Kind == "decision-withdraw"), nil
+			})
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			if err == nil {
+				if entry, err = fetch(); err != nil {
+					return err
+				}
+			}
+		}
+		if !opt.json {
+			_, err := fmt.Fprintln(stdout, decisionText(entry))
+			return err
+		}
+		if err := json.NewEncoder(stdout).Encode(newDecisionRow(entry)); err != nil {
+			return err
+		}
+		status := checkStatus{Type: "status", Code: "decided"}
+		if entry.State == "open" {
+			status.Code = "wait_expired"
+		}
+		return json.NewEncoder(stdout).Encode(status)
+	})
 }
 
 // compacted drops the fields an agent rarely needs for reading and replying.
