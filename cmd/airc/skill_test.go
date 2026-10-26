@@ -130,6 +130,69 @@ func TestSkillInstallWritesUpdatesAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// Every section of the reference must be reachable by its heading, so the
+// skill can send an agent to `airc skill reference SECTION` instead of loading
+// the whole file, and the errors section must cover every code the CLI emits.
+func TestSkillReferenceSections(t *testing.T) {
+	sections := referenceSections(skills.Reference)
+	if len(sections) < 10 {
+		t.Fatalf("expected the reference to be split into sections, found %d", len(sections))
+	}
+	var names, rebuilt []string
+	seen := map[string]bool{}
+	for _, s := range sections {
+		if s.name == "" || seen[strings.ToLower(s.name)] {
+			t.Fatalf("section heading %q is empty or repeated", s.name)
+		}
+		seen[strings.ToLower(s.name)] = true
+		names = append(names, s.name)
+		rebuilt = append(rebuilt, s.text)
+		var out, errOut bytes.Buffer
+		if err := run([]string{"skill", "reference", s.name}, strings.NewReader(""), &out, &errOut); err != nil || out.String() != s.text {
+			t.Errorf("airc skill reference %q: %v %s", s.name, err, errOut.String())
+		}
+		out.Reset()
+		if err := run([]string{"skill", "reference", strings.ToUpper(s.name)}, strings.NewReader(""), &out, io.Discard); err != nil || out.String() != s.text {
+			t.Errorf("section %q is not matched case-insensitively: %v", s.name, err)
+		}
+	}
+	preamble, _, _ := strings.Cut(skills.Reference, "\n## ")
+	if preamble+"\n"+strings.Join(rebuilt, "\n") != skills.Reference {
+		t.Error("the sections do not add up to the whole reference")
+	}
+	for _, want := range []string{"Remote access", "Identity", "Presence and directory", "Context and search", "Snippets", "Follows and reply signals", "Safe sends and recovery", "Pins and corrections", "Polls and reactions", "Handoffs", "Decisions", "Accounts and operators", "Bots", "Errors"} {
+		if !slices.Contains(names, want) {
+			t.Errorf("reference lacks the %q section; sections: %v", want, names)
+		}
+	}
+	var out bytes.Buffer
+	if err := run([]string{"skill", "reference", "--list"}, strings.NewReader(""), &out, io.Discard); err != nil || out.String() != strings.Join(names, "\n")+"\n" {
+		t.Errorf("--list = %q, %v", out.String(), err)
+	}
+	out.Reset()
+	if err := run([]string{"skill", "reference", "handoff"}, strings.NewReader(""), &out, io.Discard); err != nil || !strings.HasPrefix(out.String(), "## Handoffs\n") {
+		t.Errorf("prefix match: %q, %v", out.String(), err)
+	}
+	out.Reset()
+	var errOut bytes.Buffer
+	if err := run([]string{"skill", "reference", "nosuch"}, strings.NewReader(""), &out, &errOut); err == nil || out.Len() != 0 || !strings.Contains(errOut.String(), "Handoffs") {
+		t.Errorf("unknown section should fail and list the sections: %v %q", err, errOut.String())
+	}
+	errOut.Reset()
+	if err := run([]string{"skill", "reference", "p"}, strings.NewReader(""), &out, &errOut); err == nil || !strings.Contains(errOut.String(), "ambiguous") {
+		t.Errorf("ambiguous prefix should fail: %v %q", err, errOut.String())
+	}
+	errors := matchSections(sections, "errors")
+	if len(errors) != 1 {
+		t.Fatal("no Errors section")
+	}
+	for _, code := range []string{"invalid_request", "invalid_target", "auth_failed", "permission_denied", "server_rejected", "request_conflict", "rate_limited", "server_busy", "server_unavailable", "timeout", "state_busy", "state_unavailable", "cancelled", "delivery_unknown", "confirmation_unknown", "accepted_output_failed", "accepted_state_failed"} {
+		if !strings.Contains(errors[0].text, "| `"+code+"`") && !strings.Contains(errors[0].text, "`"+code+"` |") {
+			t.Errorf("the Errors table has no row for %s", code)
+		}
+	}
+}
+
 func TestSkillShowPathAndDefaults(t *testing.T) {
 	var out bytes.Buffer
 	if err := run([]string{"skill", "show"}, strings.NewReader(""), &out, io.Discard); err != nil || out.String() != skills.Airc {
