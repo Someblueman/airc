@@ -99,7 +99,7 @@ func TestUIStatusAndResolveAgainstADaemon(t *testing.T) {
 	h.until("builder's status", func() bool { return h.model.connected && h.model.statuses["builder"] == "working" })
 	h.command("/status review the parser | done | shipped")
 	h.until("own status", func() bool {
-		return strings.Contains(h.model.status, "status #room") && h.model.statuses["me"] == "done"
+		return h.model.status == "me [done] review the parser in #room" && h.model.statuses["me"] == "done"
 	})
 	listed := jsonLines[statusRow](t, mustCLI(t, address, "status", "--channel", "room", "--json"))
 	if len(listed) != 2 || listed[0].Nick != "me" || listed[0].State != "done" || listed[0].Task != "review the parser" || listed[1].Nick != "builder" {

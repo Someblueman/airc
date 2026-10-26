@@ -288,10 +288,16 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		}
 		if err == nil {
 			for _, e := range entries {
-				if e.Action == "typing" || e.Action == "thinking" {
+				text := chatEntryText(e)
+				switch e.Action {
+				case "typing", "thinking":
 					continue
+				case "status":
+					text = strings.SplitN(statusText(e), "\n", 2)[0]
+				case "resolve":
+					text = resolveText(e)
 				}
-				b.emit(ctx, statusIn{text: chatEntryText(e)})
+				b.emit(ctx, statusIn{text: text})
 			}
 		}
 		return true, err

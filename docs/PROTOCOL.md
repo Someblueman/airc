@@ -212,7 +212,7 @@ that owned the nickname when the message was stored, so a reader can tell whose
 inbox it was after the nickname changes hands.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
-`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`. Unknown fields are rejected;
+`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`, `link`, `task`, `state`. Unknown fields are rejected;
 requests are at most 7000 UTF-8 JSON bytes and wire lines at most 8192 bytes.
 Text may travel in the existing `+airc/body` tag instead of JSON. `777` returns
 one JSON `ChatEntry` per result, then `778` ends the response; malformed/invalid
