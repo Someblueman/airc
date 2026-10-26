@@ -18,19 +18,20 @@ import (
 // handoffSteps maps airc handoff's step words to their CHAT actions.
 var handoffSteps = map[string]string{
 	"accept":   "handoff-accept",
+	"blocked":  "handoff-blocked",
 	"decline":  "handoff-decline",
 	"done":     "handoff-done",
 	"withdraw": "handoff-withdraw",
 }
 
 // runHandoffSession offers a handoff, or with a step word and an ID takes
-// one through accept, decline, done or withdraw.
+// one through accept, blocked, decline, done or withdraw.
 func runHandoffSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	step := ""
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		step, args = args[0], args[1:]
 		if handoffSteps[step] == "" {
-			return fmt.Errorf("unknown handoff step %q: use accept, decline, done or withdraw ID", step)
+			return fmt.Errorf("unknown handoff step %q: use accept, blocked, decline, done or withdraw ID", step)
 		}
 	}
 	id := ""
@@ -43,14 +44,21 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 	opt.session = session
 	channel := fs.String("channel", "", "room to hand the work to, or to post the handoff in (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "nickname the work is for; alone, a direct handoff")
-	message := fs.String("message", "", "what to hand over, or a note on the step; - reads stdin")
+	message := fs.String("message", "", "what to hand over, or a note on the step (blocked: why, required); - reads stdin")
+	link := fs.String("link", "", "done: where the result is, an absolute http(s) URL (a PR, a commit, a document)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	r := irc.ChatRequest{Action: "handoff"}
+	if *link != "" && step != "done" {
+		return errors.New("--link applies to done")
+	}
+	if *link != "" && !protocol.ValidLink(*link) {
+		return fmt.Errorf("--link needs an absolute http(s) URL of at most %d bytes", protocol.MaxLinkBytes)
+	}
+	r := irc.ChatRequest{Action: "handoff", Link: *link}
 	if step == "" {
 		if *channel == "" && *to == "" {
 			*channel = os.Getenv("AIRC_CHANNEL")
@@ -72,6 +80,9 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 		}
 		if *channel != "" || *to != "" {
 			return errors.New("a handoff step names only the handoff's ID; it goes where the handoff is")
+		}
+		if step == "blocked" && *message == "" {
+			return errors.New("airc handoff blocked needs --message: say why it is blocked")
 		}
 		if *message != "" {
 			body, err := sendBody("", "", *message, stdin)
@@ -143,23 +154,36 @@ func handoffRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout 
 }
 
 // handoffRow is a handoff as --json prints it, the offer's text plain
-// rather than base64 as the wire carries it.
+// rather than base64 as the wire carries it. A blocked handoff carries why
+// and since when; a done one, the link to its result when one was given.
 type handoffRow struct {
-	Type      string    `json:"type"`
-	ID        string    `json:"id"`
-	Target    string    `json:"target"`
-	From      string    `json:"from"`
-	For       string    `json:"for,omitempty"`
-	State     string    `json:"state"`
-	Holder    string    `json:"holder,omitempty"`
-	Message   string    `json:"message"`
-	Timestamp time.Time `json:"timestamp"`
+	Type          string    `json:"type"`
+	ID            string    `json:"id"`
+	Target        string    `json:"target"`
+	From          string    `json:"from"`
+	For           string    `json:"for,omitempty"`
+	State         string    `json:"state"`
+	Holder        string    `json:"holder,omitempty"`
+	BlockedReason string    `json:"blocked_reason,omitempty"`
+	BlockedAt     time.Time `json:"blocked_at,omitzero"`
+	Link          string    `json:"link,omitempty"`
+	Message       string    `json:"message"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
+// handoffHeld reports a state in which the handoff names its holder: the
+// holder of a declined or withdrawn handoff no longer holds it.
+func handoffHeld(state string) bool {
+	return state == "accepted" || state == "blocked" || state == "done"
 }
 
 func newHandoffRow(e irc.ChatEntry) handoffRow {
-	row := handoffRow{Type: "handoff", ID: e.ID, Target: e.Target, From: e.From, State: e.State}
-	if e.State == "accepted" || e.State == "done" {
+	row := handoffRow{Type: "handoff", ID: e.ID, Target: e.Target, From: e.From, State: e.State, Link: e.Link}
+	if handoffHeld(e.State) {
 		row.Holder = e.Holder
+	}
+	if e.State == "blocked" {
+		row.BlockedReason, row.BlockedAt = e.BlockedReason, e.BlockedAt
 	}
 	if e.Message != nil {
 		row.For, row.Message, row.Timestamp = e.Message.For, e.Message.Message, e.Message.Timestamp
@@ -179,15 +203,18 @@ func entryState(e irc.ChatEntry) string {
 // handoffState is a handoff's state, with its holder while it has one: the
 // holder of a declined or withdrawn handoff no longer holds it.
 func handoffState(e irc.ChatEntry) string {
-	if e.Holder != "" && (e.State == "accepted" || e.State == "done") {
+	if e.Holder != "" && handoffHeld(e.State) {
 		return e.State + " by " + e.Holder
 	}
 	return e.State
 }
 
-// handoffText is one handoff as a line, its offer indented beneath:
+// handoffText is one handoff as a line, its offer indented beneath, then
+// why it is blocked or where its result is:
 //
-//	handoff ID accepted by builder in #work from planner for builder
+//	handoff ID blocked by builder in #work from planner for builder
+//	  finish task 7
+//	  blocked: waiting on CI
 func handoffText(e irc.ChatEntry) string {
 	var text strings.Builder
 	text.WriteString("handoff " + e.ID + " " + handoffState(e))
@@ -197,6 +224,12 @@ func handoffText(e irc.ChatEntry) string {
 			text.WriteString(" for " + e.Message.For)
 		}
 		text.WriteString("\n  " + indentContinuation(e.Message.Message))
+	}
+	if e.State == "blocked" && e.BlockedReason != "" {
+		text.WriteString("\n  blocked: " + indentContinuation(e.BlockedReason))
+	}
+	if e.Link != "" {
+		text.WriteString("\n  done: " + e.Link)
 	}
 	return text.String()
 }
