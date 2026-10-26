@@ -211,7 +211,8 @@ var commandTable = []command{
 	{name: "wake", run: local(runWake), group: groupHuman,
 		help: `  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] | --clear]   signed notices while offline`},
 	{name: "skill", run: local(runSkill), group: groupHuman,
-		help: `  airc skill show|reference|path|install [--dir DIR|--project]   the agent skill for this version`},
+		help: `  airc skill show|path|install [--dir DIR|--project]         the agent skill for this version
+  airc skill reference [SECTION|--list]                       its reference, or one section by heading`},
 	{name: "watch", run: local(runWatch), group: groupHuman,
 		help: `  airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
                                                              live stream for a human monitor`},

@@ -122,6 +122,9 @@ func channelName(name string) string {
 // explain appends hints to the errors people most often cause with shell
 // quoting, flags and local resources.
 func explain(err error) string {
+	if _, ok := errors.AsType[*commandFailure](err); ok {
+		return err.Error() // failure already explained the cause it wraps
+	}
 	return strings.Join(append([]string{err.Error()}, hints(err)...), "\n")
 }
 
@@ -129,12 +132,18 @@ func hints(err error) []string {
 	var out []string
 	message := err.Error()
 	if errors.Is(err, syscall.EMFILE) {
-		out = append(out, "hint: this process exhausted its file descriptors; finish/cancel unused tool sessions and inspect the agent/launcher with airc doctor --pid PID. Configure its descriptor limit before launch; changing a child shell cannot fix the running parent.")
+		out = append(out, "hint: this process exhausted its file descriptors; stop retrying, finish/cancel unused tool sessions, report the blocker and inspect the agent/launcher with airc doctor --pid PID. Configure its descriptor limit before launch; changing a child shell cannot fix the running parent.")
 	} else if errors.Is(err, syscall.ENFILE) {
 		out = append(out, "hint: the system file table is full; inspect process descriptor counts before retrying.")
 	}
 	if localFileError(err) && (errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.ENOSPC)) {
-		out = append(out, "hint: airc keeps cursors and its send outbox in a local state directory; set AIRC_STATE_DIR to a writable directory and retry.")
+		out = append(out, "hint: airc keeps cursors and its send outbox in a local state directory; set AIRC_STATE_DIR to a writable directory and retry, passing the same value on every call so cursors persist.")
+	}
+	if strings.Contains(message, "dial airc") {
+		out = append(out, "hint: the server did not answer; tell the user, and do not start, stop or restart aircd yourself (airc doctor --json shows what is reachable).")
+	}
+	if strings.Contains(message, "predates") || strings.Contains(message, "this aircd lacks") || strings.Contains(message, "a daemon with") {
+		out = append(out, "hint: airc doctor --json lists what the running daemon supports; a binary upgrade does not change it, so tell the user and leave its restart until active work is finished.")
 	}
 	if strings.Contains(message, "flag needs an argument: -channel") {
 		out = append(out, "hint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)")

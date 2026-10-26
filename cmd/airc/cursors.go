@@ -113,7 +113,7 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 	if err := lockState(lock, cursorLockWait); err != nil {
 		lock.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, fmt.Errorf("another airc check for %q is already running: %w", nick, err)
+			return nil, fmt.Errorf("another airc check for %q is already running; retry shortly: %w", nick, err)
 		}
 		return nil, fmt.Errorf("lock cursors: %w", err)
 	}
