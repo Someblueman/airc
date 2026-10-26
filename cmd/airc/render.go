@@ -279,7 +279,7 @@ func (r *renderer) dayRule(at time.Time) string {
 }
 
 // chatBody renders a message body with the markers its chat metadata calls
-// for. replyTo names the handoff a handoff step belongs to.
+// for. replyTo names the handoff or decision a step belongs to.
 func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 	body := text
 	switch m.Kind {
@@ -307,6 +307,19 @@ func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 	case "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw":
 		// A step without a note already says what it did.
 		if label := protocol.HandoffStepText(m.Kind, replyTo); body != label {
+			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
+		}
+	case "decision":
+		body = "[decision " + id + " for " + m.For + "] " + body
+		for i, option := range m.Choices {
+			body += fmt.Sprintf("\n%d. %s", i+1, option)
+		}
+	case "decision-answer":
+		// The body names the choice itself ("Decided 2 (option)"), so the
+		// marker names only the decision.
+		body = "[answer to decision " + replyTo + "] " + body
+	case "decision-withdraw":
+		if label := protocol.DecisionStepText(m.Kind, replyTo, 0, "", ""); body != label {
 			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
 		}
 	}

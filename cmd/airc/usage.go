@@ -52,6 +52,10 @@ Commands:
   airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
   airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
   airc handoffs [--channel #room | --id ID] [--limit N] [--json]   open handoffs for you, held by you or offered by you
+  airc decide (--channel #room --from N | --to N) --message TEXT|- [--option A --option B]... [--json]   ask N, usually a human, to decide
+  airc decide answer|withdraw ID [--choice N] [--message NOTE] [--json]   answer a decision asked of you, or call yours off
+  airc decisions [--channel #room | --id ID] [--limit N] [--json]   open decisions for you to make or that you asked
+  airc check --decision ID [--wait 120s] [--json]   wait for a decision to be answered or withdrawn
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
 
   airc admin init [--token-file PATH]          create an owner-only admin credential

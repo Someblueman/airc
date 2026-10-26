@@ -147,7 +147,7 @@ func hints(err error) []string {
 
 // addressedTo reports whether a message needs nick's attention: it is a direct
 // message to nick, or a channel message that tags or addresses it, or a
-// handoff step for it.
+// handoff or decision step for it.
 func addressedTo(nick, target, body, forNick string) bool {
 	if !protocol.IsChannel(target) {
 		return strings.EqualFold(target, nick)
