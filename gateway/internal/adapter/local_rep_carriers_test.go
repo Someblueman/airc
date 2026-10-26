@@ -16,6 +16,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/nngwire"
 	"github.com/Someblueman/airc/gateway/internal/zmqwire"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -295,12 +296,9 @@ func TestLocalREPCarriers(t *testing.T) {
 						if _, err = s.client.Write(wire); err != nil {
 							t.Fatal(err)
 						}
-						deadline := time.Now().Add(time.Second)
-						for len(s.requests) == 0 && time.Now().Before(deadline) {
-							time.Sleep(time.Millisecond)
-						}
+						testwait.Until(t, time.Second, "the request to be admitted", func() bool { return len(s.requests) > 0 })
 						if len(s.requests) != 1 {
-							t.Fatal("request not admitted")
+							t.Fatal("request not admitted", len(s.requests))
 						}
 					}
 					s.cancel()
