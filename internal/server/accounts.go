@@ -33,12 +33,27 @@ type account struct {
 	Hash string `json:"credential_hash"`
 }
 
+// accountsState is the registered users: the accounts by nickname key, the
+// file they are saved to and the recent creations by remote address. Every
+// field is read and written with s.mu held; saves write before the caller
+// applies, under s.mu, with env.sync.
+type accountsState struct {
+	accounts      map[string]account
+	accountsAt    string
+	registrations map[string][]time.Time // recent account creations by remote address
+	env           *storeEnv
+}
+
 func (s *Server) RestoreAccounts(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.listener != nil || s.accountsAt != "" {
 		return errors.New("configure accounts once before Serve")
 	}
+	return s.accountsState.load(path)
+}
+
+func (st *accountsState) load(path string) error {
 	loaded := map[string]account{}
 	if err := readState(path, &loaded); err != nil {
 		return err
@@ -53,8 +68,27 @@ func (s *Server) RestoreAccounts(path string) error {
 		}
 		ids[a.ID] = true
 	}
-	s.accounts, s.accountsAt = loaded, path
+	st.accounts, st.accountsAt = loaded, path
 	return nil
+}
+
+func (st *accountsState) close() error { return nil }
+
+// saveAccountsLocked writes next, the accounts as they will be, before the
+// caller applies it.
+func (st *accountsState) saveAccountsLocked(next map[string]account) error {
+	return writeState(st.accountsAt, next, st.env.sync)
+}
+
+// accountExistsLocked is false once an admin has deleted the account, which
+// ends any operator grant it held without rewriting the chat snapshot.
+func (st *accountsState) accountExistsLocked(id string) bool {
+	for _, a := range st.accounts {
+		if a.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) authLocked(client *session, command protocol.Command) {
@@ -95,7 +129,7 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 		next := make(map[string]account, len(s.accounts)+1)
 		maps.Copy(next, s.accounts)
 		next[key] = a
-		if err := writeState(s.accountsAt, next, s.cfg.Sync); err != nil {
+		if err := s.saveAccountsLocked(next); err != nil {
 			s.numericLocked(client, "437", nil, "Account not saved")
 			return
 		}
@@ -149,7 +183,7 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 				next[k] = value
 			}
 		}
-		if err := writeState(s.accountsAt, next, s.cfg.Sync); err != nil {
+		if err := s.saveAccountsLocked(next); err != nil {
 			s.logger.Error("account_write_failed", "error", err.Error())
 			s.numericLocked(client, "437", nil, "Unable to save accounts; no change applied")
 			return
@@ -170,8 +204,8 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 
 // recentRegistrationsLocked drops creations older than the window and returns
 // what remains for key.
-func (s *Server) recentRegistrationsLocked(key string) []time.Time {
-	return recentEvents(s.registrations, key, s.now().Add(-registrationWindow))
+func (st *accountsState) recentRegistrationsLocked(key string) []time.Time {
+	return recentEvents(st.registrations, key, st.env.now().Add(-registrationWindow))
 }
 
 // recentEvents drops times in table[key] that are not after cutoff, deleting
@@ -189,20 +223,20 @@ func recentEvents(table map[string][]time.Time, key string, cutoff time.Time) []
 	return recent
 }
 
-func (s *Server) registrationAllowedLocked(key string) bool {
-	return key == "" || len(s.recentRegistrationsLocked(key)) < maxRegistrationsPerAddress
+func (st *accountsState) registrationAllowedLocked(key string) bool {
+	return key == "" || len(st.recentRegistrationsLocked(key)) < maxRegistrationsPerAddress
 }
 
-func (s *Server) noteRegistrationLocked(key string) {
+func (st *accountsState) noteRegistrationLocked(key string) {
 	if key == "" {
 		return
 	}
-	if len(s.registrations) >= maxAccounts {
+	if len(st.registrations) >= maxAccounts {
 		// At most maxAccounts creations can ever be live, so a full table
 		// holds only expired addresses.
-		for other := range s.registrations {
-			s.recentRegistrationsLocked(other)
+		for other := range st.registrations {
+			st.recentRegistrationsLocked(other)
 		}
 	}
-	s.registrations[key] = append(s.registrations[key], s.now())
+	st.registrations[key] = append(st.registrations[key], st.env.now())
 }

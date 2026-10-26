@@ -11,17 +11,6 @@ func (s *Server) channelOperator(c *session, channel string) bool {
 	return c.accountID != "" && slices.Contains(s.chat.Operators[channel], c.accountID) && s.accountExistsLocked(c.accountID)
 }
 
-// accountExistsLocked is false once an admin has deleted the account, which
-// ends any operator grant it held without rewriting the chat snapshot.
-func (s *Server) accountExistsLocked(id string) bool {
-	for _, a := range s.accounts {
-		if a.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Server) modeLocked(c *session, cmd protocol.Command) {
 	channel, _ := cmd.Param(0)
 	mode, _ := cmd.Param(1)

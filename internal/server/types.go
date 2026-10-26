@@ -111,11 +111,9 @@ type Server struct {
 	gatewayHash      [32]byte
 	moderation       map[string]protocol.ModerationRule
 	moderationAt     string
-	accounts         map[string]account
-	accountsAt       string
+	accountsState                           // registered users; see accounts.go
 	wake             *wakes                 // nil unless EnableWake
 	pending          map[string]int         // unregistered connections by remote address
-	registrations    map[string][]time.Time // recent account creations by remote address
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chat             chatState
 	chatAt           string
