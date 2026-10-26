@@ -158,9 +158,8 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 		}
 		entries, err := irc.RequestChat(ctx, client, r, nil)
 		if err != nil {
-			if r.Charter != nil && strings.Contains(err.Error(), "CHAT needs one bounded JSON request") {
-				// An older daemon's strict decode refuses the field it does not know.
-				return errors.New("this aircd predates room charters; restart it from a current build")
+			if r.Charter != nil && charterUnsupported(err) {
+				return errNoCharters
 			}
 			return err
 		}
@@ -176,6 +175,16 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 		}
 		return nil
 	})
+}
+
+// errNoCharters is what a daemon from before room charters amounts to: its
+// strict decode refuses the field it does not know.
+var errNoCharters = errors.New("this aircd predates room charters; restart it from a current build")
+
+// charterUnsupported reports the rejection an older daemon's strict decode
+// gives a request with the charter field.
+func charterUnsupported(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "CHAT needs one bounded JSON request")
 }
 
 // charterText reads the charter --charter names: a file, - for stdin, or ""
