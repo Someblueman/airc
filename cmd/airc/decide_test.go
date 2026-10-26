@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestDecideThroughTheCLI(t *testing.T) {
@@ -104,5 +106,46 @@ func TestDecideWarnsWhenTheDeciderIsNotHuman(t *testing.T) {
 	mustCLI(t, address, "profile", "--nick", "sws", "--model", "reasoner")
 	if _, stderr, err := cli(t, address, "decide", "--nick", "builder", "--to", "sws", "--message", "Ship?"); err != nil || !strings.Contains(stderr, "(kind: unset)") {
 		t.Fatalf("a profile without a kind: %v %q", err, stderr)
+	}
+	mustCLI(t, address, "profile", "--nick", "sws", "--agent")
+	if _, stderr, err := cli(t, address, "decide", "--nick", "builder", "--to", "sws", "--message", "Ship?"); err != nil || !strings.Contains(stderr, "(kind: agent)") {
+		t.Fatalf("an agent: %v %q", err, stderr)
+	}
+	mustCLI(t, address, "profile", "--nick", "sws", "--human")
+	if _, stderr, err := cli(t, address, "decide", "--nick", "builder", "--channel", "work", "--from", "sws", "--message", "Ship?"); err != nil || strings.Contains(stderr, "warning") {
+		t.Fatalf("a human: %v %q", err, stderr)
+	}
+}
+
+func TestUserCreateHumanAndProfileKind(t *testing.T) {
+	address := chatServer(t, 8)
+	t.Setenv("AIRC_STATE_DIR", t.TempDir())
+	created := cliJSON[struct {
+		Nick  string `json:"nick"`
+		Ready bool   `json:"ready"`
+	}](t, address, "user", "create", "--nick", "sws", "--human")
+	if created.Nick != "sws" || !created.Ready {
+		t.Fatalf("created %+v", created)
+	}
+	card := cliJSON[irc.DirectoryEvent](t, address, "directory", "--who", "sws")
+	if card.Kind != "human" || card.AccountID == "" {
+		t.Fatalf("card %+v", card)
+	}
+	if out := mustCLI(t, address, "directory", "--who", "sws"); !strings.HasPrefix(out, "sws: unknown; human") {
+		t.Fatalf("card text %q", out)
+	}
+	// The registered nickname's kind changes only with its credential, which
+	// the saved identity supplies; a guest cannot even take the nickname.
+	if card := cliJSON[irc.DirectoryEvent](t, address, "profile", "--nick", "sws", "--agent"); card.Kind != "agent" {
+		t.Fatalf("flipped %+v", card)
+	}
+	deniedCLI(t, address, "pass one", "profile", "--nick", "sws", "--human", "--agent")
+	deniedCLI(t, address, "pass one", "user", "login", "--nick", "sws", "--human", "--agent")
+	deniedCLI(t, address, "--clear cannot be combined", "profile", "--nick", "sws", "--human", "--clear")
+	if out := mustCLI(t, address, "user", "login", "--nick", "sws", "--human"); !strings.Contains(out, "User sws ready") {
+		t.Fatalf("login %q", out)
+	}
+	if card := cliJSON[irc.DirectoryEvent](t, address, "directory", "--who", "sws"); card.Kind != "human" {
+		t.Fatalf("login did not set the kind: %+v", card)
 	}
 }

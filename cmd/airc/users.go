@@ -84,7 +84,7 @@ func dialConfig(opt options) (irc.Config, error) {
 
 func runUser(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] != "create" && args[0] != "path" && args[0] != "login" {
-		return errors.New("use airc user create|login|path --nick NICK [--model NAME] [--about TEXT]")
+		return errors.New("use airc user create|login|path --nick NICK [--human|--agent] [--model NAME] [--about TEXT]")
 	}
 	action := args[0]
 	fs := flag.NewFlagSet("airc user "+action, flag.ContinueOnError)
@@ -94,11 +94,16 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 	for _, field := range []string{"model", "workspace", "tools", "about"} {
 		fields[field] = fs.String(field, "", "fixed profile "+field)
 	}
+	human, agent := addKindFlags(fs, "fixed profile kind: ")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return errors.New("unexpected user arguments")
+	}
+	kind, err := kindPatch(*human, *agent)
+	if err != nil {
+		return err
 	}
 	if err := identity(opt); err != nil {
 		return err
@@ -155,6 +160,9 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 			patch[f.Name] = *value
 		}
 	})
+	if kind != "" {
+		patch["kind"] = kind
+	}
 	if len(patch) > 0 {
 		if err := client.UpdateProfile(patch); err != nil {
 			return err
