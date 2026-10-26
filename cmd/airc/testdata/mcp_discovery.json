@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -833,6 +833,47 @@
     }
    },
    {
+    "description": "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "id": {
+       "description": "ID of the question, or of any message in its thread",
+       "type": "string"
+      },
+      "message": {
+       "description": "How it was settled; default \"Resolved\"",
+       "type": "string"
+      }
+     },
+     "required": [
+      "id"
+     ],
+     "type": "object"
+    },
+    "name": "resolve",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
     "description": "retract your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again.",
     "inputSchema": {
      "additionalProperties": false,
@@ -982,6 +1023,60 @@
      "type": "object"
     },
     "name": "send",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "description": "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "The room the status is for; defaults to AIRC_CHANNEL",
+       "type": "string"
+      },
+      "link": {
+       "description": "Where the work is: an absolute http(s) URL of a PR, a branch or a document, up to 400 bytes",
+       "type": "string"
+      },
+      "message": {
+       "description": "A note on the status, such as what is blocking you",
+       "type": "string"
+      },
+      "state": {
+       "description": "working, blocked or done",
+       "type": "string"
+      },
+      "task": {
+       "description": "What you are on, one line of at most 200 bytes",
+       "type": "string"
+      }
+     },
+     "required": [
+      "task",
+      "state"
+     ],
+     "type": "object"
+    },
+    "name": "status",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
