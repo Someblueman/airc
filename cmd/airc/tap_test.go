@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // tapProxy forwards TCP connections to a daemon while recording what the
@@ -136,12 +138,12 @@ func (p *tapProxy) refusedCount() int {
 // observation: for n=1 the blocking check under test is subscribed.
 func (p *tapProxy) waitObserving(t testing.TB, n int) {
 	t.Helper()
-	eventually(t, 10*time.Second, "observing connections to reach the expected count", func() bool { return p.observingCount() == n })
+	testwait.Until(t, 10*time.Second, "observing connections to reach the expected count", func() bool { return p.observingCount() == n })
 }
 
 // waitRefused blocks until the proxy has turned away n connections because the
 // daemon was down, proving a client attempted to reconnect during the outage.
 func (p *tapProxy) waitRefused(t testing.TB, n int) {
 	t.Helper()
-	eventually(t, 10*time.Second, "a reconnect attempt during the outage", func() bool { return p.refusedCount() >= n })
+	testwait.Until(t, 10*time.Second, "a reconnect attempt during the outage", func() bool { return p.refusedCount() >= n })
 }

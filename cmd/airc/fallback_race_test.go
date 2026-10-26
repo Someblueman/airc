@@ -18,25 +18,29 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/fallback"
 )
+
+// listenFreedPort listens on address once the process that held it has let
+// it go, within a second.
+func listenFreedPort(t *testing.T, address string) net.Listener {
+	t.Helper()
+	var l net.Listener
+	testwait.Every(t, time.Second, 20*time.Millisecond, "the native port to be free", func() bool {
+		var err error
+		l, err = net.Listen("tcp", address)
+		return err == nil
+	})
+	return l
+}
 
 // silentNative takes over a native port with a listener that accepts and
 // never answers, as when aircd hangs or a middlebox swallows the traffic. It
 // counts the connections it accepted.
 func silentNative(t *testing.T, address string) *atomic.Int32 {
 	t.Helper()
-	var l net.Listener
-	var err error
-	for range 50 { // the proxy's port is free again once it is down
-		if l, err = net.Listen("tcp", address); err == nil {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	l := listenFreedPort(t, address) // the proxy's port is free again once it is down
 	var accepted atomic.Int32
 	var mu sync.Mutex
 	var conns []net.Conn
@@ -246,17 +250,7 @@ func TestReadsPrintTheSameOverAnyCarrier(t *testing.T) {
 // stagger, well within the native connect budget.
 func slowNative(t *testing.T, address, daemon string, delay time.Duration) {
 	t.Helper()
-	var l net.Listener
-	var err error
-	for range 50 {
-		if l, err = net.Listen("tcp", address); err == nil {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	l := listenFreedPort(t, address)
 	var mu sync.Mutex
 	var conns []net.Conn
 	go func() {
@@ -359,25 +353,28 @@ func TestSendThatGoesSilentIsResolvedInAboutASecond(t *testing.T) {
 		// The proxy stops accepting when the send goes silent; a listener
 		// that accepts and never answers then takes the port over.
 		defer close(taken)
-		for range 200 {
-			time.Sleep(10 * time.Millisecond)
-			if !f.proxy.isDown() {
-				continue
-			}
-			if l, err := net.Listen("tcp", f.proxy.addr()); err == nil {
-				taken <- l
-				var conns []net.Conn
-				for {
-					conn, err := l.Accept()
-					if err != nil {
-						for _, c := range conns {
-							_ = c.Close()
-						}
-						return
-					}
-					conns = append(conns, conn)
+		if !testwait.Poll(2*time.Second, 10*time.Millisecond, f.proxy.isDown) {
+			return // the test reports the port never taken
+		}
+		var l net.Listener
+		if !testwait.Poll(time.Second, 10*time.Millisecond, func() bool {
+			var err error
+			l, err = net.Listen("tcp", f.proxy.addr())
+			return err == nil
+		}) {
+			return
+		}
+		taken <- l
+		var conns []net.Conn
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				for _, c := range conns {
+					_ = c.Close()
 				}
+				return
 			}
+			conns = append(conns, conn)
 		}
 	}()
 	t.Cleanup(func() {
