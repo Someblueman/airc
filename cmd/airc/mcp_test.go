@@ -287,3 +287,71 @@ func TestMCPDiscoveryMatchesSDKServer(t *testing.T) {
 		t.Fatalf("discovery differs from the SDK server's:\n%s", gotJSON)
 	}
 }
+
+// The handoff tool's step blocked needs a reason, accept resumes, and done
+// records a link; the handoffs rows carry the new fields.
+func TestMCPHandoffBlockedAndLink(t *testing.T) {
+	address := chatServer(t, 64)
+	binary := nativeCLIBinary(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "acceptance", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.Command(binary, "mcp", "--addr", address, "--nick", "builder")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	call := func(name string, args any) *mcp.CallToolResult {
+		t.Helper()
+		r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil || r.IsError {
+			t.Fatalf("%s: %+v %v", name, r, err)
+		}
+		return r
+	}
+	refused := func(want string, args any) {
+		t.Helper()
+		r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "handoff", Arguments: args})
+		if err == nil && !r.IsError {
+			t.Fatalf("handoff %v was accepted: %+v", args, r)
+		}
+		text := fmt.Sprint(err)
+		if r != nil {
+			data, _ := json.Marshal(r.Content)
+			text += string(data)
+		}
+		if !strings.Contains(text, want) {
+			t.Fatalf("handoff %v: want %q in %s", args, want, text)
+		}
+	}
+	offer := cliJSON[handoffRow](t, address, "handoff", "--nick", "planner", "--channel", "room", "--message", "port the fix")
+	rows := func(r *mcp.CallToolResult) []handoffRow {
+		t.Helper()
+		data, _ := json.Marshal(r.StructuredContent)
+		var out struct{ Rows []handoffRow }
+		if err := json.Unmarshal(data, &out); err != nil {
+			t.Fatal(string(data), err)
+		}
+		return out.Rows
+	}
+	call("handoff", map[string]any{"step": "accept", "id": offer.ID})
+	refused("saying why", map[string]any{"step": "blocked", "id": offer.ID})
+	refused("link applies to done", map[string]any{"step": "accept", "id": offer.ID, "link": "https://example.com/pr/1"})
+	refused("absolute http(s) URL", map[string]any{"step": "done", "id": offer.ID, "link": "pr/54"})
+	if blocked := rows(call("handoff", map[string]any{"step": "blocked", "id": offer.ID, "message": "waiting on CI"})); len(blocked) != 1 || blocked[0].State != "blocked" || blocked[0].BlockedReason != "waiting on CI" || blocked[0].BlockedAt.IsZero() {
+		t.Fatalf("blocked %+v", blocked)
+	}
+	if mine := rows(call("handoffs", map[string]any{})); len(mine) != 1 || mine[0].State != "blocked" || mine[0].Holder != "builder" {
+		t.Fatalf("builder's handoffs %+v", mine)
+	}
+	if resumed := rows(call("handoff", map[string]any{"step": "accept", "id": offer.ID})); len(resumed) != 1 || resumed[0].State != "accepted" || resumed[0].BlockedReason != "" {
+		t.Fatalf("resumed %+v", resumed)
+	}
+	link := "https://github.com/o/r/pull/54"
+	if done := rows(call("handoff", map[string]any{"step": "done", "id": offer.ID, "link": link})); len(done) != 1 || done[0].State != "done" || done[0].Link != link {
+		t.Fatalf("done %+v", done)
+	}
+	if room := rows(call("handoffs", map[string]any{"channel": "#room"})); len(room) != 1 || room[0].Link != link {
+		t.Fatalf("room listing %+v", room)
+	}
+}
