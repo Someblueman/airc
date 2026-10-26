@@ -34,33 +34,33 @@ type chatAction struct {
 // chatActionTable is every CHAT action; chatLocked dispatches from it and
 // chatReadOnlyActions is derived from it, so nothing is kept in step by hand.
 var chatActionTable = []chatAction{
-	{name: "context", handler: (*Server).contextLocked, readOnly: true, requires: "CONTEXT"},
-	{name: "pins", handler: (*Server).pinsLocked, readOnly: true},
-	{name: "pin", handler: (*Server).pinsLocked},
-	{name: "unpin", handler: (*Server).pinsLocked},
+	{name: "context", handler: typed(decodeContextRequest, (*Server).contextLocked), readOnly: true, requires: "CONTEXT"},
+	{name: "pins", handler: typed(decodePinRequest, (*Server).pinsLocked), readOnly: true},
+	{name: "pin", handler: typed(decodePinRequest, (*Server).pinsLocked)},
+	{name: "unpin", handler: typed(decodePinRequest, (*Server).pinsLocked)},
 	{name: "prepare", handler: (*Server).signalLocked, readOnly: true},
 	{name: "cancel", handler: (*Server).signalLocked, readOnly: true},
 	{name: "waiting", handler: (*Server).signalLocked, readOnly: true},
 	{name: "typing", handler: (*Server).signalLocked, readOnly: true},
 	{name: "thinking", handler: (*Server).signalLocked, readOnly: true},
-	{name: "room", handler: (*Server).roomLocked},
-	{name: "action", handler: (*Server).chatPostLocked},
-	{name: "correct", handler: (*Server).chatPostLocked},
-	{name: "retract", handler: (*Server).chatPostLocked},
-	{name: "poll", handler: (*Server).pollLocked},
-	{name: "vote", handler: (*Server).pollLocked},
-	{name: "results", handler: (*Server).pollLocked, readOnly: true},
-	{name: "close-poll", handler: (*Server).pollLocked},
-	{name: "handoff", handler: (*Server).handoffLocked, requires: "HANDOFF"},
-	{name: "handoff-accept", handler: (*Server).handoffLocked, requires: "HANDOFF"},
-	{name: "handoff-decline", handler: (*Server).handoffLocked, requires: "HANDOFF"},
-	{name: "handoff-done", handler: (*Server).handoffLocked, requires: "HANDOFF"},
-	{name: "handoff-withdraw", handler: (*Server).handoffLocked, requires: "HANDOFF"},
-	{name: "handoffs", handler: (*Server).handoffLocked, readOnly: true, requires: "HANDOFF"},
-	{name: "decision", handler: (*Server).decisionLocked, requires: "DECISION"},
-	{name: "decision-answer", handler: (*Server).decisionLocked, requires: "DECISION"},
-	{name: "decision-withdraw", handler: (*Server).decisionLocked, requires: "DECISION"},
-	{name: "decisions", handler: (*Server).decisionLocked, readOnly: true, requires: "DECISION"},
+	{name: "room", handler: typed(decodeRoomRequest, (*Server).roomLocked)},
+	{name: "action", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
+	{name: "correct", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
+	{name: "retract", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
+	{name: "poll", handler: typed(decodePollRequest, (*Server).pollLocked)},
+	{name: "vote", handler: typed(decodePollRequest, (*Server).pollLocked)},
+	{name: "results", handler: typed(decodePollRequest, (*Server).pollLocked), readOnly: true},
+	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked)},
+	{name: "handoff", handler: (*Server).offerHandoffLocked, requires: "HANDOFF"},
+	{name: "handoff-accept", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
+	{name: "handoff-decline", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
+	{name: "handoff-done", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
+	{name: "handoff-withdraw", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
+	{name: "handoffs", handler: typed(decodeHandoffRequest, (*Server).listHandoffsLocked), readOnly: true, requires: "HANDOFF"},
+	{name: "decision", handler: (*Server).offerDecisionLocked, requires: "DECISION"},
+	{name: "decision-answer", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
+	{name: "decision-withdraw", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
+	{name: "decisions", handler: typed(decodeDecisionRequest, (*Server).listDecisionsLocked), readOnly: true, requires: "DECISION"},
 }
 
 // chatActions is chatActionTable by name. chatReadOnlyActions are the names
@@ -86,6 +86,8 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "CHAT needs one bounded JSON request")
 		return
 	}
+	// Checked on the union, before the body and the action: it is answered
+	// without the rejection prefix and ahead of an unknown action.
 	if r.MaxBytes != 0 && r.Action != "context" {
 		s.numericLocked(client, "461", nil, "max_bytes is only supported for context")
 		return
@@ -113,10 +115,38 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 	s.numericLocked(client, "778", nil, "End of chat response")
 }
 
-func (s *Server) roomLocked(client *session, r protocol.ChatRequest) error {
-	if !validChannel(r.Target) || r.Seconds < -1 || r.Seconds > 3600 || r.Limit < -1 || r.Limit > s.cfg.HistoryLimit {
-		return errors.New("room requires a channel; slow mode 0-3600s; retention 0 through global limit; -1 reads")
+// typed adapts a handler that takes one action group's view of the request
+// to the table's signature: decode checks the union's fields as the group
+// needs them, with the server's limits, and the handler runs on the result.
+// Only checks that come before any state-dependent check or reply in the
+// handler belong in a decode, so a request with several faults is answered
+// as before.
+func typed[T any](decode func(cfg Config, r protocol.ChatRequest) (T, error), handle func(s *Server, client *session, request T) error) func(s *Server, client *session, r protocol.ChatRequest) error {
+	return func(s *Server, client *session, r protocol.ChatRequest) error {
+		request, err := decode(s.cfg, r)
+		if err != nil {
+			return err
+		}
+		return handle(s, client, request)
 	}
+}
+
+// roomRequest reads or sets a room's slow mode and retention: -1 leaves a
+// setting as it is.
+type roomRequest struct {
+	Target  string
+	Seconds int64
+	Limit   int
+}
+
+func decodeRoomRequest(cfg Config, r protocol.ChatRequest) (roomRequest, error) {
+	if !validChannel(r.Target) || r.Seconds < -1 || r.Seconds > 3600 || r.Limit < -1 || r.Limit > cfg.HistoryLimit {
+		return roomRequest{}, errors.New("room requires a channel; slow mode 0-3600s; retention 0 through global limit; -1 reads")
+	}
+	return roomRequest{Target: r.Target, Seconds: r.Seconds, Limit: r.Limit}, nil
+}
+
+func (s *Server) roomLocked(client *session, r roomRequest) error {
 	if r.Seconds >= 0 || r.Limit >= 0 {
 		if !client.admin && !s.channelOperator(client, r.Target) {
 			s.numericLocked(client, "481", nil, "Room configuration requires admin or channel operator authentication")

@@ -44,7 +44,35 @@ func (s *Server) pollEntryLocked(client *session, p poll) {
 	s.chatEntryLocked(client, pollEntry(p, s.now()))
 }
 
-func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
+// pollRequest opens a poll (Question, Options and Seconds in Target) or
+// votes Choice on, reads the results of, or closes poll ID.
+type pollRequest struct {
+	Action   string
+	Target   string
+	Question string
+	Options  []string
+	Seconds  int64
+	ID       string
+	Choice   int
+}
+
+func decodePollRequest(cfg Config, r protocol.ChatRequest) (pollRequest, error) {
+	if r.Action == "poll" {
+		if !validChannel(r.Target) || !protocol.BriefText(r.Text, 1000) || len(r.Text) > cfg.MaxMessageSize || strings.TrimSpace(r.Text) == "" || len(r.Options) < 2 || len(r.Options) > 8 || r.Seconds < 1 || r.Seconds > 7*24*3600 {
+			return pollRequest{}, errors.New("poll needs a room, question up to 1000 bytes, 2-8 options and duration 1s-168h")
+		}
+		seen := map[string]bool{}
+		for _, option := range r.Options {
+			if option == "" || !protocol.BriefText(option, 80) || seen[option] {
+				return pollRequest{}, errors.New("poll choices must be distinct nonempty text up to 80 bytes")
+			}
+			seen[option] = true
+		}
+	}
+	return pollRequest{Action: r.Action, Target: r.Target, Question: r.Text, Options: r.Options, Seconds: r.Seconds, ID: r.ID, Choice: r.Choice}, nil
+}
+
+func (s *Server) pollLocked(client *session, r pollRequest) error {
 	next := s.copyChat()
 	for id, old := range next.Polls {
 		if s.now().After(old.Message.PollClosesAt.Add(7 * 24 * time.Hour)) {
@@ -52,16 +80,6 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 		}
 	}
 	if r.Action == "poll" {
-		if !validChannel(r.Target) || !protocol.BriefText(r.Text, 1000) || len(r.Text) > s.cfg.MaxMessageSize || strings.TrimSpace(r.Text) == "" || len(r.Options) < 2 || len(r.Options) > 8 || r.Seconds < 1 || r.Seconds > 7*24*3600 {
-			return errors.New("poll needs a room, question up to 1000 bytes, 2-8 options and duration 1s-168h")
-		}
-		seen := map[string]bool{}
-		for _, option := range r.Options {
-			if option == "" || !protocol.BriefText(option, 80) || seen[option] {
-				return errors.New("poll choices must be distinct nonempty text up to 80 bytes")
-			}
-			seen[option] = true
-		}
 		if !client.ephemeral {
 			if _, joined := client.channels[r.Target]; !joined {
 				return errors.New("join the room before posting")
@@ -73,7 +91,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 		if len(next.Polls) >= 128 {
 			return errors.New("poll limit reached; closed polls are retained for seven days after expiry")
 		}
-		m := s.newMessage(client.client.Nick, r.Target, r.Text, nil)
+		m := s.newMessage(client.client.Nick, r.Target, r.Question, nil)
 		m.Kind, m.AccountID, m.PollOptions, m.PollClosesAt = "poll", client.accountID, r.Options, s.now().UTC().Add(time.Duration(r.Seconds)*time.Second)
 		p := poll{Message: m, Votes: map[string]int{}}
 		next.Polls[m.ID] = p
