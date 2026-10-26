@@ -20,7 +20,7 @@ const (
 // entryOverhead approximates the heap a retained message costs beyond the
 // bytes of its strings: the entry and Message structs, its cursor, request
 // and index entries. TestHistoryBytesTrackHeap checks it against the heap.
-const entryOverhead = 440
+const entryOverhead = 520
 
 // entry is a retained message with what is derived from it on insertion.
 type entry struct {
