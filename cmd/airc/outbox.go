@@ -53,7 +53,7 @@ func openOutbox(opt options) (*outbox, error) {
 	// Sends hold the lock across their round trip; parallel sends queue here.
 	if err := lockState(lock, outboxLockWait); err != nil {
 		lock.Close()
-		return nil, fmt.Errorf("another send for this nickname is updating its outbox: %w", err)
+		return nil, fmt.Errorf("another send for this nickname is updating its outbox; retry shortly: %w", err)
 	}
 	b := &outbox{path: path, lock: lock}
 	data, err := atomicfile.ReadBounded(path, maxOutboxBytes)
