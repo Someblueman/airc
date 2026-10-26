@@ -318,11 +318,13 @@ no receipt-only recovery, so after an uncertain offer check `airc decisions`
 before asking again.
 
 `airc check --decision ID --wait 120s` waits for the answer on one
-connection: it reads the decision, observes its thread, reads it again (an
-answer may have raced the observation), and waits for an answer or withdrawal
-before printing the row; with `--json` a status row follows, `decided` when
-final and `wait_expired` when still open. It moves no cursors and takes no
-other check option.
+connection: it reads the decision, observes the room (or, for a direct
+decision, your inbox) where its steps are posted, reads it again (an answer
+may have raced the observation), and waits for an answer or withdrawal before
+printing the row; with `--json` a status row follows, `decided` when final
+and `wait_expired` when still open. The wait does not need the offer to be
+retained in history, so it works however long the decision has been open. It
+moves no cursors and takes no other check option.
 
 `airc decisions` lists the open decisions that concern you: for you to make,
 asked by you, or asked in a room you joined or checked, waited or posted in

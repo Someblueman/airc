@@ -190,10 +190,14 @@ func (c *checkOptions) decisionOnly(fs *flag.FlagSet) error {
 }
 
 // waitForDecision prints decision id, waiting up to wait for it to be
-// answered or withdrawn first: one connection, the decision's thread
-// observed, and the row read again once a step arrives, so an answer that
-// raced the observation is not missed. With --json the row is followed by a
-// status: decided when it is final, wait_expired when it is still open.
+// answered or withdrawn first: one connection, the place its steps are
+// posted observed, and the row read again once a step arrives, so an answer
+// that raced the observation is not missed. The decision outlives the
+// history ring, so the wait watches the room, or this nick's inbox for a
+// direct decision, rather than the offer's thread, which the server no
+// longer knows once the offer has been evicted. With --json the row is
+// followed by a status: decided when it is final, wait_expired when it is
+// still open.
 func waitForDecision(ctx context.Context, opt options, id string, wait time.Duration, stdout io.Writer) error {
 	return chatRequestWithContext(ctx, opt, "DECISION", func(ctx context.Context, client *irc.Client) error {
 		fetch := func() (irc.ChatEntry, error) {
@@ -211,7 +215,11 @@ func waitForDecision(ctx context.Context, opt options, id string, wait time.Dura
 			return err
 		}
 		if entry.State == "open" && wait > 0 {
-			if err := client.Observe("thread:" + id); err != nil {
+			target := entry.Target
+			if !protocol.IsChannel(target) {
+				target = "@" + opt.nick
+			}
+			if err := client.Observe(target); err != nil {
 				return err
 			}
 			if err := awaitObservationWith(ctx, client, 1, nil, false); err != nil {

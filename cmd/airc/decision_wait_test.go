@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,34 @@ func TestCheckWaitsForADecision(t *testing.T) {
 	out := mustCLI(t, address, "check", "--nick", "builder", "--decision", offer.ID, "--wait", "5s")
 	if !strings.HasPrefix(out, "decision "+offer.ID+" answered by sws: 1. yes in #work from builder\n") || time.Since(start) > 2*time.Second {
 		t.Fatalf("answered decision = %q after %s", out, time.Since(start))
+	}
+
+	// A decision outlives the history ring: once the offer has been evicted,
+	// the wait still ends with the answer, since it watches the room the
+	// answer is posted to rather than the offer's thread.
+	aged := cliJSON[decisionRow](t, address, "decide", "--nick", "builder", "--channel", "work", "--from", "sws", "--message", "Still there?", "--option", "yes", "--option", "no")
+	for i := range 70 {
+		send(t, address, "reviewer", "#work", fmt.Sprintf("filler %d", i))
+	}
+	if out := mustCLI(t, address, "history", "#work", "--json"); strings.Contains(out, aged.ID) {
+		t.Fatal("the offer was not evicted")
+	}
+	go func() {
+		out, _, err := cli(t, address, "check", "--nick", "builder", "--decision", aged.ID, "--wait", "10s", "--json")
+		done <- result{out, err}
+	}()
+	tap.waitObserving(t, 1)
+	mustCLI(t, address, "decide", "answer", aged.ID, "--nick", "sws", "--choice", "2")
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("waiting on an evicted offer: %v", got.err)
+		}
+		if rows := jsonLines[decisionRow](t, got.out); len(rows) != 2 || rows[0].State != "answered" || rows[0].Choice != 2 || checkFooter(t, got.out).Code != "decided" {
+			t.Fatalf("wait result: %s", got.out)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the answer to an evicted offer did not wake the wait")
 	}
 
 	// An open decision outlasts a short wait quietly, and a wait of zero
