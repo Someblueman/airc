@@ -65,12 +65,14 @@ func New(cfg Config) *Server {
 		accountsState: accountsState{registrations: make(map[string][]time.Time)},
 		nicks:         make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
-		history:        newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), closed: make(chan struct{}),
+		topicState:     topicState{topics: make(map[string]topic)},
+		history:        newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), closed: make(chan struct{}),
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
 	s.accountsState.env = &s.env
 	s.moderationState.env = &s.env
 	s.directoryState.env = &s.env
+	s.topicState.env = &s.env
 	return s
 }
 

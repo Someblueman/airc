@@ -121,6 +121,18 @@ func (s *Server) channelsLocked(client *session) {
 	s.numericLocked(client, "769", nil, "End of channels list")
 }
 
+// topicState is the channel headers and the file they are saved to. Every
+// field is read and written with s.mu held; saves run under s.mu with
+// env.soft, and a failed save is logged, not returned.
+type topicState struct {
+	topics   map[string]topic // channel headers; independent of who is connected
+	topicsAt string           // file the topics are saved to, if any
+	env      *storeEnv
+}
+
+// Headers are written indented, as they always were, and read unbounded.
+var topicsSnapshot = snapshot{indent: true}
+
 // RestoreTopics loads channel headers from path and saves every later change
 // to it, so headers survive a restart. Call it before Serve.
 func (s *Server) RestoreTopics(path string) error {
@@ -129,6 +141,10 @@ func (s *Server) RestoreTopics(path string) error {
 	if s.topicsAt != "" {
 		return errors.New("topics file is already open")
 	}
+	return s.topicState.load(path)
+}
+
+func (st *topicState) load(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create topics directory: %w", err)
 	}
@@ -145,28 +161,23 @@ func (s *Server) RestoreTopics(path string) error {
 			if moveErr != nil {
 				return fmt.Errorf("topics file %s is corrupt: %w", path, err)
 			}
-			s.logger.Error("topics_file_corrupt", "path", path, "moved_to", bad, "error", err.Error())
+			st.env.logger.Error("topics_file_corrupt", "path", path, "moved_to", bad, "error", err.Error())
 		}
 		for channel, t := range loaded {
-			if validChannel(channel) && t.Text != "" && len(s.topics) < maxTotalChannels {
-				s.topics[channel] = t
+			if validChannel(channel) && t.Text != "" && len(st.topics) < maxTotalChannels {
+				st.topics[channel] = t
 			}
 		}
 	}
-	s.topicsAt = path
-	s.logger.Info("topics_restored", "path", path, "topics", len(s.topics))
+	st.topicsAt = path
+	st.env.logger.Info("topics_restored", "path", path, "topics", len(st.topics))
 	return nil
 }
 
-func (s *Server) saveTopicsLocked() {
-	if s.topicsAt == "" {
-		return
-	}
-	data, err := json.MarshalIndent(s.topics, "", "  ")
-	if err == nil {
-		err = atomicfile.Write(s.topicsAt, append(data, '\n'), 0o600, s.softSync())
-	}
-	if err != nil {
-		s.logger.Error("topics_write_failed", "error", err.Error())
+func (st *topicState) close() error { return nil }
+
+func (st *topicState) saveTopicsLocked() {
+	if err := topicsSnapshot.write(st.topicsAt, st.topics, st.env.soft); err != nil {
+		st.env.logger.Error("topics_write_failed", "error", err.Error())
 	}
 }

@@ -99,9 +99,8 @@ type Server struct {
 	channels         map[string]map[string]*session
 	watchers         map[string]map[string]*session
 	history          historyRing
-	topics           map[string]topic // channel headers; independent of who is connected
-	topicsAt         string           // file the topics are saved to, if any
-	directoryState                    // profiles, presence and activity; see profiles.go
+	topicState       // channel headers; see topics.go
+	directoryState   // profiles, presence and activity; see profiles.go
 	accessEnabled    bool
 	accessHash       [32]byte
 	adminEnabled     bool
