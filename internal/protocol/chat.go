@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -24,10 +25,40 @@ type ChatMetadata struct {
 	Retracted          bool      `json:"retracted,omitempty"`
 	PollOptions        []string  `json:"poll_options,omitempty"`
 	PollClosesAt       time.Time `json:"poll_closes_at,omitzero"`
-	// For names who a handoff step is addressed to: on an offer, the nick
-	// it is handed to; on accept, decline and done, the offer's author.
-	// A room message counts as a mention of it.
+	// For names who a handoff or decision step is addressed to: on an
+	// offer, the nick it is handed to or who decides; on accept, decline,
+	// done and an answer, the offer's author. A room message counts as a
+	// mention of it.
 	For string `json:"for,omitempty"`
+	// Choices are a decision's options, numbered from 1; Choice is the one
+	// an answer chose, 0 when it gave only a note.
+	Choices []string `json:"choices,omitempty"`
+	Choice  int      `json:"choice,omitempty"`
+}
+
+// DecisionStepText is the body a decision step carries. An answer names its
+// choice for a reader that knows no decisions ("Decided 2 (option)", then
+// ": note" when a note was given), or is the note alone when the decision
+// had no options or no option was chosen; a withdrawal without a note reads
+// "Withdrew decision ID".
+func DecisionStepText(kind, offer string, choice int, option, note string) string {
+	switch kind {
+	case "decision-answer":
+		if option == "" {
+			return note
+		}
+		text := fmt.Sprintf("Decided %d (%s)", choice, option)
+		if note != "" {
+			text += ": " + note
+		}
+		return text
+	case "decision-withdraw":
+		if note != "" {
+			return note
+		}
+		return "Withdrew decision " + offer
+	}
+	return ""
 }
 
 // HandoffStepText is the body a handoff step carries when it has no note
@@ -111,6 +142,8 @@ type ChatEntry struct {
 	State        string           `json:"state,omitempty"`
 	Holder       string           `json:"holder,omitempty"`
 	Message      *MessageMetadata `json:"message,omitempty"`
+	// Answer is a decision's answer message once it has one.
+	Answer *MessageMetadata `json:"answer,omitempty"`
 }
 
 func CustomReaction(kind string) bool {
