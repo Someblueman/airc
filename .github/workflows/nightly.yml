@@ -1,0 +1,78 @@
+# Full tier: the whole suite under the race detector, plus the two opt-in
+# soaks, every night and on demand. Kept apart from ci.yml so the push and
+# pull_request triggers there never pick up these long jobs, and so a manual
+# run of this workflow never re-runs the fast tier. The jobs are independent
+# and run in parallel.
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # 03:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# On Linux the gateway journal needs ext4, XFS or Btrfs (docs/gateway/README.md,
+# "Testing"). GitHub's ubuntu runners keep both /tmp and the workspace on ext4,
+# but a short owner-only directory under RUNNER_TEMP keeps Unix socket paths
+# short and the parent private, which internal/testfs honours through TMPDIR.
+env:
+  TMPDIR: ${{ runner.temp }}/airc
+
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: temporary directory
+        run: mkdir -m 0700 -p "$TMPDIR"
+      - name: full suite with the race detector
+        run: go test -race -count=1 -timeout 120m ./...
+
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: temporary directory
+        run: mkdir -m 0700 -p "$TMPDIR"
+      - name: resource soak (internal/server TestResourceSoak, 30m)
+        env:
+          AIRC_SOAK_DURATION: 30m
+        run: go test -count=1 -timeout 60m -run '^TestResourceSoak$' -v ./internal/server
+
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: temporary directory
+        run: mkdir -m 0700 -p "$TMPDIR"
+      - name: fault-injection soak (integration/gateway TestChaosSoak, 30m)
+        env:
+          AIRC_CHAOS_DURATION: 30m
+          AIRC_CHAOS_REPORT: ${{ runner.temp }}/chaos-report.json
+        run: go test -count=1 -timeout 60m -run '^TestChaosSoak$' -v ./integration/gateway
+      - name: upload chaos report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-report
+          path: |
+            ${{ runner.temp }}/chaos-report.json
+            ${{ runner.temp }}/chaos-report.json.events
+          if-no-files-found: ignore

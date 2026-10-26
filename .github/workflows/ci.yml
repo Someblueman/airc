@@ -1,0 +1,54 @@
+# Fast tier: runs on every pull request and every push to main. The gateway packages
+# (internal/gateway, integration/, cmd/airc-gateway) dominate the ~25 minute
+# full suite, so they are left to nightly.yml; everything else runs here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        run: go tool staticcheck ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: unit tests (non-gateway packages)
+        run: |
+          pkgs=$(go list ./... | grep -v -e '/internal/gateway' -e '/integration/' -e '/cmd/airc-gateway')
+          go test -count=1 -timeout 15m $pkgs
+
+      - name: fuzz smoke (protocol parser, 20s)
+        run: go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
