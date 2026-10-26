@@ -163,7 +163,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	if b.cacheLines != nil && b.cacheWidth == width && b.cacheVersion == b.version {
 		return b.cacheLines
 	}
-	if b.kind == bufHelp {
+	if b.kind == bufHelp || isBoard(b) {
 		lines := renderHelp(b.help, max(width-1, 10))
 		for i := range lines {
 			lines[i] = " " + lines[i]

@@ -110,7 +110,7 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 }
 
 func queryRoom(b *uiBuffer) string {
-	if b != nil && b.query != nil && b.query.Kind == "search" {
+	if b != nil && b.query != nil && (b.query.Kind == "search" || b.query.Kind == "board") {
 		return b.query.Target
 	}
 	if b != nil {

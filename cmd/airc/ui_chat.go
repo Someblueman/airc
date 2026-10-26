@@ -123,14 +123,28 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return nil, true
 		}
 		request.Action = "handoff"
-	case "/accept", "/decline", "/done", "/withdraw":
+	case "/accept", "/blocked", "/decline", "/done", "/withdraw":
 		if !need(1) {
+			return nil, true
+		}
+		if name == "/blocked" && len(fields) < 2 {
+			m.setStatus("/blocked ID reason: say why the handoff is stuck", true)
 			return nil, true
 		}
 		request.Action, request.ID = "handoff-"+name[1:], fields[0]
 		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
 	case "/handoffs":
 		request.Action = "handoffs"
+	case "/board":
+		room := queryRoom(b)
+		if len(fields) > 0 {
+			room = channelName(fields[0])
+		}
+		if !protocol.IsChannel(room) {
+			m.setStatus("/board needs a room: /board #room", true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "board", target: room}}, true
 	case "/decide":
 		if !need(1) {
 			return nil, true
@@ -201,7 +215,13 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 }
 
 func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, translate func(irc.Event)) (bool, error) {
+	if (cmd.kind == "query-next" || cmd.kind == "query-first") && strings.HasPrefix(cmd.target, "board:") {
+		// A board has no pages; /next and /first redraw it.
+		cmd = uiCmd{kind: "board", target: strings.TrimPrefix(cmd.target, "board:"), text: "refresh"}
+	}
 	switch cmd.kind {
+	case "board":
+		return true, b.refreshBoard(ctx, c, cmd.target, cmd.text == "refresh", translate)
 	case "close-query":
 		delete(b.threads, strings.TrimPrefix(cmd.target, "thread:"))
 		delete(b.queries, cmd.target)
@@ -303,6 +323,21 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		return true, err
 	}
 	return false, nil
+}
+
+// refreshBoard reads room's handoffs and hands them to the board view; a
+// refresh redraws an open board without switching to it.
+func (b *uiBackend) refreshBoard(ctx context.Context, c *irc.Client, room string, refresh bool, translate func(irc.Event)) error {
+	entries, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "handoffs", Target: room}, translate)
+	if err != nil {
+		return err
+	}
+	if b.queries == nil {
+		b.queries = map[string]uiQuery{}
+	}
+	b.queries[boardName(room)] = uiQuery{Kind: "board", Target: room}
+	b.emit(ctx, boardIn{room: room, entries: entries, refresh: refresh})
+	return nil
 }
 
 func (m *uiModel) showQuery(q queryIn) {

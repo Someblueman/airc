@@ -126,6 +126,13 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 			}
 		}
 	}
+	for _, q := range b.queries {
+		if q.Kind == "board" {
+			if err := b.refreshBoard(ctx, client, q.Target, true, translate); err != nil {
+				b.emit(ctx, statusIn{text: err.Error(), isError: true})
+			}
+		}
+	}
 	b.emit(ctx, statusIn{connected: &online})
 	if !first {
 		b.emit(ctx, statusIn{text: "reconnected"})
