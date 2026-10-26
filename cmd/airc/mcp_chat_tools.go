@@ -53,6 +53,22 @@ type mcpHandoffsInput struct {
 	Limit   int    `json:"limit,omitempty" jsonschema:"Newest handoffs to list, 1-1000; default 200"`
 }
 
+type mcpDecideInput struct {
+	Step    string   `json:"step,omitempty" jsonschema:"ask (the default), answer or withdraw"`
+	ID      string   `json:"id,omitempty" jsonschema:"The decision's ID, for answer and withdraw"`
+	Channel string   `json:"channel,omitempty" jsonschema:"Ask: the room to ask in; defaults to AIRC_CHANNEL; needs from"`
+	From    string   `json:"from,omitempty" jsonschema:"Ask: the nickname who decides, usually a human; required in a room"`
+	To      string   `json:"to,omitempty" jsonschema:"Ask: the decider of a direct decision, without channel"`
+	Message string   `json:"message,omitempty" jsonschema:"Ask: what to decide and why it matters. Answer: a note; withdraw: an optional reason"`
+	Options []string `json:"options,omitempty" jsonschema:"Ask: 2-8 choices, each up to 80 bytes; omit for a free-text decision"`
+	Choice  int      `json:"choice,omitempty" jsonschema:"Answer: the chosen option, numbered from 1"`
+}
+type mcpDecisionsInput struct {
+	Channel string `json:"channel,omitempty" jsonschema:"Every decision asked in this room, answered ones from the last week included"`
+	ID      string `json:"id,omitempty" jsonschema:"One decision"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Newest decisions to list, 1-1000; default 200"`
+}
+
 type mcpUnreadInput struct {
 	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to count besides the inbox; defaults to AIRC_CHANNEL"`
 	Mentions bool     `json:"mentions,omitempty" jsonschema:"Count only direct messages and tags"`
@@ -77,6 +93,7 @@ type mcpProfileInput struct {
 	Workspace *string `json:"workspace,omitempty" jsonschema:"Repository or directory you work in"`
 	Tools     *string `json:"tools,omitempty" jsonschema:"Tools or languages you can use"`
 	About     *string `json:"about,omitempty" jsonschema:"What to ask you about"`
+	Kind      *string `json:"kind,omitempty" jsonschema:"human or agent; empty string clears it"`
 	Clear     bool    `json:"clear,omitempty" jsonschema:"Remove your whole profile"`
 }
 type mcpNoInput struct{}
@@ -144,6 +161,16 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		}{{"--model", in.Model}, {"--workspace", in.Workspace}, {"--tools", in.Tools}, {"--about", in.About}} {
 			if field.value != nil {
 				args = append(args, field.name+"="+*field.value)
+			}
+		}
+		if in.Kind != nil {
+			switch *in.Kind {
+			case "human":
+				args = append(args, "--human")
+			case "agent":
+				args = append(args, "--agent")
+			default:
+				return nil, mcpOutput{}, errors.New("kind is human or agent")
 			}
 		}
 		if in.Clear {
@@ -238,6 +265,52 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open and accepted handoffs that concern you: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"handoffs"}
+		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
+			if pair[1] != "" {
+				args = append(args, pair[0]+"="+pair[1])
+			}
+		}
+		if in.Limit != 0 {
+			args = append(args, "--limit", strconv.Itoa(in.Limit))
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecideInput) (*mcpserver.Result, mcpOutput, error) {
+		args := []string{"decide"}
+		switch in.Step {
+		case "", "ask":
+			if in.ID != "" || in.Choice != 0 {
+				return nil, mcpOutput{}, errors.New("ask takes no id or choice; it creates a decision")
+			}
+			for _, pair := range [][2]string{{"--channel", in.Channel}, {"--from", in.From}, {"--to", in.To}} {
+				if pair[1] != "" {
+					args = append(args, pair[0]+"="+pair[1])
+				}
+			}
+			for _, option := range in.Options {
+				args = append(args, "--option="+option)
+			}
+		case "answer", "withdraw":
+			if !protocol.ValidMessageID(in.ID) || in.Channel != "" || in.From != "" || in.To != "" || len(in.Options) > 0 {
+				return nil, mcpOutput{}, errors.New(in.Step + " takes the decision's id and no channel, from, to or options")
+			}
+			if in.Choice != 0 && in.Step != "answer" {
+				return nil, mcpOutput{}, errors.New("choice applies to answer")
+			}
+			args = append(args, in.Step, in.ID)
+			if in.Choice != 0 {
+				args = append(args, "--choice", strconv.Itoa(in.Choice))
+			}
+		default:
+			return nil, mcpOutput{}, errors.New("step is ask, answer or withdraw")
+		}
+		if in.Message != "" {
+			args = append(args, "--message="+in.Message)
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decisions", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecisionsInput) (*mcpserver.Result, mcpOutput, error) {
+		args := []string{"decisions"}
 		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
 			if pair[1] != "" {
 				args = append(args, pair[0]+"="+pair[1])

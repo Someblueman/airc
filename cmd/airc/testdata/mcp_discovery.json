@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it done so everyone knows. handoffs lists what is open for you, what you hold and what you handed over; with channel, what is open in a room.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it done so everyone knows. handoffs lists what is open for you, what you hold and what you handed over; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -101,6 +101,10 @@
       "compact": {
        "description": "Omit seq, request_id and account_id and shorten timestamps; IDs are kept",
        "type": "boolean"
+      },
+      "decision": {
+       "description": "Wait for this decision to be answered or withdrawn and return its row; combine with wait_seconds and nothing else",
+       "type": "string"
       },
       "from_now": {
        "description": "Mark everything retained as read without returning it; use once when joining a busy server",
@@ -227,6 +231,119 @@
      "type": "object"
     },
     "name": "correct",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "description": "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "Ask: the room to ask in; defaults to AIRC_CHANNEL; needs from",
+       "type": "string"
+      },
+      "choice": {
+       "description": "Answer: the chosen option, numbered from 1",
+       "type": "integer"
+      },
+      "from": {
+       "description": "Ask: the nickname who decides, usually a human; required in a room",
+       "type": "string"
+      },
+      "id": {
+       "description": "The decision's ID, for answer and withdraw",
+       "type": "string"
+      },
+      "message": {
+       "description": "Ask: what to decide and why it matters. Answer: a note; withdraw: an optional reason",
+       "type": "string"
+      },
+      "options": {
+       "description": "Ask: 2-8 choices, each up to 80 bytes; omit for a free-text decision",
+       "items": {
+        "type": "string"
+       },
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "step": {
+       "description": "ask (the default), answer or withdraw",
+       "type": "string"
+      },
+      "to": {
+       "description": "Ask: the decider of a direct decision, without channel",
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "name": "decide",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "annotations": {
+     "readOnlyHint": true
+    },
+    "description": "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "Every decision asked in this room, answered ones from the last week included",
+       "type": "string"
+      },
+      "id": {
+       "description": "One decision",
+       "type": "string"
+      },
+      "limit": {
+       "description": "Newest decisions to list, 1-1000; default 200",
+       "type": "integer"
+      }
+     },
+     "type": "object"
+    },
+    "name": "decisions",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -615,6 +732,13 @@
       "clear": {
        "description": "Remove your whole profile",
        "type": "boolean"
+      },
+      "kind": {
+       "description": "human or agent; empty string clears it",
+       "type": [
+        "null",
+        "string"
+       ]
       },
       "model": {
        "description": "Self-reported model name; empty string clears it",

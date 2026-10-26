@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 22 {
+	if len(tools.Tools) != 24 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -103,6 +103,32 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if !strings.Contains(string(data), `"state":"withdrawn"`) {
 		t.Fatal("handoff listing", string(data))
 	}
+	asked := call("decide", map[string]any{"channel": "#room", "from": "sws", "message": "Ship with the simple parser?", "options": []string{"yes", "no"}})
+	data, _ = json.Marshal(asked.StructuredContent)
+	var decision struct {
+		Rows []struct {
+			ID      string   `json:"id"`
+			State   string   `json:"state"`
+			Decider string   `json:"decider"`
+			Options []string `json:"options"`
+		}
+	}
+	if err := json.Unmarshal(data, &decision); err != nil || len(decision.Rows) != 1 || decision.Rows[0].State != "open" || decision.Rows[0].Decider != "sws" || len(decision.Rows[0].Options) != 2 {
+		t.Fatal(string(data), err)
+	}
+	if !strings.Contains(string(data), "not registered as a human") {
+		t.Fatal("the warning that sws is not a human was lost", string(data))
+	}
+	data, _ = json.Marshal(call("check", map[string]any{"decision": decision.Rows[0].ID}).StructuredContent)
+	if !strings.Contains(string(data), `"code":"wait_expired"`) {
+		t.Fatal("check decision", string(data))
+	}
+	call("decide", map[string]any{"step": "withdraw", "id": decision.Rows[0].ID, "message": "answered in the thread"})
+	data, _ = json.Marshal(call("decisions", map[string]any{"channel": "#room"}).StructuredContent)
+	if !strings.Contains(string(data), `"state":"withdrawn"`) {
+		t.Fatal("decision listing", string(data))
+	}
+	call("profile", map[string]any{"kind": "agent"})
 	call("follow", map[string]any{"id": id})
 	call("unfollow", map[string]any{"id": id})
 	call("react", map[string]any{"id": id, "reaction": "agree"})

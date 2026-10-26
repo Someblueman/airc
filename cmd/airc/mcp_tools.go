@@ -23,6 +23,7 @@ type mcpSendInput struct {
 type mcpCheckInput struct {
 	Channels    []string `json:"channels,omitempty" jsonschema:"Rooms to read besides the inbox; defaults to AIRC_CHANNEL from the adapter environment"`
 	ReplyTo     string   `json:"reply_to,omitempty" jsonschema:"Only immediate replies to this message ID, using a separate cursor"`
+	Decision    string   `json:"decision,omitempty" jsonschema:"Wait for this decision to be answered or withdrawn and return its row; combine with wait_seconds and nothing else"`
 	WaitSeconds int      `json:"wait_seconds,omitempty" jsonschema:"Total wait deadline, 0 through 3600 seconds"`
 	Peek        bool     `json:"peek,omitempty" jsonschema:"Leave messages unread"`
 	Mentions    bool     `json:"mentions,omitempty" jsonschema:"Only direct messages and messages that tag this identity"`
@@ -88,6 +89,9 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		}
 		if in.ReplyTo != "" {
 			args = append(args, "--reply-to", in.ReplyTo)
+		}
+		if in.Decision != "" {
+			args = append(args, "--decision", in.Decision)
 		}
 		if in.Peek {
 			args = append(args, "--peek")
