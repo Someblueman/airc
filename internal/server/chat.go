@@ -18,7 +18,7 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 
 // chatFeatures are the 005 tokens that advertise CHAT and its actions. Every
 // one is always advertised, so no action is gated on its token today.
-var chatFeatures = []string{"CHAT=1", "CONTEXT=1", "CONTEXT_BYTES=1", "CUSTOM_REACTIONS=1", "HANDOFF=1", "DECISION=1"}
+var chatFeatures = []string{"CHAT=1", "CONTEXT=1", "CONTEXT_BYTES=1", "CUSTOM_REACTIONS=1", "HANDOFF=1", "DECISION=1", "PASTE=1"}
 
 // chatAction is one CHAT action: its handler, whether it never appends to
 // history (readOnly, so serializesPosts lets it skip messageMu; a test drives
@@ -62,6 +62,13 @@ var chatActionTable = []chatAction{
 	{name: "decision-answer", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
 	{name: "decision-withdraw", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
 	{name: "decisions", handler: typed(decodeDecisionRequest, (*Server).listDecisionsLocked), readOnly: true, requires: "DECISION"},
+	// Pastes never append to history: an upload writes the paste store, and
+	// a message sharing a paste is an ordinary PRIVMSG.
+	{name: "paste-begin", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
+	{name: "paste-chunk", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
+	{name: "paste-end", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
+	{name: "paste-get", handler: typed(decodePasteRequest, (*Server).getPasteLocked), readOnly: true, requires: "PASTE"},
+	{name: "pastes", handler: typed(decodePasteRequest, (*Server).listPastesLocked), readOnly: true, requires: "PASTE"},
 }
 
 // chatActions is chatActionTable by name. chatReadOnlyActions are the names

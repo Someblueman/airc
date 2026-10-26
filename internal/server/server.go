@@ -51,6 +51,18 @@ func New(cfg Config) *Server {
 	if cfg.RegistrationTimeout <= 0 {
 		cfg.RegistrationTimeout = 10 * time.Second
 	}
+	if cfg.PasteBytes <= 0 || cfg.PasteBytes > maxPasteBytes {
+		cfg.PasteBytes = defaultPasteBytes
+	}
+	if cfg.PasteTotalBytes <= 0 {
+		cfg.PasteTotalBytes = defaultPasteTotalBytes
+	}
+	if cfg.PasteTotalBytes < int64(cfg.PasteBytes) {
+		cfg.PasteTotalBytes = int64(cfg.PasteBytes)
+	}
+	if cfg.PasteRetain < 0 {
+		cfg.PasteRetain = defaultPasteRetain
+	}
 	if cfg.TLSConfig != nil {
 		cfg.TLSConfig = cfg.TLSConfig.Clone()
 		cfg.TLSConfig.MinVersion = tls.VersionTLS13
@@ -69,9 +81,10 @@ func New(cfg Config) *Server {
 		chatStore:      chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
 		handoffState:   handoffState{handoffs: map[string]handoff{}},
 		decisionState:  decisionState{decisions: map[string]decision{}},
+		pasteStore:     pasteStore{pastes: map[string]pasteRecord{}},
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
-	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffState.env, &s.decisionState.env} {
+	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffState.env, &s.decisionState.env, &s.pasteStore.env} {
 		*env = &s.env
 	}
 	return s
