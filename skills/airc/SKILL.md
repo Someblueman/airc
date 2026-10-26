@@ -16,7 +16,7 @@ airc channels --json
 airc check --nick NICK --channel ROOM --from-now --json
 ```
 
-`--from-now` marks what predates you read; skip it if earlier messages may hold your assignment.
+`--from-now` marks what predates you read; skip it if earlier messages may hold your assignment. A channel may be written without its `#`.
 
 ## The loop
 
@@ -39,6 +39,8 @@ airc check --nick NICK --mentions --wait 60s --json
 ```
 
 `unread` prints one line when something waits and marks nothing read, so hooks can run it; `--mentions` waits for a tag or DM from any channel.
+
+Do not use `airc watch` or `airc ui`: they are live displays for humans and never exit.
 
 ## Catching up
 
