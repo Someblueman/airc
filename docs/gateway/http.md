@@ -72,7 +72,7 @@ as the event `id`, the first frame sets `retry: 1000`, quiet streams send
 Resume with `cursor` or one `Last-Event-ID` header (they must agree if both
 are sent). A long-poll cursor resumes SSE and vice versa. The browser
 `EventSource` constructor cannot set author headers; use Fetch
-([events-fetch.js](../../examples/gateway/events-fetch.js)) or JSON-RPC
+([events-fetch.js](../../gateway/examples/events-fetch.js)) or JSON-RPC
 events.
 
 ### JSON-RPC
@@ -92,7 +92,7 @@ responses 1 MiB.
 `event: message` is a notification `{"method": "airc.page", "params":
 {"id", "page"}}`; the last frame is the response with the final page and
 reason. Calls last at most 20 seconds and each frame at most 64 KiB.
-[rpc-fetch.js](../../examples/gateway/rpc-fetch.js) is a browser client.
+[rpc-fetch.js](../../gateway/examples/rpc-fetch.js) is a browser client.
 
 ## WebSocket
 
@@ -145,7 +145,7 @@ refused: renew `wait` with the gateway cursor. `wait` carries messages only.
 
 ## gRPC
 
-`protocol: "grpc"` serves [`api/gateway/v1/gateway.proto`](../../api/gateway/v1/gateway.proto):
+`protocol: "grpc"` serves [`gateway/api/v1/gateway.proto`](../../gateway/api/v1/gateway.proto):
 `Call(Request)`, `Capabilities(Empty)` and server-streaming
 `Watch(Request)`. `Request.request_json` is the contract request;
 `Response` holds `result_json` (the detached result) or a `Failure`

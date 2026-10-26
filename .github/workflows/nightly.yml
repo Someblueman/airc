@@ -30,10 +30,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gateway/go.sum
       - name: temporary directory
         run: mkdir -m 0700 -p "$TMPDIR"
-      - name: full suite with the race detector
-        run: go test -race -count=1 -timeout 120m ./...
+      # Workspace mode from the root: `./...` is the root module only, so the
+      # gateway module is named too.
+      - name: full suite with the race detector (both modules)
+        run: go test -race -count=1 -timeout 120m ./... ./gateway/...
 
   soak:
     runs-on: ubuntu-latest
@@ -44,6 +49,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gateway/go.sum
       - name: temporary directory
         run: mkdir -m 0700 -p "$TMPDIR"
       - name: resource soak (internal/server TestResourceSoak, 30m)
@@ -60,13 +68,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gateway/go.sum
       - name: temporary directory
         run: mkdir -m 0700 -p "$TMPDIR"
-      - name: fault-injection soak (integration/gateway TestChaosSoak, 30m)
+      - name: fault-injection soak (gateway/integration TestChaosSoak, 30m)
         env:
           AIRC_CHAOS_DURATION: 30m
           AIRC_CHAOS_REPORT: ${{ runner.temp }}/chaos-report.json
-        run: go test -count=1 -timeout 60m -run '^TestChaosSoak$' -v ./integration/gateway
+        run: go test -count=1 -timeout 60m -run '^TestChaosSoak$' -v ./gateway/integration
       - name: upload chaos report
         if: always()
         uses: actions/upload-artifact@v4

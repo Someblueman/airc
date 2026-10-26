@@ -20,12 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
-	gwservice "github.com/Someblueman/airc/internal/gateway/service"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
-	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -172,62 +168,6 @@ func (p *nativeProxy) down() {
 	}
 }
 
-// startGatewayListeners runs an in-process gateway with the given listeners.
-func startGatewayListeners(t *testing.T, upstream string, listeners []gwconfig.Listener, carriers []protocol.Carrier) {
-	t.Helper()
-	startGatewayUpstream(t, gwconfig.Upstream{Network: "tcp", Address: upstream}, listeners, carriers)
-}
-
-// startGatewayUpstream runs an in-process gateway reaching aircd as upstream
-// describes.
-func startGatewayUpstream(t *testing.T, upstream gwconfig.Upstream, listeners []gwconfig.Listener, carriers []protocol.Carrier) {
-	t.Helper()
-	root, err := testfs.MkdirTemp("airc-fallback-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	c := gwconfig.Defaults()
-	c.Version, c.Realm, c.StateDir = 1, "cli-fallback", filepath.Join(root, "state")
-	if err := os.Mkdir(c.StateDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	c.CursorKeyFile = filepath.Join(root, "cursor.key")
-	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Upstream = &upstream
-	for _, carrier := range carriers {
-		c.Carriers = append(c.Carriers, carrier.String())
-	}
-	c.Listeners = listeners
-	ctx, cancel := context.WithCancel(context.Background())
-	reader, writer := io.Pipe()
-	done := make(chan error, 1)
-	go func() {
-		err := gwservice.Run(ctx, c, writer)
-		_ = writer.CloseWithError(io.EOF)
-		done <- err
-	}()
-	_, err = bufio.NewReader(reader).ReadBytes('\n') // the ready line
-	go func() { _, _ = io.Copy(io.Discard, reader) }()
-	if err != nil {
-		cancel()
-		t.Fatalf("gateway did not start: %v %v", err, <-done)
-	}
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("gateway stopped with %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			t.Error("gateway did not stop")
-		}
-	})
-}
-
 // fallbackFixture is a daemon reached natively through a proxy, and its
 // gateway reached directly (over TCP carriers and its Unix socket),
 // advertising the proxy as aircd's own port.
@@ -299,9 +239,9 @@ func newFallbackFixture(t *testing.T) *fallbackFixture {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	f.sock = filepath.Join(dir, "gateway.sock")
-	listeners := []gwconfig.Listener{{ID: "unix", Protocol: "unix", Address: f.sock, Enabled: true}}
+	listeners := []gatewayListener{{ID: "unix", Protocol: "unix", Address: f.sock, Enabled: true}}
 	for name, port := range f.ports {
-		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
+		listeners = append(listeners, gatewayListener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
 	}
 	startGatewayListeners(t, f.daemon, listeners, carriers)
 	return f

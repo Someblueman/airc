@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package airc.gateway.v1;
+option go_package = "github.com/Someblueman/airc/gateway/api/v1;gatewayv1";
+
+// request_json is a plain contract request naming its author, the same JSON
+// object every carrier takes (TLS optional: h2c is accepted). It contains the
+// durable request ID; gRPC call correlation is not a durable mutation
+// identity.
+service Gateway {
+  rpc Call(Request) returns (Response);
+  rpc Capabilities(Empty) returns (Response);
+  rpc Watch(Request) returns (stream WatchFrame);
+}
+
+message Empty {}
+message Request { bytes request_json = 1; }
+message Failure {
+  string code = 1;
+  bool transient = 2;
+  int32 upstream_code = 3;
+}
+message Response {
+  oneof outcome {
+    bytes result_json = 1;
+    Failure error = 2;
+  }
+}
+// Ordinary frames carry exact HistoryPage JSON. A final frame has a reason
+// and the last delivered page, or an error. Renew using page.cursor.
+message WatchFrame {
+  oneof event {
+    bytes page_json = 1;
+    Terminal terminal = 2;
+  }
+}
+message Terminal {
+  bytes page_json = 1;
+  string reason = 2;
+  Failure error = 3;
+}

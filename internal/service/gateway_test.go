@@ -14,9 +14,45 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/admin"
-	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/testtls"
 )
+
+// generatedGateway is the generated configuration as the gateway's
+// configuration reads it. The gateway module's tests parse what every
+// carrier generates with the gateway's own parser; these tests check the
+// shape airc writes without linking that parser.
+type generatedGateway struct {
+	Version       int                 `json:"version"`
+	Realm         string              `json:"realm"`
+	StateDir      string              `json:"state_dir"`
+	CursorKeyFile string              `json:"cursor_key_file"`
+	Upstream      *gatewayUpstream    `json:"upstream"`
+	Carriers      []string            `json:"carriers"`
+	Listeners     []generatedListener `json:"listeners"`
+}
+
+type generatedListener struct {
+	gatewayListener
+	Guests *bool `json:"guests"` // omitted: guests are allowed, as IRC does
+}
+
+func parseGenerated(t *testing.T, data []byte) generatedGateway {
+	t.Helper()
+	var loaded generatedGateway
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("%v in %s", err, data)
+	}
+	return loaded
+}
+
+func loadGenerated(t *testing.T, path string) generatedGateway {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parseGenerated(t, data)
+}
 
 // bundled is a service with a gateway whose credentials exist in an
 // owner-only state directory, as airc service install leaves them.
@@ -96,20 +132,16 @@ func TestEachListedCarrierParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := gwconfig.Parse(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range loaded.Listeners {
-		if l.Protocol == "mqtt" || l.Protocol == "mqtt_websocket" {
-			if len(l.MQTT.Routes) != 1 || l.MQTT.Routes[0].Topic != gwconfig.DefaultMQTTTopic {
-				t.Errorf("mqtt routes %+v", l.MQTT.Routes)
-			}
-		}
+	// MQTT's request topic is a default the gateway fills in; the gateway
+	// module's tests parse this configuration and check it.
+	if loaded := parseGenerated(t, data); len(loaded.Listeners) != len(plain) || strings.Contains(string(data), "routes") {
+		t.Fatal(string(data))
 	}
 }
 
-func TestEverySupportedCarrierGeneratesAValidConfig(t *testing.T) {
+// Every supported carrier generates a configuration; the gateway module's
+// tests parse each one with the gateway's own parser.
+func TestEverySupportedCarrierGeneratesAConfig(t *testing.T) {
 	cert := testtls.New(t)
 	access := filepath.Join(filepath.Dir(cert.KeyPath), "access.token")
 	if err := admin.CreateToken(access); err != nil {
@@ -126,8 +158,8 @@ func TestEverySupportedCarrierGeneratesAValidConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if _, err := gwconfig.Parse(data); err != nil {
-			t.Fatalf("%s: %v", name, err)
+		if loaded := parseGenerated(t, data); len(loaded.Listeners) != 1 || loaded.Listeners[0].Protocol != name || !loaded.Listeners[0].Enabled {
+			t.Fatalf("%s: %s", name, data)
 		}
 	}
 }
@@ -145,10 +177,7 @@ func TestGeneratedGatewayConfigLoadsAndFollowsAircd(t *testing.T) {
 	if err := os.Mkdir(c.GatewayStateDir(), 0700); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := gwconfig.Load(c.GatewayConfigPath())
-	if err != nil {
-		t.Fatal(err)
-	}
+	loaded := loadGenerated(t, c.GatewayConfigPath())
 	// One upstream on aircd's socket with its gateway credential; nothing
 	// else to provision.
 	if u := loaded.Upstream; u == nil || u.Network != "unix" || u.Address != "/run/user/1/airc.sock" || u.GatewayTokenFile != c.GatewayTokenPath() || u.AccessTokenFile != "" {
@@ -165,7 +194,7 @@ func TestGeneratedGatewayConfigLoadsAndFollowsAircd(t *testing.T) {
 	var ids []string
 	for _, l := range loaded.Listeners {
 		ids = append(ids, l.ID+"@"+l.Address)
-		if !l.Enabled || len(l.Operations) != 0 || !l.GuestsAllowed() || l.TLSCertFile != "" || l.PasswordFile != "" {
+		if !l.Enabled || len(l.Operations) != 0 || l.Guests != nil || l.TLSCertFile != "" || l.PasswordFile != "" {
 			t.Fatalf("listener %+v", l)
 		}
 	}
@@ -194,10 +223,7 @@ func TestGatewayKeepsAircdAccessPolicy(t *testing.T) {
 	}
 	// Listeners share aircd's certificate, key and access token, which is
 	// also the upstream's credential: one role each, so no aliasing.
-	loaded, err := gwconfig.Load(c.GatewayConfigPath())
-	if err != nil {
-		t.Fatal(err)
-	}
+	loaded := loadGenerated(t, c.GatewayConfigPath())
 	if u := loaded.Upstream; u.Network != "tcp" || u.Address != "127.0.0.1:6697" || u.TLSServerName != "localhost" || u.TLSCAFile != cert.CertPath || u.AccessTokenFile != access {
 		t.Fatalf("upstream %+v", u)
 	}
@@ -296,9 +322,12 @@ func TestInstallWritesTheGatewayPairOrNothing(t *testing.T) {
 	}
 	var validated string
 	validateGateway = func(binary, path string) error {
-		_, err := gwconfig.Load(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
 		validated = binary
-		return err
+		return json.Unmarshal(data, &generatedGateway{})
 	}
 	if err := Install(c); err != nil {
 		t.Fatal(err)
@@ -384,11 +413,7 @@ func TestHTTP3UsesAircdsCertificateAndSharesHTTPsPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := gwconfig.Parse(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, l := range loaded.Listeners {
+	for _, l := range parseGenerated(t, data).Listeners {
 		if l.Protocol == "http3" && (l.TLSCertFile != cert.CertPath || l.Address != "127.0.0.1:6680") {
 			t.Fatalf("listener %+v", l)
 		}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,43 +44,44 @@ func TestSkillHasValidFrontmatter(t *testing.T) {
 // or flag cannot silently leave agents with broken instructions.
 func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	skillText := skills.Airc + "\n" + skills.Reference
+	// Positional arguments and actions that must precede -h for the command to
+	// print its flags; every other command takes -h first.
+	id := strings.Repeat("a", 32)
+	leading := map[string][]string{
+		"user": {"create"}, "service": {"install"}, "admin": {"list"}, "skill": {"install"},
+		"history": {"#room"}, "names": {"#room"}, "topic": {"#room"},
+		"thread": {id}, "context": {id}, "search": {"query"}, "react": {id, "seen"},
+	}
 	usage := map[string]string{}
-	for _, sub := range []string{"unread", "digest", "channels", "context", "bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "wake", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close", "handoff", "handoffs", "decide", "decisions"} {
+	var names []string
+	for _, sub := range commands {
 		var stderr bytes.Buffer
-		args := []string{sub, "-h"}
-		if sub == "user" {
-			args = []string{sub, "create", "-h"}
-		}
-		if sub == "history" || sub == "names" || sub == "topic" {
-			args = []string{sub, "#room", "-h"} // these take the channel first
-		}
-		if sub == "thread" || sub == "context" {
-			args = []string{sub, strings.Repeat("a", 32), "-h"}
-		}
-		if sub == "search" {
-			args = []string{sub, "query", "-h"}
-		}
-		if sub == "react" {
-			args = []string{sub, strings.Repeat("a", 32), "seen", "-h"}
-		}
+		args := append(append([]string{sub}, leading[sub]...), "-h")
 		err := run(args, strings.NewReader(""), io.Discard, &stderr)
 		if err != nil && strings.Contains(err.Error(), "unknown command") {
 			t.Fatalf("subcommand %q does not exist", sub)
 		}
+		if !strings.Contains(stderr.String(), "Usage") {
+			t.Errorf("airc %s does not print its flags; fix leading", strings.Join(args, " "))
+		}
 		usage[sub] = stderr.String()
+		names = append(names, regexp.QuoteMeta(sub))
 	}
-	commands := regexp.MustCompile(`(?m)^\s*(?:\$ )?airc (\w+)`).FindAllStringSubmatch(skillText, -1)
-	if len(commands) < 5 {
-		t.Fatalf("expected the skill to contain example commands, found %d", len(commands))
+	// Longest first, so poll-results is not matched as poll.
+	slices.SortFunc(names, func(a, b string) int { return len(b) - len(a) })
+	mentions := regexp.MustCompile(`(?m)^\s*(?:\$ )?airc (\w+)`).FindAllStringSubmatch(skillText, -1)
+	if len(mentions) < 5 {
+		t.Fatalf("expected the skill to contain example commands, found %d", len(mentions))
 	}
-	for _, m := range commands {
+	for _, m := range mentions {
 		if _, known := usage[m[1]]; !known {
-			t.Errorf("skill uses `airc %s`, which this test does not know; add it or fix the skill", m[1])
+			t.Errorf("skill uses `airc %s`, which is not a command; fix the skill", m[1])
 		}
 	}
 	// Every --flag on a line that invokes a subcommand must be defined by it.
+	invocation := regexp.MustCompile(`airc (` + strings.Join(names, "|") + `)\b`)
 	for line := range strings.SplitSeq(skillText, "\n") {
-		m := regexp.MustCompile(`airc (unread|channels|context|bot|monitor|away|op|deop|operators|kick|send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|wake|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close|handoff|handoffs|decide|decisions)\b`).FindStringSubmatch(line)
+		m := invocation.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}

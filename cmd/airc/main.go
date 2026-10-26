@@ -113,54 +113,15 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return runInteractive(args, stdin, stdout, stderr)
 	}
-	if _, ok := sessionCommands[args[0]]; ok {
-		return runSessionCommand(args[0], args[1:], stdin, stdout, stderr)
-	}
-	switch args[0] {
-	case "op", "deop", "operators", "kick":
-		return runRoomControl(args[0], args[1:], stdout, stderr)
-	case "monitor":
-		return runMonitor(args[1:], stdout, stderr)
-	case "away":
-		return runSessionCommand("presence", append([]string{"--set", "away"}, args[1:]...), stdin, stdout, stderr)
-	case "bot":
-		return runBot(args[1:], stdout, stderr)
-	case "service":
-		return runService(args[1:], stdout, stderr)
-	case "user":
-		return runUser(args[1:], stdout, stderr)
-	case "admin":
-		return runAdmin(args[1:], stdout, stderr)
-	case "watch":
-		return runWatch(args[1:], stdout, stderr)
-	case "agents":
-		return runAgents(args[1:], stdout, stderr)
-	case "skill":
-		return runSkill(args[1:], stdout, stderr)
-	case "topic":
-		return runTopic(args[1:], stdout, stderr)
-	case "wake":
-		return runWake(args[1:], stdout, stderr)
-	case "ui":
-		return runUI(args[1:], stdout, stderr)
-	case "react":
-		return runReact(args[1:], stdout, stderr)
-	case "mcp":
-		return runMCP(args[1:], stdin, stdout, stderr)
-	case "thread":
-		return runThread(args[1:], stdout, stderr)
-	case "names":
-		return runNames(args[1:], stdout, stderr)
-	case "doctor":
-		return runDoctor(args[1:], stdout, stderr)
-	case "interactive":
-		return runInteractive(args[1:], stdin, stdout, stderr)
-	case "help", "--help", "-h":
+	if args[0] == "help" {
 		printUsage(stdout)
 		return nil
-	default:
+	}
+	c, ok := commandsByName[args[0]]
+	if !ok {
 		return fmt.Errorf("unknown command %q (see airc help)", args[0])
 	}
+	return runCommand(c, args[1:], stdin, stdout, stderr)
 }
 
 func addOptions(fs *flag.FlagSet) *options {

@@ -85,7 +85,10 @@ func failure(err error, phase string) *commandFailure {
 	case localFileError(err):
 		// syscall.Errno satisfies net.Error, so this must precede the network case.
 		e.Code = "state_unavailable"
-	case errors.As(err, &network), errors.Is(err, io.EOF), errors.Is(err, net.ErrClosed):
+	case errors.As(err, &network), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, net.ErrClosed):
+		// An unexpected EOF is the server (or a proxy in front of it) closing
+		// the connection before it answered, as a restarting daemon does to a
+		// client that reconnects too soon: an outage, not a refusal.
 		e.Code, e.Retryable = "server_unavailable", true
 	}
 	return e

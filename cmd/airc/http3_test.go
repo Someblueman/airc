@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
-	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/internal/service"
@@ -108,8 +107,8 @@ func http3Fixture(t *testing.T) (daemon string, port int, cert testtls.Certifica
 	cert = testtls.New(t)
 	daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64}, func(s *server.Server) error { return s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts")) })
 	port = freeUDPPort(t)
-	listener := gwconfig.Listener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}
-	startGatewayListeners(t, daemon, []gwconfig.Listener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
+	listener := gatewayListener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}
+	startGatewayListeners(t, daemon, []gatewayListener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
 	return daemon, port, cert
 }
 
@@ -167,9 +166,9 @@ func TestSendFallsBackOverHTTP3(t *testing.T) {
 		return s.RestoreAccounts(filepath.Join(dir, "accounts.json"))
 	})
 	port := freeUDPPort(t)
-	listener := gwconfig.Listener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, PasswordFile: tokenPath}
-	upstream := gwconfig.Upstream{Network: "tcp", Address: daemon, TLSServerName: "localhost", TLSCAFile: cert.CAPath, AccessTokenFile: tokenPath}
-	startGatewayUpstream(t, upstream, []gwconfig.Listener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
+	listener := gatewayListener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, PasswordFile: tokenPath}
+	upstream := gatewayUpstream{Network: "tcp", Address: daemon, TLSServerName: "localhost", TLSCAFile: cert.CAPath, AccessTokenFile: tokenPath}
+	startGatewayUpstream(t, upstream, []gatewayListener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
 
 	gone := "127.0.0.1:" + strconv.Itoa(closedTCPPort(t))
 	sent, stderr, err := sendJSON(t, "--addr", gone, "--tls-ca", cert.CAPath, "--access-token-file", tokenPath, "--nick", "alice", "--channel", "#ops", "--carriers", "http3+tls:"+strconv.Itoa(port), "--message", "over http3")

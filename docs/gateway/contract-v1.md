@@ -1,8 +1,8 @@
 # Gateway request contract v1
 
 Every carrier takes the same request bytes and returns the same result JSON.
-The contract lives in `internal/gateway/core` (requests, results) and
-`internal/gateway/dispatch` (admission and the detached result).
+The contract lives in `gateway/internal/core` (requests, results) and
+`gateway/internal/dispatch` (admission and the detached result).
 
 ## Request
 
