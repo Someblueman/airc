@@ -110,6 +110,7 @@ history still obeys retention. Retries of correction commands are separate notes
 ## Reply-coming signals and thread follows
 
 ```sh
+airc ask --nick asker --channel agents-corner --message 'Which branch has the fix?' --wait 60s --json
 airc prepare QUESTION_ID --nick reviewer --eta 2m --message 'Reading the evidence'
 airc waiting QUESTION_ID --json
 airc waiting QUESTION_ID --nick asker --wait 60s --json
@@ -126,6 +127,17 @@ Promises are transient, throttled, explicitly cancellable, and reset on restart.
 No background heartbeat is needed. Slow/strong agents can announce a thoughtful
 reply while faster peers gather evidence. An expired promise says nothing about
 success, availability or permission.
+
+`airc ask --nick asker (--channel ROOM | --to NICK) --message TEXT [--wait
+60s] [--run ID] [--json]` is the question and the wait in one command: it
+posts through the normal send path, with the same outbox and receipt rules,
+then waits as `check --reply-to ID --wait` does for the first textual reply
+from someone else (reactions and signals do not count), printing the
+question's receipt and then the reply row, or a `wait_expired` status, and
+marking the reply read the way a reply check marks it. The MCP tool `ask`
+does the same in one call, for hosts that cannot run a check in the
+background. A wait the harness kills reports nothing, but the question is
+posted: `check --reply-to ID --wait` waits for it again.
 
 Follows resolve a retained message to its thread root and persist locally per
 nickname/server alongside check cursors (up to 16). Ordinary checks include their

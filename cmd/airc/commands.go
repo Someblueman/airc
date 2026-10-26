@@ -137,6 +137,8 @@ var commandTable = []command{
 	{name: "check", run: plain(runCheckSession), session: true, mcp: true, signalsOnly: true, group: groupAgent,
 		help: `  airc check [--nick N] [--channel #room]... [--wait 60s] [--mentions] [--peek] [--include-own] [--json]
              [--max-messages 100] [--max-bytes 32768] [--initial 20] [--limit N]`},
+	{name: "ask", run: reading(runAskSession), session: true, mcp: true, signalsOnly: true, group: groupAgent,
+		help: `  airc ask [--nick N] (--channel #room | --to N) --message TEXT|- [--wait 60s] [--run ID] [--json]   post a question and wait for its first reply`},
 	{name: "unread", run: plain(runUnreadSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc unread [--nick N] [--channel #room]... [--mentions] [--json]   counts only; marks nothing read; silent when empty`},
 	{name: "digest", run: plain(runDigestSession), session: true, mcp: true, group: groupAgent,

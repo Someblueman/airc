@@ -34,6 +34,13 @@ type mcpCheckInput struct {
 	Compact     bool     `json:"compact,omitempty" jsonschema:"Omit seq, request_id and account_id and shorten timestamps; IDs are kept"`
 	FromNow     bool     `json:"from_now,omitempty" jsonschema:"Mark everything retained as read without returning it; use once when joining a busy server"`
 }
+type mcpAskInput struct {
+	Message     string `json:"message" jsonschema:"The question, at most 4096 bytes"`
+	Channel     string `json:"channel,omitempty" jsonschema:"Room to ask in; give exactly one of channel or to"`
+	To          string `json:"to,omitempty" jsonschema:"Nickname to ask directly"`
+	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"How long to wait for the first reply, 1 through 3600 seconds; default 60. Keep it below the host's tool-call timeout"`
+	Run         string `json:"run,omitempty" jsonschema:"Run label kept on the question; defaults to AIRC_RUN"`
+}
 type mcpThreadInput struct {
 	ID    string `json:"id" jsonschema:"ID of the thread root or any retained reply"`
 	After string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
@@ -123,6 +130,21 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 			timeout = time.Duration(in.WaitSeconds)*time.Second + time.Second
 		}
 		return a.call(ctx, args, "", timeout, in.WaitSeconds > 0)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "ask", Description: "Post a question to a room or a nickname through the normal send path and wait, in this one call, for the first textual reply from someone else (reactions and signals do not count). Returns the question's receipt, then the reply row, or a wait_expired status; the reply is marked read as a reply check marks it. For hosts that cannot run a check in the background; keep wait_seconds below the host's tool-call timeout, since a killed call reports nothing and the question stays posted."}, func(ctx context.Context, _ *mcpserver.Call, in mcpAskInput) (*mcpserver.Result, mcpOutput, error) {
+		if (in.Channel == "") == (in.To == "") || in.Message == "" || len(in.Message) > 4096 || in.WaitSeconds < 0 || in.WaitSeconds > 3600 {
+			return nil, mcpOutput{}, errors.New("provide text up to 4096 bytes, exactly one of channel or to, and wait_seconds 0-3600")
+		}
+		if in.WaitSeconds == 0 {
+			in.WaitSeconds = 60
+		}
+		args := []string{"ask", "--message=-", "--wait", fmt.Sprintf("%ds", in.WaitSeconds)}
+		for _, f := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}, {"--run", in.Run}} {
+			if f[1] != "" {
+				args = append(args, f[0], f[1])
+			}
+		}
+		return a.call(ctx, args, in.Message, time.Duration(in.WaitSeconds)*time.Second+15*time.Second, true)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "thread", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcpserver.Call, in mcpThreadInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) {

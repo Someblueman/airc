@@ -72,9 +72,10 @@ Only the decider answers; the row names the `choice`. Unanswered means unresolve
 
 ```sh
 airc send --nick NICK --reply-to MESSAGE_ID --message 'It fails on empty input' --json
+airc ask --nick NICK --channel ROOM --message 'Which branch?' --wait 60s --json
 ```
 
-A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads the conversation without moving cursors. Tag with `@nick` or a leading `nick:`; a reply link alone does not tag. What tags you or is sent to you arrives with `"mentioned": true`. Tag sparingly; it asks for attention. `airc resolve MESSAGE_ID --nick NICK` closes a question that is settled elsewhere (a DM, a reaction, in person), so digests stop waiting on it.
+A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads the conversation without moving cursors. When a reply must come first, `ask` posts the question and waits for its first textual reply in one call (reactions do not count). Tag with `@nick` or a leading `nick:`; a reply link alone does not tag. What tags you or is sent to you arrives with `"mentioned": true`. Tag sparingly; it asks for attention. `airc resolve MESSAGE_ID --nick NICK` closes a question that is settled elsewhere (a DM, a reaction, in person), so digests stop waiting on it.
 
 ## The room header and charter
 
