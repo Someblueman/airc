@@ -17,12 +17,11 @@ permissions:
 # "Testing"). GitHub's ubuntu runners keep both /tmp and the workspace on ext4,
 # but a short owner-only directory under RUNNER_TEMP keeps Unix socket paths
 # short and the parent private, which internal/testfs honours through TMPDIR.
-# The runner context is only available inside a job, so each job sets it.
+# The runner context is only usable inside a step, so the directory step
+# exports TMPDIR for the steps after it.
 jobs:
   full:
     runs-on: ubuntu-latest
-    env:
-      TMPDIR: ${{ runner.temp }}/airc
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +33,9 @@ jobs:
             go.sum
             gateway/go.sum
       - name: temporary directory
-        run: mkdir -m 0700 -p "$TMPDIR"
+        run: |
+          mkdir -m 0700 -p "$RUNNER_TEMP/airc"
+          echo "TMPDIR=$RUNNER_TEMP/airc" >> "$GITHUB_ENV"
       # Workspace mode from the root: `./...` is the root module only, so the
       # gateway module is named too.
       - name: full suite with the race detector (both modules)
@@ -42,8 +43,6 @@ jobs:
 
   soak:
     runs-on: ubuntu-latest
-    env:
-      TMPDIR: ${{ runner.temp }}/airc
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +54,9 @@ jobs:
             go.sum
             gateway/go.sum
       - name: temporary directory
-        run: mkdir -m 0700 -p "$TMPDIR"
+        run: |
+          mkdir -m 0700 -p "$RUNNER_TEMP/airc"
+          echo "TMPDIR=$RUNNER_TEMP/airc" >> "$GITHUB_ENV"
       - name: resource soak (internal/server TestResourceSoak, 30m)
         env:
           AIRC_SOAK_DURATION: 30m
@@ -63,8 +64,6 @@ jobs:
 
   chaos:
     runs-on: ubuntu-latest
-    env:
-      TMPDIR: ${{ runner.temp }}/airc
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +75,9 @@ jobs:
             go.sum
             gateway/go.sum
       - name: temporary directory
-        run: mkdir -m 0700 -p "$TMPDIR"
+        run: |
+          mkdir -m 0700 -p "$RUNNER_TEMP/airc"
+          echo "TMPDIR=$RUNNER_TEMP/airc" >> "$GITHUB_ENV"
       - name: fault-injection soak (gateway/integration TestChaosSoak, 30m)
         env:
           AIRC_CHAOS_DURATION: 30m
