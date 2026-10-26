@@ -109,8 +109,7 @@ type Server struct {
 	adminHash        [32]byte
 	gatewayEnabled   bool
 	gatewayHash      [32]byte
-	moderation       map[string]protocol.ModerationRule
-	moderationAt     string
+	moderationState                         // mutes and bans; see moderation_store.go
 	accountsState                           // registered users; see accounts.go
 	wake             *wakes                 // nil unless EnableWake
 	pending          map[string]int         // unregistered connections by remote address

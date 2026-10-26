@@ -68,6 +68,7 @@ func New(cfg Config) *Server {
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
 	s.accountsState.env = &s.env
+	s.moderationState.env = &s.env
 	return s
 }
 

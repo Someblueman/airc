@@ -57,20 +57,6 @@ func ruleActive(rule protocol.ModerationRule, now time.Time) bool {
 	return rule.ExpiresAt.IsZero() || now.Before(rule.ExpiresAt)
 }
 
-func (s *Server) restrictionLocked(kind, nick, scope string) (protocol.ModerationRule, bool) {
-	if len(s.moderation) == 0 {
-		return protocol.ModerationRule{}, false // the common case, checked per recipient
-	}
-	now := s.now()
-	for _, where := range []string{"*", scope} {
-		rule, ok := s.moderation[ruleKey(kind, nick, where)]
-		if ok && ruleActive(rule, now) {
-			return rule, true
-		}
-	}
-	return protocol.ModerationRule{}, false
-}
-
 func (s *Server) channelAllowedLocked(client *session, channel string) bool {
 	if rule, banned := s.restrictionLocked("ban", client.client.Nick, channel); banned {
 		s.numericLocked(client, "474", []string{channel}, restrictionText("Banned", rule))
