@@ -14,7 +14,7 @@ import (
 )
 
 func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
-	f, plain, _ := oscoreRPCFixture(t)
+	f, plain := frameFixture(t)
 	path := unixPacketPath(t)
 	listener, err := ListenUnixPacket(path)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
 			t.Fatal("record listener refused a plain request", response, err)
 		}
 	}
-	if f.jobs(t, "oscore-rpc-message") != 1 {
+	if f.jobs(t, "frame-message") != 1 {
 		t.Fatal("replayed record was not one durable job")
 	}
 	cancel()

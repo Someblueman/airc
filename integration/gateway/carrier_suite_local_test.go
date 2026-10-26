@@ -29,11 +29,10 @@ import (
 
 // The local carriers an in-process gateway serves join the cross-carrier
 // suite here: a Unix datagram socket, a directory mailbox and an append log
-// (and, in their own files, Unix sequenced packets and System V queues).
-// Carriers that run as their own process (stdio, FIFO, socket pair,
-// inherited stream, UART, file mailbox, offline imports) own the journal
-// while they run, so they cannot share the suite's gateway; they run the
-// shared scenarios in TestLocalProcessCarriers instead.
+// (and, in its own file, Unix sequenced packets). Carriers that run as their
+// own process (stdio, socket pair, inherited stream, file mailbox) own the
+// journal while they run, so they cannot share the suite's gateway; they run
+// the shared scenarios in TestLocalProcessCarriers instead.
 var _ = registerSuiteCarriers(
 	suiteCarrier{name: "unixgram", listener: config.Listener{Protocol: "unixgram"}, configure: prepareLocalSocket, dial: dialUnixgramSuite, results: true, reads: true, wire: unixSuiteWire},
 	suiteCarrier{name: "dirmailbox", listener: config.Listener{Protocol: "directory_mailbox", Operations: mailboxOperations}, configure: prepareDirectoryMailbox, dial: dialDirectoryMailboxSuite, results: true, wire: mailboxHistoryWire},

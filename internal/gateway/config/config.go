@@ -18,21 +18,15 @@ import (
 const MaxBytes = 64 << 10
 
 type Config struct {
-	Version        int              `json:"version"`
-	Realm          string           `json:"realm"`
-	StateDir       string           `json:"state_dir"`
-	Upstream       *Upstream        `json:"upstream,omitempty"`
-	Carriers       []string         `json:"carriers,omitempty"`
-	Listeners      []Listener       `json:"listeners"`
-	Limits         Limits           `json:"limits"`
-	Retry          Retry            `json:"retry"`
-	CursorKeyFile  string           `json:"cursor_key_file,omitempty"`
-	RedisPubSub    []RedisPubSub    `json:"redis_pubsub,omitempty"`
-	RedisStreams   []RedisStreams   `json:"redis_streams,omitempty"`
-	IRCBridges     []IRCBridge      `json:"irc_bridges,omitempty"`
-	XMPPBridges    []XMPPBridge     `json:"xmpp_bridges,omitempty"`
-	SFTP           []SFTP           `json:"sftp,omitempty"`
-	PostgresNotify []PostgresNotify `json:"postgres_notify,omitempty"`
+	Version       int        `json:"version"`
+	Realm         string     `json:"realm"`
+	StateDir      string     `json:"state_dir"`
+	Upstream      *Upstream  `json:"upstream,omitempty"`
+	Carriers      []string   `json:"carriers,omitempty"`
+	Listeners     []Listener `json:"listeners"`
+	Limits        Limits     `json:"limits"`
+	Retry         Retry      `json:"retry"`
+	CursorKeyFile string     `json:"cursor_key_file,omitempty"`
 }
 
 // Upstream is the AIRC endpoint every per-request author connects through.
@@ -49,22 +43,7 @@ type Upstream struct {
 }
 
 type Listener struct {
-	UDPLite        *UDPLite         `json:"udp_lite,omitempty"`
-	IPv4Broadcast  *IPv4Broadcast   `json:"ipv4_broadcast,omitempty"`
-	IPv6Multicast  *IPv6Multicast   `json:"ipv6_multicast,omitempty"`
-	ICMPv6         *ICMPv6          `json:"icmp_v6,omitempty"`
-	IPv4Multicast  *IPv4Multicast   `json:"ipv4_multicast,omitempty"`
-	SNMP           *SNMP            `json:"snmp,omitempty"`
-	SignedSyslog   *SignedSyslog    `json:"signed_syslog,omitempty"`
-	Syslog         *Syslog          `json:"syslog,omitempty"`
-	STOMP          *STOMP           `json:"stomp,omitempty"`
-	AMQP           *AMQP            `json:"amqp,omitempty"`
-	MQTTSN         *MQTTSN          `json:"mqtt_sn,omitempty"`
 	MQTT           *MQTT            `json:"mqtt,omitempty"`
-	BundleProtocol *BundleProtocol  `json:"bundle_protocol,omitempty"`
-	POSIXQueue     *POSIXQueue      `json:"posix_queue,omitempty"`
-	SharedMemory   *SharedMemory    `json:"shared_memory,omitempty"`
-	MachIPC        *MachIPC         `json:"mach_ipc,omitempty"`
 	AllowedOrigins []string         `json:"allowed_origins,omitempty"`
 	ID             string           `json:"id"`
 	Protocol       string           `json:"protocol"`
@@ -74,8 +53,6 @@ type Listener struct {
 	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
 	Operations     []core.Operation `json:"operations"`
 	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
-	OSCORE         *OSCORE          `json:"oscore,omitempty"`
-	SCPInbox       *SCPInbox        `json:"scp_inbox,omitempty"`
 	// Author access policy (see ListenerAccess). Operations above also bound
 	// author requests; when empty, authors get every available operation.
 	Targets      []core.Target   `json:"targets,omitempty"`
@@ -85,7 +62,6 @@ type Listener struct {
 	Keepalive    *Keepalive      `json:"keepalive,omitempty"`
 	// Local author carriers (see local_author.go).
 	BoundAuthor *BoundAuthor `json:"bound_author,omitempty"`
-	ReplyTo     string       `json:"reply_to,omitempty"`
 }
 
 type Limits struct {
@@ -190,33 +166,6 @@ func (c *Config) Validate() error {
 	if len(c.Listeners) > 128 {
 		return errors.New("configuration count limit exceeded")
 	}
-	// Bridges, then the carriers whose listeners constrain each other
-	// (shared keys, endpoints, directories and platform support).
-	for _, check := range []func(Config) error{
-		Config.validateRedisPubSub,
-		Config.validateRedisStreams,
-		Config.validateIRCBridges,
-		Config.validateXMPPBridges,
-		Config.validateBridgeNamespaces,
-		Config.validatePostgresNotify,
-		Config.validateSFTP,
-		Config.validateSystemVQueues,
-		Config.validateUDPLite,
-		Config.validateIPv4Broadcast,
-		Config.validateIPv6Multicast,
-		Config.validateICMPv6,
-		Config.validateIPv4Multicast,
-		Config.validatePOSIXQueues,
-		Config.validateSharedMemory,
-		Config.validateMappedFile,
-		Config.validateSCTP,
-		Config.validateMachIPC,
-		Config.validateSCPInbox,
-	} {
-		if err := check(*c); err != nil {
-			return err
-		}
-	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	var sole [len(soleMessages)]int
 	enabled := 0
@@ -244,12 +193,6 @@ func (c *Config) Validate() error {
 		}
 		if l.Address == "" {
 			switch t.Address {
-			case SCTPPort:
-				return errors.New("SCTP listener requires an explicit IP:port")
-			case ServiceName:
-				return fmt.Errorf("%s listener requires a bootstrap service name", l.Protocol)
-			case ICMPEndpoint:
-				return fmt.Errorf("%s listener requires an explicit [IPv6]:channel endpoint", l.Protocol)
 			case Path:
 				return errors.New("local listener requires an absolute path")
 			case NoAddress:
@@ -282,8 +225,6 @@ func (c *Config) Validate() error {
 		}
 		var err error
 		switch t.Address {
-		case GroupPort:
-			err = t.checkAddress(*l)
 		case DatagramPort:
 			err = udpListenEndpoint(l.Address)
 		case HostPort:

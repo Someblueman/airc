@@ -4,8 +4,8 @@ Packet, QUIC, CoAP, WebRTC and message-socket carriers. All take the
 [contract](contract-v1.md) request, usually inside a
 [frame](streams.md#frames), and apply the listener access policy. AIRC sees
 the client's IP address (without port) as its source. Connection-oriented
-carriers (a QUIC connection, a DTLS association, a CoAP/TCP, SCTP, ZeroMQ
-or NNG connection, a WebRTC peer) are one author session, where
+carriers (a QUIC connection, a DTLS association, a ZeroMQ or NNG
+connection, a WebRTC peer) are one author session, where
 `account.identify` sets the default author; datagram carriers have no
 session, so every request names its author. Cleartext carriers expose
 tokens to anyone on the path, as plain IRC does.
@@ -37,41 +37,13 @@ the gateway into an amplifier, a reply to a non-loopback source may use at
 most three times the request's wire bytes plus one 512-byte error frame; pad
 a request with JSON whitespace to make room for a larger page.
 
-## UDP family
+## UDP
 
-| `protocol` | Address | Options | Platforms |
-|---|---|---|---|
-| `udp` | numeric IP and port (wildcard and port 0 allowed) | none | all |
-| `udp_lite` | numeric unicast IPv4 or IPv6 | `udp_lite: {"checksum_coverage": "full"}` (required; no fallback to UDP) | Linux |
-| `ipv4_multicast` | group in `239.0.0.0/8`, port 1–65535 | `ipv4_multicast: {"interface": "eth0"}` | Darwin, Linux |
-| `ipv6_multicast` | transient group with scope 1, 2, 3, 4, 5, 8 or 14, e.g. `[ff12::1234]:9001` | `ipv6_multicast: {"interface": "en0"}` (supplies the zone) | Darwin, Linux |
-| `ipv4_broadcast` | `255.255.255.255` or the subnet's broadcast address | `ipv4_broadcast: {"interface", "subnet"}` | Darwin, Linux |
-
-Each request is a fragmented frame; replies are unicast to the source,
-never to a group or broadcast address. A broadcast reaches every gateway on
-the segment, so run one receiver per broadcast domain unless every receiver
-should answer. Calls last four seconds and streamed watches twenty; idle
-sources expire after five seconds; invalid input is dropped without reply.
-
-## ICMPv6
-
-`protocol: "icmp_v6"` (Darwin ARM64) carries fragments in ICMPv6 Echo
-Requests in both directions. `address` is `[IPv6]:channel`, where the
-channel (1–65535) is the Echo identifier, not a port; link-local,
-multicast and zoned addresses are refused. `icmp_v6.interface` must own the
-address. Replies go to the source with the channel in the Echo sequence;
-kernel Echo Replies are ignored.
-
-## SCTP
-
-`sctp` (ordered), `sctp_unordered` and `sctp_pr_ttl` (Linux ARM64, kernel
-SCTP) need an explicit literal unicast `IP:port`. Each record on stream 0
-with PPID 0 carries one frame without a length prefix; each reply is one
-record. `sctp_unordered` requires `SCTP_UNORDERED` on every request and sets
-it on every reply. `sctp_pr_ttl` uses ordered records with PR-SCTP timed
-reliability fixed at 1000 ms; peers must negotiate PR support. A record
-fits 16 KiB; truncated, interleaved or off-stream records close the
-association.
+`protocol: "udp"` listens on a numeric IP and port (wildcard and port 0
+allowed), on every platform, with no options. Each request is a fragmented
+frame; replies go to the source. Calls last four seconds and streamed
+watches twenty; idle sources expire after five seconds; invalid input is
+dropped without reply.
 
 ## Raw QUIC
 
@@ -98,55 +70,22 @@ credentials. Each DTLS record carries one fragment.
 | `protocol` | Transport | Security |
 |---|---|---|
 | `coap_udp` | UDP, CON or NON (RFC 7252) | none; no TLS settings allowed |
-| `coap_tcp` | TCP (RFC 8323) | none; no TLS settings allowed |
 | `coaps` | DTLS 1.2, ALPN `coap` | certificate required |
-| `coaps_tcp` | TLS 1.3, ALPN `coap` | certificate required |
 
 `POST /v1/coap/rpc` with Content-Format `application/json` carries one frame
 (no `stream`); the response is the response frame (Bad Request for an
 error frame). Block1 and Block2 move whole bodies in blocks of at most
 1024 bytes. Over UDP the source is unverified, so there is no session, and
 each request packet gets at most one 1 KiB block back; fetch the rest with
-Block2. The TCP variants exchange CSM first (the gateway advertises a
-1152-byte frame) and pick block sizes that fit the peer.
+Block2.
 
 Watches use Observe in two steps, because a GET payload cannot carry a
 request: POST the watch frame with `stream: true` to
 `/v1/coap/observe/register`, which answers an `observation_token` (16 hex
 digits) valid for ten seconds; then GET `/v1/coap/observe` with Observe=0
-and that eight-byte token as the CoAP token (CoAP over TCP adds
-`?observation=<token-hex>` when notifications need blockwise transfer).
-Notifications carry fragments. Observe=1 with the token, a Reset or a closed
-connection cancels.
-
-## OSCORE
-
-`protocol: "coap_oscore"` runs a native libcoap worker that terminates
-OSCORE and hands the gateway plain frames. Build it with
-`scripts/build-oscore.sh` ([native/oscore](../../native/oscore/README.md)),
-then configure and provision the context:
-
-```json
-{"id": "oscore-device", "protocol": "coap_oscore", "enabled": true,
- "address": "0.0.0.0:5683", "operations": ["send", "receipt.get", "history.read"],
- "oscore": {"binary": "/abs/build/oscore-gateway",
-            "context_file": "/abs/private/device-oscore.json",
-            "author": {"nick": "device", "token_file": "/abs/private/device.token"}}}
-```
-
-```sh
-airc-gateway oscore init --file CONFIG --listener oscore-device \
-  --context-file /abs/private/device-oscore.json
-```
-
-`init` creates a fresh context (256-bit master secret, 128-bit salt and
-context ID; AES-CCM-16-64-128, HKDF-SHA-256, server sender ID `01`, client
-`02`, replay window 64) and its replay record in the journal. It never
-imports, resets or overwrites one; keep the file paired with its journal.
-Requests are OSCORE-protected `POST /v1/coap/rpc` with one frame (16 KiB in,
-64 KiB out, no Observe). `oscore.author` is the default author for requests
-that name none (a guest without `token_file`); the source is
-`listener:<id>`. The worker has only run on Darwin, before the author model.
+and that eight-byte token as the CoAP token. Notifications carry
+fragments. Observe=1 with the token, a Reset or a closed connection
+cancels.
 
 ## WebRTC
 

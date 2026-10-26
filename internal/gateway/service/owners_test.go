@@ -13,18 +13,13 @@ func TestOwnersCoverTheRegistry(t *testing.T) {
 	for _, tr := range config.Transports() {
 		seen[tr.Name] = true
 		_, owned := owners[tr.Name]
-		_, bridged := bridgeOwners[tr.Name]
 		switch tr.Kind {
 		case config.Stream, config.Packet:
-			if !owned || bridged {
+			if !owned {
 				t.Errorf("%s: serve has no owner", tr.Name)
 			}
-		case config.Bridge:
-			if owned || !bridged {
-				t.Errorf("%s: bridge has no preparation", tr.Name)
-			}
 		case config.Process:
-			if owned || bridged {
+			if owned {
 				t.Errorf("%s: a process carrier is owned by serve", tr.Name)
 			}
 			if tr.Command == "" || tr.ServeRefusal() == nil {
@@ -37,11 +32,6 @@ func TestOwnersCoverTheRegistry(t *testing.T) {
 	for name := range owners {
 		if !seen[name] {
 			t.Errorf("owner %s has no transport", name)
-		}
-	}
-	for name := range bridgeOwners {
-		if !seen[name] {
-			t.Errorf("bridge %s has no transport", name)
 		}
 	}
 }

@@ -21,16 +21,6 @@ type packetSource struct {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
-	case *SystemVQueueAddr:
-		return a != nil && a.Key > 0
-	case *POSIXQueueAddr:
-		return a != nil && ValidPOSIXQueueName(a.Name)
-	case *SharedMemoryAddr:
-		return a != nil && ValidSharedMemoryName(a.Name)
-	case *MappedFileAddr:
-		return a != nil && ValidMappedFileDirectory(a.Directory)
-	case *ICMPv6Addr:
-		return validICMPv6Addr(a)
 	case *net.UDPAddr:
 		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
 			return false
@@ -45,31 +35,6 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
-	case *SystemVQueueAddr:
-		if a == nil {
-			return (*SystemVQueueAddr)(nil)
-		}
-		return &SystemVQueueAddr{Key: a.Key}
-	case *POSIXQueueAddr:
-		if a == nil {
-			return (*POSIXQueueAddr)(nil)
-		}
-		return &POSIXQueueAddr{Name: a.Name}
-	case *SharedMemoryAddr:
-		if a == nil {
-			return (*SharedMemoryAddr)(nil)
-		}
-		return &SharedMemoryAddr{Name: a.Name}
-	case *MappedFileAddr:
-		if a == nil {
-			return (*MappedFileAddr)(nil)
-		}
-		return &MappedFileAddr{Directory: a.Directory}
-	case *ICMPv6Addr:
-		if a == nil {
-			return (*ICMPv6Addr)(nil)
-		}
-		return &ICMPv6Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
 	case *net.UDPAddr:
 		if a == nil {
 			return (*net.UDPAddr)(nil)
@@ -106,24 +71,6 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "mapped_file" {
-		return "mapped_file_mailbox_fragments"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "shared_memory" {
-		return "shared_memory_mailbox_fragments"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "system_v_queue" {
-		return "system_v_queue_mailbox_fragments"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "posix_mqueue" {
-		return "posix_queue_mailbox_fragments"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v6" {
-		return "icmp_v6_mailbox_datagrams"
-	}
-	if _, ok := conn.(*IPv4BroadcastPackets); ok {
-		return "ipv4_broadcast_unicast_mailbox_datagrams"
-	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "unixgram" {
 		return "unixgram_mailbox_datagrams"
 	}

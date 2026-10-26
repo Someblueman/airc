@@ -160,15 +160,15 @@ func TestLocalREPCarriers(t *testing.T) {
 				f := newLocalREPFixture(t, c.protocol)
 				s := startLocalREP(t, c, f, make(chan struct{}, 1))
 				c.handshake(t, s.client)
-				payload := f.body(t, mqttSNRequest())
+				payload := f.body(t, plainRequest())
 				for range 2 {
 					response := s.send(t, payload)
-					if response.Error != nil || response.Result == nil || response.RequestID != mqttSNRequest().RequestID || response.Result.Result == nil || !response.Result.Result.Durable {
+					if response.Error != nil || response.Result == nil || response.RequestID != plainRequest().RequestID || response.Result.Result == nil || !response.Result.Result.Durable {
 						t.Fatalf("send %+v", response)
 					}
 				}
-				job, err := f.lookup(t, mqttSNRequest().RequestID)
-				if err != nil || job.Request.Message != mqttSNRequest().Message {
+				job, err := f.lookup(t, plainRequest().RequestID)
+				if err != nil || job.Request.Message != plainRequest().Message {
 					t.Fatalf("job %+v %v", job, err)
 				}
 				for _, body := range []string{"malformed", `{"version":1,"request_id":"no-author","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x"}`} {
@@ -191,7 +191,7 @@ func TestLocalREPCarriers(t *testing.T) {
 				f := newLocalREPFixture(t, c.protocol)
 				s := startLocalREP(t, c, f, make(chan struct{}, 1))
 				c.handshake(t, s.client)
-				request := mqttSNRequest()
+				request := plainRequest()
 				if response := s.send(t, f.body(t, request)); response.Error != nil {
 					t.Fatal(response.Error)
 				}
@@ -199,13 +199,13 @@ func TestLocalREPCarriers(t *testing.T) {
 				if response := s.send(t, f.body(t, request)); response.Error == nil || response.Error.Code != core.IDConflict || response.Result != nil {
 					t.Fatalf("conflict %+v", response)
 				}
-				if job, err := f.lookup(t, request.RequestID); err != nil || job.Request.Message != mqttSNRequest().Message {
+				if job, err := f.lookup(t, request.RequestID); err != nil || job.Request.Message != plainRequest().Message {
 					t.Fatal("conflict changed the original intent", job, err)
 				}
 			})
 			t.Run("resend-after-reconnect", func(t *testing.T) {
 				f := newLocalREPFixture(t, c.protocol)
-				request := mqttSNRequest()
+				request := plainRequest()
 				var upstreamID string
 				for range 2 {
 					s := startLocalREP(t, c, f, make(chan struct{}, 1))
@@ -236,10 +236,10 @@ func TestLocalREPCarriers(t *testing.T) {
 							messages = append(messages, irc.MessageMetadata{ID: fmt.Sprintf("%032x", i+3), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: strings.Repeat("x", 4096)})
 						}
 					}
-					reads := localREPNativeHistory(t, f, mqttSNRequest().Target.Name, messages, "CHECK=1")
+					reads := localREPNativeHistory(t, f, plainRequest().Target.Name, messages, "CHECK=1")
 					s := startLocalREP(t, c, f, make(chan struct{}, 1))
 					c.handshake(t, s.client)
-					response := s.send(t, f.body(t, core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: mqttSNRequest().Target, Limit: len(messages)}))
+					response := s.send(t, f.body(t, core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: plainRequest().Target, Limit: len(messages)}))
 					if large {
 						if response.Result != nil || response.Error == nil || response.Error.Code != core.CapacityExceeded {
 							t.Fatalf("oversized reply %+v", response)
@@ -266,7 +266,7 @@ func TestLocalREPCarriers(t *testing.T) {
 					t.Fatal(err)
 				}
 				s.joined(t, "malformed request retained owner")
-				if _, err := f.lookup(t, mqttSNRequest().RequestID); err == nil {
+				if _, err := f.lookup(t, plainRequest().RequestID); err == nil {
 					t.Fatal("malformed request admitted")
 				}
 			})
@@ -288,7 +288,7 @@ func TestLocalREPCarriers(t *testing.T) {
 					s := startLocalREP(t, c, f, make(chan struct{}, 1))
 					if reply {
 						c.handshake(t, s.client)
-						wire, err := c.request([]byte(f.body(t, mqttSNRequest())))
+						wire, err := c.request([]byte(f.body(t, plainRequest())))
 						if err != nil {
 							t.Fatal(err)
 						}

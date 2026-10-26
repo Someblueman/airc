@@ -57,8 +57,8 @@ func (c Config) validateMQTT(l Listener) error {
 	return nil
 }
 
-// mqttDefaults, amqpDefaults and stompDefaults give a broker listener
-// without routes its default request route, so it needs only an address.
+// mqttDefaults gives an MQTT listener without routes its default request
+// route, so it needs only an address.
 func mqttDefaults(l *Listener) {
 	if l.MQTT == nil {
 		l.MQTT = &MQTT{}
@@ -71,23 +71,5 @@ func mqttDefaults(l *Listener) {
 	}
 	if l.MQTT.SessionsPerAuthor == 0 {
 		l.MQTT.SessionsPerAuthor = min(DefaultMQTTSessionsPerAuthor, l.MQTT.Sessions)
-	}
-}
-
-func amqpDefaults(l *Listener) {
-	if l.AMQP == nil {
-		l.AMQP = &AMQP{}
-	}
-	if len(l.AMQP.Routes) == 0 {
-		l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
-	}
-}
-
-func stompDefaults(l *Listener) {
-	if l.STOMP == nil {
-		l.STOMP = &STOMP{}
-	}
-	if len(l.STOMP.Routes) == 0 {
-		l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
 	}
 }

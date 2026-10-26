@@ -12,7 +12,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/delivery"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 // RunStdio serves exactly one configured stdio listener over an already
@@ -49,17 +48,8 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if !ok {
 		return fmt.Errorf("serve-%s requires exactly one enabled %s listener", protocol, protocol)
 	}
-	var scpAuthor dispatch.RouteAuthor
-	if protocol == "scp_inbox" {
-		var err error
-		scpAuthor, err = scpInboxAuthor(listener)
-		if err != nil {
-			return err
-		}
-	}
 	// Plain author requests run under the listener's author policy; the
-	// parent-owned pipe, FIFO pair, socket, serial line or SSH login is the
-	// access gate.
+	// parent-owned pipe or socket is the access gate.
 	s, b, d, err := openListenerDispatch(ctx, c, listener)
 	if err != nil {
 		return err
@@ -83,15 +73,7 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	var work sync.WaitGroup
 	work.Go(func() { results <- outcome{err: runner.Run(deliveryCtx)} })
 	work.Go(func() {
-		var err error
-		if protocol == "scp_inbox" {
-			err = adapter.ServeSCPInbox(streamCtx, stream, d, *listener.SCPInbox, scpAuthor, requests)
-		} else if protocol == "uart" {
-			err = adapter.ServeUART(streamCtx, stream, d, requests)
-		} else {
-			err = adapter.ServeFramedStream(streamCtx, stream, d, requests)
-		}
-		results <- outcome{stream: true, err: err}
+		results <- outcome{stream: true, err: adapter.ServeFramedStream(streamCtx, stream, d, requests)}
 	})
 	first := <-results
 	if first.stream && first.err == nil && ctx.Err() == nil {

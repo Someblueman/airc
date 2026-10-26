@@ -26,26 +26,15 @@ func TestLocalCarriersTakeRequestAuthors(t *testing.T) {
 		{Protocol: "stdio", Operations: send},
 		{Protocol: "socketpair", Operations: send},
 		{Protocol: "inherited", Operations: send},
-		{Protocol: "fifo", Address: "/private/pair", Operations: send},
-		{Protocol: "uart", Address: "/dev/tty-fixture", Operations: send},
 		{Protocol: "file_mailbox", Address: "/private/mailbox", Operations: send, BoundAuthor: &BoundAuthor{Nick: "robot", AccountTokenFile: "/private/robot.token"}},
 		{Protocol: "directory_mailbox", Address: "/private/dir", Operations: send, BoundAuthor: &BoundAuthor{Nick: "robot"}},
 		{Protocol: "append_log", Address: "/private/log", Operations: send},
-		{Protocol: "offline_bundle", Operations: send, BoundAuthor: &BoundAuthor{Nick: "courier"}},
-		{Protocol: "bpv7", Operations: send, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: core.Target{Kind: "room", Name: "#ops"}}},
 	}
 	if Available("unix") {
-		listeners = append(listeners, Listener{Protocol: "unixgram", Address: "/private/gram.sock"}, Listener{Protocol: "system_v_queue", Address: "4242", ReplyTo: "4243"})
+		listeners = append(listeners, Listener{Protocol: "unixgram", Address: "/private/gram.sock"})
 	}
 	if Available("unixpacket") {
 		listeners = append(listeners, Listener{Protocol: "unixpacket", Address: "/private/packet.sock"})
-	}
-	if Available("posix_mqueue") {
-		listeners = append(listeners, Listener{Protocol: "posix_mqueue", Address: "/airc-in", POSIXQueue: &POSIXQueue{Depth: 4}, ReplyTo: "/airc-out"})
-	}
-	if Available("mach_ipc") {
-		uid := uint32(501)
-		listeners = append(listeners, Listener{Protocol: "mach_ipc", Address: "org.airc.fixture"}, Listener{ID: "uids", Protocol: "mach_ipc", Address: "org.airc.uids", MachIPC: &MachIPC{Callers: []MachIPCCaller{{UID: &uid}}}})
 	}
 	for _, l := range listeners {
 		t.Run(l.Protocol, func(t *testing.T) {
@@ -62,14 +51,9 @@ func TestLocalCarriersTakeRequestAuthors(t *testing.T) {
 
 func TestLocalAuthorOptionsAreBounded(t *testing.T) {
 	for name, l := range map[string]Listener{
-		"bound author on a stream":  {Protocol: "stdio", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "robot"}},
-		"bound author bad nick":     {Protocol: "file_mailbox", Address: "/private/mailbox", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "#robot"}},
-		"bound author relative":     {Protocol: "file_mailbox", Address: "/private/mailbox", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "robot", AccountTokenFile: "robot.token"}},
-		"reply_to on a mailbox":     {Protocol: "file_mailbox", Address: "/private/mailbox", Operations: []core.Operation{core.Send}, ReplyTo: "/private/out"},
-		"queue without reply_to":    {Protocol: "system_v_queue", Address: "4242"},
-		"queue replying to itself":  {Protocol: "system_v_queue", Address: "4242", ReplyTo: "4242"},
-		"queue reply of wrong kind": {Protocol: "system_v_queue", Address: "4242", ReplyTo: "/airc-out"},
-		"bpv7 unnormalized target":  {Protocol: "bpv7", Operations: []core.Operation{core.Send}, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: core.Target{Kind: "direct", Name: "Alice"}}},
+		"bound author on a stream": {Protocol: "stdio", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "robot"}},
+		"bound author bad nick":    {Protocol: "file_mailbox", Address: "/private/mailbox", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "#robot"}},
+		"bound author relative":    {Protocol: "file_mailbox", Address: "/private/mailbox", Operations: []core.Operation{core.Send}, BoundAuthor: &BoundAuthor{Nick: "robot", AccountTokenFile: "robot.token"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := localAuthorConfig(l)

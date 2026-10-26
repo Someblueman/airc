@@ -12,7 +12,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"github.com/plgd-dev/go-coap/v3/message/codes"
 )
 
 // frameCarrier carries the shared request frame ({"version",
@@ -136,23 +135,6 @@ func frameCarriers() []frameCarrier {
 				return func(ctx context.Context) error { return ProcessAppendLogMailbox(ctx, m, f.d, nil) }, filepath.Join(path, "claim.json"), filepath.Join(path, "response.json")
 			},
 		},
-		{
-			name: "oscore-rpc",
-			open: func(t *testing.T, f plainFixture) func(*testing.T, []byte, int) FrameResponse {
-				requests := make(chan struct{}, 1)
-				return func(t *testing.T, body []byte, _ int) FrameResponse {
-					code, response := oscoreRPCRequest(t.Context(), body, f.d, requests, f.ingress())
-					want := codes.Content
-					if response.Error != nil {
-						want = codes.BadRequest
-					}
-					if code != want || response.Error == nil && response.Sequence != 1 || len(requests) != 0 {
-						t.Fatal("CoAP code, sequence or admission slot", code, response)
-					}
-					return response
-				}
-			},
-		},
 	}
 }
 
@@ -165,7 +147,7 @@ func TestFrameCarriers(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel() // Each carrier has its own journal and sockets.
 			t.Run("intake-and-replay", func(t *testing.T) {
-				f, body, _ := oscoreRPCFixture(t)
+				f, body := frameFixture(t)
 				deliver := c.open(t, f)
 				var upstream string
 				for i := range 2 {
@@ -173,7 +155,7 @@ func TestFrameCarriers(t *testing.T) {
 					if response.Error != nil || response.CorrelationID != "native-rpc" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
 						t.Fatal("intake failed", response)
 					}
-					job, err := f.lookup(t, "oscore-rpc-message")
+					job, err := f.lookup(t, "frame-message")
 					if err != nil || job.Request.Message != "first\nsecond" || job.Result.SendAttempts != 0 || upstream != "" && upstream != job.UpstreamID {
 						t.Fatal("wrong durable intake or replay", job, err)
 					}
@@ -181,7 +163,7 @@ func TestFrameCarriers(t *testing.T) {
 				}
 			})
 			// Refusals leave the journal untouched, so they share one.
-			f, body, _ := oscoreRPCFixture(t)
+			f, body := frameFixture(t)
 			for _, kind := range []string{"request", "stream", "profile", "version", "correlation", "malformed"} {
 				t.Run("refusal/"+kind, func(t *testing.T) {
 					var frame map[string]any
@@ -210,14 +192,14 @@ func TestFrameCarriers(t *testing.T) {
 					if response := c.open(t, f)(t, body, 0); response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
 						t.Fatal("wrong refusal", response)
 					}
-					if _, err := f.lookup(t, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
+					if _, err := f.lookup(t, "frame-message"); !errors.Is(err, store.ErrNotFound) {
 						t.Fatal("refusal reached durable intake", err)
 					}
 				})
 			}
 			if c.claimed != nil {
 				t.Run("cancellation-retains-claim", func(t *testing.T) {
-					f, body, _ := oscoreRPCFixture(t)
+					f, body := frameFixture(t)
 					process, claim, result := c.claimed(t, f, body)
 					ctx, cancel := context.WithCancel(t.Context())
 					cancel()

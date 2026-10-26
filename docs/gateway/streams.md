@@ -1,9 +1,9 @@
 # Streams and local IPC
 
 These carriers move [contract](contract-v1.md) requests inside a *frame*
-over a byte stream, a local socket, a pipe, a serial line or a kernel queue.
-The local ones are gated by the boundary they already have (owner-only
-paths, peer credentials, the parent process, the caller UID); requests and
+over a byte stream, a local socket or a pipe. The local ones are gated by
+the boundary they already have (owner-only paths, peer credentials, the
+parent process); requests and
 replies, tokens included, are plaintext to anyone who can read that channel.
 AIRC sees `listener:<id>` as their source; a Unix stream socket names each
 client process, `listener:<id>:pid:<pid>`, so per-source limits apply to
@@ -94,85 +94,3 @@ writes requests. A clean EOF between frames drains admitted handlers and
 allows up to five seconds for pending deliveries; unfinished jobs resume
 when a child next opens the journal. A partial frame, I/O error or signal
 cancels and joins the work. `serve` refuses these listeners.
-
-## FIFO pair
-
-`protocol: "fifo"`, `address` an owner-only (0700) directory holding
-`input.fifo` and `output.fifo` (both 0600, owned by the gateway user), and
-an explicit `operations` list. Run `airc-gateway serve-fifo --file CONFIG`.
-The producer opens `output.fifo` for reading before starting the child,
-then writes length-prefixed frames to `input.fifo`; one producer per pair.
-EOF and failures behave as for the parent-owned streams.
-
-## UART
-
-`protocol: "uart"`, `address` a canonical absolute tty path, an explicit
-`operations` list; run `airc-gateway serve-uart --file CONFIG`. The line is
-fixed at 115200 baud 8N1, raw, without flow control. The gateway checks the
-character device, takes an advisory `flock`, requests tty exclusivity and
-restores the original settings on exit. TLS is optional: without
-certificates the line carries length-prefixed plaintext frames; with them
-the peer negotiates TLS 1.3 (ALPN `airc-gateway/1`) first. Writes have ten
-seconds, enough for 64 KiB at this rate. It cannot run beside an enabled
-broker or bridge. Exercised over a PTY, never a physical line.
-
-## Queues, shared memory and mapped files
-
-Each kernel message or slot holds one
-[fragment](network.md#datagram-fragments) (1–1000 bytes); the gateway
-reassembles requests and writes response fragments to the listener's
-`reply_to`, one owner-provisioned destination of the same kind that a
-request cannot change. A listener may set a
-[`bound_author`](authentication.md#bound-authors) for requests that name
-none. A dequeued or copied fragment is not yet durable: producers keep the
-request until they read a result, and retry it with the same `request_id`.
-
-| `protocol` | Platforms | `address` and `reply_to` | Notes |
-|---|---|---|---|
-| `posix_mqueue` | Linux AMD64, ARM64 | `/name` (2–255 bytes) | `posix_queue.depth` 1–10. The gateway creates its ingress queue exclusively (mode 0600) and removes only that queue; the reply queue is provisioned by the owner. |
-| `system_v_queue` | Darwin ARM64, Linux AMD64, ARM64 | decimal key 1–2147483647 | Messages of type 1. Ingress is created exclusively and recorded in the journal; an unknown queue under the same key is refused, never adopted. |
-| `shared_memory` | Darwin ARM64, Linux ARM64 | `/name` (≤ 31 bytes) | `shared_memory.lock_directory` holds `<name>/transaction.lock` per object. Objects are pre-provisioned, 16384 bytes, mode 0600; the gateway never creates or removes them. |
-| `mapped_file` | Darwin ARM64, Linux ARM64 | absolute 0700 directories holding `queue.dat` (16384 bytes) and `transaction.lock` | Pre-provisioned, mode 0600; never created, truncated or removed by the gateway. |
-
-Shared-memory objects and `queue.dat` share one slot layout, little-endian,
-under the transaction lock:
-
-| Offset | Bytes | Content |
-|---|---|---|
-| 0 | 4 | atomic state: 0 empty, 1 incomplete, 2 ready |
-| 4 | 4 | magic `AGQ1`, written by the provisioner |
-| 8 | 4 | fragment length, 1–1000 when ready |
-| 12 | 4 | zero |
-| 16 | 1000 | fragment |
-
-A writer waits for state 0, sets 1, writes length and fragment, then sets 2;
-the reader copies a ready record, sets 1, clears the length and sets 0. A
-later owner discards an incomplete slot left by a dead process; a ready
-slot copied but not emptied can be read twice, which journal replay absorbs.
-
-## Mach IPC, XPC and D-Bus
-
-`protocol: "mach_ipc"` (Darwin ARM64) registers `address` as a name in the
-process's bootstrap namespace. The caller's effective UID comes from the
-kernel audit trailer; only the gateway's own UID may call unless
-`mach_ipc.callers` lists others (`[{"uid": 501}]`, at most 1024). A request
-is a simple Mach message: the 24-byte header, a little-endian `uint32`
-length, the frame JSON and zero padding to four bytes. Request message ID
-`0x41495201` with a send-once reply right; reply ID `0x41495202`. Requests are
-at most 16 KiB, replies 64 KiB; `stream: true` is refused because a
-send-once right carries one reply. Unknown callers and malformed messages
-get no reply.
-
-Two Darwin bridges forward frames unchanged to a `mach_ipc` listener, which
-still checks the caller UID:
-
-- `scripts/build-xpc-bridge.sh --output App.app --mach-service NAME` builds
-  an application bundle with an embedded XPC service and a `client` that
-  reads one frame on stdin and prints the response.
-- `scripts/build-dbus-bridge.sh --output DIR` builds `dbus-server` and
-  `dbus-client` (GLib/GIO) for D-Bus peer-to-peer connections over an
-  owner-only Unix socket; no bus daemon is involved.
-
-Native sources are in [`native/mach`](../../native/mach),
-[`native/xpc`](../../native/xpc) and [`native/dbus`](../../native/dbus).
-None of these has been run on Darwin with author frames yet.

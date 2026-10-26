@@ -54,7 +54,6 @@ func ParseFile(path string) (Config, error) {
 // Actual token/certificate decoding belongs to authentication/backend startup.
 func (c Config) CheckFiles() error {
 	paths := []string{c.StateDir}
-	var mappedPaths []string
 	check := func(path string, private bool) error {
 		if path == "" {
 			return nil
@@ -86,79 +85,6 @@ func (c Config) CheckFiles() error {
 	if err := check(c.CursorKeyFile, true); err != nil {
 		return err
 	}
-	for _, b := range c.RedisPubSub {
-		for _, path := range []string{b.Subscriber.PasswordFile, b.Publisher.PasswordFile} {
-			if err := check(path, true); err != nil {
-				return err
-			}
-		}
-		if err := check(b.TLSCAFile, false); err != nil {
-			return err
-		}
-	}
-	for _, b := range c.RedisStreams {
-		if err := check(b.Credential.PasswordFile, true); err != nil {
-			return err
-		}
-		if err := check(b.TLSCAFile, false); err != nil {
-			return err
-		}
-	}
-	for _, owner := range c.SFTP {
-		if err := check(owner.PrivateKeyFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.HostKeyFile, false); err != nil {
-			return err
-		}
-	}
-	// One AIRC account may be mapped on several bridges with one token file.
-	accountFiles := map[string]bool{}
-	checkAccounts := func(accounts []BridgeAccount) error {
-		for _, a := range accounts {
-			if accountFiles[a.AccountTokenFile] {
-				continue
-			}
-			accountFiles[a.AccountTokenFile] = true
-			if err := check(a.AccountTokenFile, true); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	for _, b := range c.IRCBridges {
-		if err := check(b.PasswordFile, true); err != nil {
-			return err
-		}
-		if err := check(b.TLSCAFile, false); err != nil {
-			return err
-		}
-		if err := checkAccounts(b.Accounts); err != nil {
-			return err
-		}
-	}
-	for _, bridge := range c.XMPPBridges {
-		if err := check(bridge.PasswordFile, true); err != nil {
-			return err
-		}
-		if err := check(bridge.TLSCAFile, false); err != nil {
-			return err
-		}
-		if err := checkAccounts(bridge.Accounts); err != nil {
-			return err
-		}
-	}
-	for _, owner := range c.PostgresNotify {
-		if err := check(owner.ClientCertFile, false); err != nil {
-			return err
-		}
-		if err := check(owner.ClientKeyFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.TLSCAFile, false); err != nil {
-			return err
-		}
-	}
 	if u := c.Upstream; u != nil {
 		if err := share(u.AccessTokenFile, true, "password"); err != nil {
 			return err
@@ -180,15 +106,7 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
-		if l.SNMP != nil {
-			for _, r := range l.SNMP.Routes {
-				if err := check(r.AuthenticationKeyFile, true); err != nil {
-					return err
-				}
-			}
-		}
 		if l.Protocol == "file_mailbox" {
 			info, err := os.Lstat(l.Address)
 			if err != nil {
@@ -201,25 +119,6 @@ func (c Config) CheckFiles() error {
 			for _, name := range []string{"request.json", "processing.json", "response.tmp", "response.json"} {
 				paths = append(paths, filepath.Join(l.Address, name))
 			}
-		}
-		if l.OSCORE != nil {
-			if err := check(l.OSCORE.ContextFile, true); err != nil {
-				return err
-			}
-			if a := l.OSCORE.Author; a != nil && a.TokenFile != "" {
-				if err := check(a.TokenFile, true); err != nil {
-					return err
-				}
-			}
-			if !binaries[l.OSCORE.Binary] {
-				if err := check(l.OSCORE.Binary, false); err != nil {
-					return err
-				}
-				binaries[l.OSCORE.Binary] = true
-			}
-		}
-		if l.Protocol == "mapped_file" {
-			mappedPaths = append(mappedPaths, l.Address, filepath.Join(l.Address, "queue.dat"), filepath.Join(l.Address, "transaction.lock"))
 		}
 		if err := share(l.TLSKeyFile, true, "key"); err != nil {
 			return err
@@ -235,19 +134,9 @@ func (c Config) CheckFiles() error {
 			}
 		}
 	}
-	// Queue-owned paths participate in identity checks, but are not external
-	// references in the containment check below. No path spelling is exempt.
-	allPaths := append(append([]string(nil), paths...), mappedPaths...)
-	if err := pathcheck.Distinct(allPaths...); err != nil {
+	// No path spelling is exempt from the aliasing check.
+	if err := pathcheck.Distinct(paths...); err != nil {
 		return errors.New("state, credentials and queue resources must not alias each other")
-	}
-	localReferences := c.mappedFileLocalReferences()
-	for _, queuePath := range mappedPaths {
-		for _, reference := range localReferences {
-			if reference != "" && pathcheck.Same(queuePath, reference) {
-				return errors.New("mapped_file resources must not alias another local carrier")
-			}
-		}
 	}
 	if err := c.checkMailboxReferences(paths); err != nil {
 		return err

@@ -3,7 +3,6 @@
 package gateway_test
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -23,19 +22,17 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/service"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // TestLocalProcessCarriers runs the cross-carrier suite's scenarios against
 // the local carriers that run as their own gateway process: a child on its
-// parent's pipe, FIFO pair, socket pair or inherited Unix stream, a serial
-// line, and the one-shot mailbox and offline imports. Each process owns the
-// journal while it runs, so these carriers cannot share TestCarrierSuite's
-// in-process gateway and HTTP receipts. The parent-owned endpoint, the
-// private directory or the operator running the import is the access gate,
-// so there is no listener password or TLS twin to test. Failures read
+// parent's pipe, socket pair or inherited Unix stream, and the one-shot file
+// mailbox. Each process owns the journal while it runs, so these carriers
+// cannot share TestCarrierSuite's in-process gateway and HTTP receipts. The
+// parent-owned endpoint or the private directory is the access gate, so
+// there is no listener password or TLS twin to test. Failures read
 // TestLocalProcessCarriers/<carrier>/<scenario>; behaviour particular to
 // one carrier (signals, crash recovery, partial frames, file modes) keeps
 // its focused test in the carrier's own files.
@@ -69,16 +66,12 @@ type localProcessCarrier struct {
 
 var localProcessCarriers = []localProcessCarrier{
 	{name: "stdio", listener: config.Listener{Protocol: "stdio"}, start: startStdioSession, frames: true, reads: true},
-	{name: "fifo", listener: config.Listener{Protocol: "fifo", Operations: dispatch.ImplementedOperations()}, start: startFIFOSession, frames: true, reads: true},
 	{name: "socketpair", listener: config.Listener{Protocol: "socketpair"}, start: startParentSession("socketpair"), frames: true, reads: true},
 	{name: "inherited", listener: config.Listener{Protocol: "inherited"}, start: startParentSession("inherited"), frames: true, reads: true},
-	{name: "uart", listener: config.Listener{Protocol: "uart", Operations: dispatch.ImplementedOperations()}, start: startUARTSession, frames: true, reads: true},
 	{name: "filemailbox", listener: config.Listener{Protocol: "file_mailbox", Operations: mailboxOperations}, start: startFileMailboxSession, frames: true, reads: true, wire: fileMailboxBoundAuthor},
-	{name: "bundle", listener: config.Listener{Protocol: "offline_bundle", Operations: []core.Operation{core.Send}}, start: startBundleSession, wire: bundleBoundAuthor},
-	{name: "bpv7", listener: config.Listener{Protocol: "bpv7", Operations: []core.Operation{core.Send}, BundleProtocol: &config.BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: core.Target{Kind: "room", Name: localRoom}}}, start: startBPv7Session},
 }
 
-// localRoom is the one room the carriers admit (a BPv7 mapping names one).
+// localRoom is the one room the carriers admit.
 const localRoom = "#lobby"
 
 var localProcessScenarios = []struct {
@@ -96,8 +89,8 @@ var localProcessScenarios = []struct {
 }
 
 // localSession submits plain requests to a running carrier. stop ends it
-// (EOF, or SIGINT for a serial line) and waits for a clean exit; one-shot
-// carriers have already exited after each call.
+// (EOF) and waits for a clean exit; the one-shot mailbox has already exited
+// after each call.
 type localSession interface {
 	call(t *testing.T, request []byte) localOutcome
 	stop(t *testing.T)
@@ -107,12 +100,11 @@ type localSession interface {
 type localOutcome struct {
 	result  *dispatch.DetachedResult // the operation's result
 	failure *core.Failure            // a correlated refusal
-	refused bool                     // no answer: closed, or the import refused its input
-	replay  bool                     // an import reported a rejected replay
+	refused bool                     // no answer: closed, or the mailbox refused its input
 }
 
 func (o localOutcome) String() string {
-	return fmt.Sprintf("result=%+v failure=%+v refused=%t replay=%t", o.result, o.failure, o.refused, o.replay)
+	return fmt.Sprintf("result=%+v failure=%+v refused=%t", o.result, o.failure, o.refused)
 }
 
 // localProcessEnv is one carrier's aircd, configuration and running session.
@@ -178,12 +170,8 @@ func (e *localProcessEnv) writeConfig(t *testing.T) string {
 	return path
 }
 
-// id is a request ID unique to the environment; a BPv7 request's ID is the
-// identity of the bundle that will carry it.
+// id is a request ID unique to the environment.
 func (e *localProcessEnv) id(name string) string {
-	if s, ok := e.session.(*bpv7Session); ok {
-		return s.identity()
-	}
 	e.sequence++
 	return fmt.Sprintf("%s-%s-%d", e.carrier.name, name, e.sequence)
 }
@@ -204,7 +192,7 @@ func (e *localProcessEnv) send(t *testing.T, id, text, nick, token string) local
 // admitted checks that an outcome durably admits request id.
 func (e *localProcessEnv) admitted(t *testing.T, o localOutcome, id string) {
 	t.Helper()
-	if o.result == nil || o.result.Result == nil || o.result.Result.RequestID != id || !o.result.Result.Durable || o.replay {
+	if o.result == nil || o.result.Result == nil || o.result.Result.RequestID != id || !o.result.Result.Durable {
 		t.Fatalf("%s not admitted: %v", id, o)
 	}
 }
@@ -262,15 +250,14 @@ func localRefusedBeforeIntake(t *testing.T, e *localProcessEnv) {
 }
 
 // Submitting a request again, as a client that lost the answer does,
-// returns the original acceptance (an import reports a rejected replay),
-// and AIRC holds one message.
+// returns the original acceptance, and AIRC holds one message.
 func localReplayPostsOnce(t *testing.T, e *localProcessEnv) {
 	id, nick, text := e.id("replay"), e.guest("replay"), e.text("replay")
 	e.admitted(t, e.send(t, id, text, nick, ""), id)
 	seen := e.posted(t, text, nick)
 	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
 		o := e.send(t, id, text, nick, "")
-		if o.result == nil || o.result.Result == nil || o.result.Result.RequestID != id || o.replay != (e.carrier.listener.Protocol == "offline_bundle" || e.carrier.listener.Protocol == "bpv7") {
+		if o.result == nil || o.result.Result == nil || o.result.Result.RequestID != id {
 			t.Fatalf("replay: %v", o)
 		}
 		if r := o.result.Result; r.State == core.Accepted {
@@ -300,8 +287,8 @@ func localBoundedReads(t *testing.T, e *localProcessEnv) {
 	})
 }
 
-// The carrier ends cleanly (a stream at EOF, a serial line at SIGINT, an
-// import when it returns), joins delivery and releases the journal, which
+// The carrier ends cleanly (a stream at EOF, the mailbox when it returns),
+// joins delivery and releases the journal, which
 // keeps the registered author's accepted job with its account ID and holds
 // no job for any refused request.
 func localShutdownJoins(t *testing.T, e *localProcessEnv) {
@@ -395,22 +382,6 @@ func startStdioSession(t *testing.T, e *localProcessEnv) localSession {
 	}}
 }
 
-// A serve-fifo child serves a private FIFO pair and exits at EOF.
-func startFIFOSession(t *testing.T, e *localProcessEnv) localSession {
-	l := e.config.Listeners[0]
-	e.config = configureFIFOFixture(t, e.config)
-	address := e.config.Listeners[0].Address
-	e.config.Listeners[0] = l
-	e.config.Listeners[0].Address = address
-	peer, stop, _ := startFIFO(t, e.binary, e.config, 0, false)
-	return &localStream{in: peer, out: peer, done: func(t *testing.T) {
-		if err := peer.CloseWrite(); err != nil {
-			t.Error(err)
-		}
-		stop()
-	}}
-}
-
 // serve-socketpair and serve-inherited take a stream from their parent as
 // file descriptor 3 and exit at EOF.
 func startParentSession(protocol string) func(*testing.T, *localProcessEnv) localSession {
@@ -424,16 +395,6 @@ func startParentSession(protocol string) func(*testing.T, *localProcessEnv) loca
 			stop()
 		}}
 	}
-}
-
-// serve-uart serves plain frames on a serial line (here a PTY) and stops at
-// SIGINT, as a serial line has no EOF.
-func startUARTSession(t *testing.T, e *localProcessEnv) localSession {
-	pty := newPTYBroker(t)
-	e.config.Listeners[0].Address = pty.path
-	process := startUARTProcess(t, e.binary, e.config)
-	pty.waitReady(t, process)
-	return &localStream{in: pty.master, out: pty.master, done: process.stop}
 }
 
 // fileMailboxSession runs mailbox-once on one request in its private
@@ -488,114 +449,3 @@ func fileMailboxBoundAuthor(t *testing.T, e *localProcessEnv) {
 	e.admitted(t, e.send(t, id, text, "", ""), id)
 	e.posted(t, text, "alice")
 }
-
-// localImport runs an offline import command and maps its one-entry report
-// to an outcome: an import exits 0, a rejected replay or refused input
-// exits 1.
-func localImport(t *testing.T, binary string, args ...string) localOutcome {
-	t.Helper()
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(binary, args...)
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	runErr := cmd.Run()
-	var report service.OfflineImportReport
-	if stdout.Len() > 0 {
-		if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
-			t.Fatalf("import report %s: %v", stdout.String(), err)
-		}
-	}
-	switch {
-	case len(report.Entries) == 0 && runErr != nil:
-		t.Logf("%s: %v %s", args[0], runErr, stderr.String())
-		return localOutcome{refused: true}
-	case len(report.Entries) != 1:
-		t.Fatalf("%s report %+v: %v %s", args[0], report, runErr, stderr.String())
-	}
-	entry := report.Entries[0]
-	if entry.Imported == (runErr != nil) || entry.Imported == entry.ReplayRejected {
-		t.Fatalf("%s entry %+v: %v %s", args[0], entry, runErr, stderr.String())
-	}
-	return localOutcome{result: &dispatch.DetachedResult{Result: &entry.Result}, replay: entry.ReplayRejected}
-}
-
-// bundleSession imports each request as a one-request offline bundle.
-type bundleSession struct {
-	e    *localProcessEnv
-	path string
-}
-
-func startBundleSession(t *testing.T, e *localProcessEnv) localSession {
-	return &bundleSession{e: e, path: e.writeConfig(t)}
-}
-
-func (s *bundleSession) call(t *testing.T, request []byte) localOutcome {
-	t.Helper()
-	return s.importBundle(t, request)
-}
-
-func (s *bundleSession) importBundle(t *testing.T, request []byte, extra ...string) localOutcome {
-	t.Helper()
-	input := filepath.Join(s.e.root, "bundle.json")
-	if err := os.WriteFile(input, fmt.Appendf(nil, `{"version":1,"requests":[%s]}`, request), 0600); err != nil {
-		t.Fatal(err)
-	}
-	return localImport(t, s.e.binary, append([]string{"import-bundle", "--file", s.path, "--input", input}, extra...)...)
-}
-
-func (s *bundleSession) stop(*testing.T) {}
-
-// bundleBoundAuthor: a request that names no author needs one from the
-// operator (--author-nick); without it the import refuses the bundle.
-func bundleBoundAuthor(t *testing.T, e *localProcessEnv) {
-	s := e.session.(*bundleSession)
-	id, text := e.id("bound"), e.text("bound")
-	body := sendBody(t, id, localRoom, text, "", "")
-	if o := s.importBundle(t, body); !o.refused {
-		t.Fatalf("a request without an author imported without a bound author: %v", o)
-	}
-	// Each import has released the journal by the time it returns.
-	(&suiteEnv{config: e.config}).noJob(t, id)
-	e.admitted(t, s.importBundle(t, body, "--author-nick", "courier"), id)
-	e.posted(t, text, "courier")
-}
-
-// bpv7Session imports each request as the payload of a BPv7 bundle whose
-// identity is the request ID; the same ID is the same bundle again.
-type bpv7Session struct {
-	e         *localProcessEnv
-	path      string
-	created   uint64
-	producers map[string]bpProducer
-}
-
-func startBPv7Session(t *testing.T, e *localProcessEnv) localSession {
-	return &bpv7Session{e: e, path: e.writeConfig(t), created: uint64(time.Now().Add(-time.Minute).Unix()-946684800) * 1000, producers: map[string]bpProducer{}}
-}
-
-func (s *bpv7Session) identity() string {
-	p := bpProducer{source: "dtn://producer/", destination: "dtn://gateway/send", creation: s.created, sequence: uint64(len(s.producers) + 1), lifetime: 3600 * 1000}
-	s.producers[p.id()] = p
-	return p.id()
-}
-
-func (s *bpv7Session) call(t *testing.T, request []byte) localOutcome {
-	t.Helper()
-	var named struct {
-		RequestID string `json:"request_id"`
-	}
-	if err := json.Unmarshal(request, &named); err != nil {
-		t.Fatal(err)
-	}
-	p, ok := s.producers[named.RequestID]
-	if !ok {
-		t.Fatalf("no bundle for %s", named.RequestID)
-	}
-	p.payload = string(request)
-	input := filepath.Join(s.e.root, "input.bpv7")
-	if err := os.WriteFile(input, p.wire(), 0600); err != nil {
-		t.Fatal(err)
-	}
-	return localImport(t, s.e.binary, "import-bpv7", "--file", s.path, "--input", input)
-}
-
-func (s *bpv7Session) stop(*testing.T) {}

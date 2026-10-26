@@ -3,7 +3,7 @@
 package gateway_test
 
 // The CoAP carriers in TestCarrierSuite: CoAP over DTLS (coaps, confirmable
-// and non-confirmable), over TLS (coaps_tcp), and plain over UDP and TCP. A
+// and non-confirmable) and plain over UDP. A
 // request is a plain frame POSTed to /v1/coap/rpc and its outcome is the
 // response body; a streamed watch registers on /v1/coap/observe/register and
 // observes /v1/coap/observe, which notifies AGD1 fragments of each page.
@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -32,19 +31,16 @@ import (
 	"github.com/plgd-dev/go-coap/v3/net/blockwise"
 	coapNetClient "github.com/plgd-dev/go-coap/v3/net/client"
 	coapOptions "github.com/plgd-dev/go-coap/v3/options"
-	coapTCPClient "github.com/plgd-dev/go-coap/v3/tcp/client"
 	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
 )
 
 var _ = registerSuiteCarriers(
 	suiteCarrier{name: "coaps", listener: config.Listener{Protocol: "coaps"}, dial: dialCoAPSSuite(message.Confirmable), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_observe_fragments"}, wire: coapsSuiteWire},
 	suiteCarrier{name: "coaps_non", listener: config.Listener{Protocol: "coaps"}, dial: dialCoAPSSuite(message.NonConfirmable), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_observe_fragments"}},
-	suiteCarrier{name: "coaps_tcp", listener: config.Listener{Protocol: "coaps_tcp"}, dial: dialCoAPTCPSuite, secure: true, tls: true, alpn: coapTCPALPN, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_tcp_observe_fragments"}, wire: coapTCPSuiteWire},
-	suiteCarrier{name: "coap_tcp", listener: config.Listener{Protocol: "coap_tcp"}, dial: dialCoAPTCPSuite, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_tcp_observe_fragments"}, wire: coapPlainSuiteWire},
 	suiteCarrier{name: "coap_udp", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite, configure: suiteUDPAddress, results: true, reads: true, watch: true, watchModes: []string{"long_poll", "coap_udp_observe_fragments"}, wire: coapUDPSuiteWire},
 )
 
-// coapSuiteConn is what the suite uses of a go-coap UDP, DTLS or TCP client.
+// coapSuiteConn is what the suite uses of a go-coap UDP or DTLS client.
 type coapSuiteConn interface {
 	NewPostRequest(ctx context.Context, path string, contentFormat message.MediaType, payload io.ReadSeeker, opts ...message.Option) (*pool.Message, error)
 	NewGetRequest(ctx context.Context, path string, opts ...message.Option) (*pool.Message, error)
@@ -95,25 +91,6 @@ func dialCoAPSPeer(t *testing.T, address string, trust *tls.Config, alpn string)
 		t.Fatalf("CoAPS state %+v", state)
 	}
 	return conn, nil
-}
-
-func dialCoAPTCPSuite(t *testing.T, d suiteDial) (suiteClient, error) {
-	ctx, cancel := suiteContext(t)
-	defer cancel()
-	if d.tls != nil {
-		d.tls.NextProtos = []string{coapTCPALPN}
-	}
-	raw, err := suiteConnect("tcp", d)
-	if err != nil {
-		return nil, err
-	}
-	if secure, ok := raw.(*tls.Conn); ok {
-		if state := secure.ConnectionState(); state.Version != tls.VersionTLS13 || state.NegotiatedProtocol != coapTCPALPN || len(state.VerifiedChains) == 0 {
-			_ = raw.Close()
-			t.Fatalf("CoAP TLS state %+v", state)
-		}
-	}
-	return &coapSuiteClient{conn: startCoAPTCPClient(t, ctx, raw, 1152, func(*coapTCPClient.Conn, *pool.Message) (bool, error) { return false, nil })}, nil
 }
 
 func dialCoAPUDPSuite(_ *testing.T, d suiteDial) (suiteClient, error) {
@@ -396,18 +373,4 @@ var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 	})
 })
 
-var coapTCPSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
-	t.Run("wrong_alpn", func(t *testing.T) {
-		config := e.cert.Client.Clone()
-		config.NextProtos = []string{"wrong"}
-		if conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", e.secure, config); err == nil {
-			_ = conn.Close()
-			t.Fatal("TLS handshake with an unknown ALPN accepted")
-		}
-	})
-})
-
-var (
-	coapPlainSuiteWire = coapSuiteWire(true, nil)
-	coapUDPSuiteWire   = coapSuiteWire(true, nil)
-)
+var coapUDPSuiteWire = coapSuiteWire(true, nil)

@@ -7,12 +7,10 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,13 +18,10 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/testnet"
 	"github.com/Someblueman/airc/pkg/irc"
-	"golang.org/x/net/ipv4"
-	"golang.org/x/net/ipv6"
 )
 
-// A network datagram carrier (UDP, UDP-Lite, IPv4 and IPv6 multicast) takes
+// A network datagram carrier (UDP) takes
 // each plain correlated frame as AGD1 fragments and answers the request's
 // source with fragments of the same kind. There is no connection, so there
 // is no identify and a watch cannot be cancelled; a frame it cannot verify
@@ -40,30 +35,6 @@ var _ = registerSuiteCarriers(
 			return net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 		},
 		bind: bindUDPPort("udp4", net.IPv4zero),
-	}),
-	packetSuiteCarrier("ipv4_multicast", config.Listener{Protocol: "ipv4_multicast"}, packetCarrier{
-		configure: func(t *testing.T, l *config.Listener) {
-			l.Address = net.JoinHostPort("239.255.1.2", fmt.Sprint(reserveUDPPort(t, "udp4", net.IPv4zero)))
-			l.IPv4Multicast = &config.IPv4Multicast{Interface: loopbackName()}
-		},
-		socket: ipv4MulticastSuiteSocket,
-		bind:   bindUDPPort("udp4", net.IPv4zero),
-		wire:   multicastGroupWire,
-	}),
-	packetSuiteCarrier("ipv6_multicast", config.Listener{Protocol: "ipv6_multicast"}, packetCarrier{
-		configure: func(t *testing.T, l *config.Listener) {
-			iface, source := testnet.IPv6Multicast(t)
-			probe, err := net.ListenUDP("udp6", &net.UDPAddr{IP: source})
-			if err != nil {
-				t.Skipf("IPv6 multicast needs an IPv6 source address on %s: %v", iface.Name, err)
-			}
-			_ = probe.Close()
-			l.Address = net.JoinHostPort("ff11::1234", fmt.Sprint(reserveUDPPort(t, "udp6", net.IPv6unspecified)))
-			l.IPv6Multicast = &config.IPv6Multicast{Interface: iface.Name}
-		},
-		socket: ipv6MulticastSuiteSocket,
-		bind:   bindUDPPort("udp6", net.IPv6unspecified),
-		wire:   multicastGroupWire,
 	}),
 )
 
@@ -432,29 +403,6 @@ func postNative(t *testing.T, socket, nick, room, text string) {
 	next(t, author, func(r *irc.SendReceiptEvent) bool { return r.RequestID == id })
 }
 
-// multicastGroupWire: the listener reports the group it joined, not a
-// wildcard bind.
-func multicastGroupWire(t *testing.T, e *suiteEnv, _ packetCarrier) {
-	t.Run("group_address", func(t *testing.T) { multicastGroupAddress(t, e) })
-}
-
-func multicastGroupAddress(t *testing.T, e *suiteEnv) {
-	for _, l := range e.config.Listeners {
-		if l.ID != "carrier" {
-			continue
-		}
-		ready, err := net.ResolveUDPAddr("udp", e.address)
-		configured, errConfigured := net.ResolveUDPAddr("udp", l.Address)
-		zone := ""
-		if l.IPv6Multicast != nil {
-			zone = l.IPv6Multicast.Interface
-		}
-		if err != nil || errConfigured != nil || !ready.IP.Equal(configured.IP) || ready.Port != configured.Port || ready.Zone != zone {
-			t.Fatalf("ready address %s, configured %s", e.address, l.Address)
-		}
-	}
-}
-
 // reserveUDPPort returns a port free on ip for network.
 func reserveUDPPort(t *testing.T, network string, ip net.IP) int {
 	t.Helper()
@@ -468,44 +416,4 @@ func reserveUDPPort(t *testing.T, network string, ip net.IP) int {
 
 func bindUDPPort(network string, ip net.IP) func(int) (io.Closer, error) {
 	return func(port int) (io.Closer, error) { return net.ListenUDP(network, &net.UDPAddr{IP: ip, Port: port}) }
-}
-
-func loopbackName() string {
-	if runtime.GOOS == "darwin" {
-		return "lo0"
-	}
-	return "lo"
-}
-
-// ipv4MulticastSuiteSocket sends to a group on the loopback interface; the
-// gateway answers its unicast address.
-func ipv4MulticastSuiteSocket(*testing.T) (*net.UDPConn, error) {
-	iface, err := net.InterfaceByName(loopbackName())
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		return nil, err
-	}
-	packets := ipv4.NewPacketConn(conn)
-	if err := errors.Join(packets.SetMulticastInterface(iface), packets.SetMulticastLoopback(true), packets.SetMulticastTTL(1)); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return conn, nil
-}
-
-func ipv6MulticastSuiteSocket(t *testing.T) (*net.UDPConn, error) {
-	iface, source := testnet.IPv6Multicast(t)
-	conn, err := net.ListenUDP("udp6", &net.UDPAddr{IP: source})
-	if err != nil {
-		return nil, err
-	}
-	packets := ipv6.NewPacketConn(conn)
-	if err := errors.Join(packets.SetMulticastInterface(iface), packets.SetMulticastLoopback(true), packets.SetMulticastHopLimit(1)); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return conn, nil
 }

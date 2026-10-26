@@ -25,10 +25,6 @@ func TestInheritedUnixPendingTerminationAndFreshChildRecovery(t *testing.T) {
 	localStreamPendingTerminationAndFreshChildRecovery(t, "inherited")
 }
 
-func TestFIFOPendingTerminationAndFreshChildRecovery(t *testing.T) {
-	localStreamPendingTerminationAndFreshChildRecovery(t, "fifo")
-}
-
 func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol string) {
 	t.Helper()
 	recoverable := []core.State{core.Queued, core.Dispatching, core.RetryWait, core.Uncertain, core.CredentialWait}
@@ -38,15 +34,8 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f)
 			f.config.Upstream.Address = relay.listener.Addr().String()
-			if protocol == "fifo" {
-				f.config = configureFIFOFixture(t, f.config)
-			} else {
-				f.config.Listeners[0].Address = ""
-			}
+			f.config.Listeners[0].Address = ""
 			start := func(signal syscall.Signal, expectFailure bool) (adapter.FramedStream, func(), *exec.Cmd) {
-				if protocol == "fifo" {
-					return startFIFO(t, f.binary, f.config, signal, expectFailure)
-				}
 				conn, stop, child := startParentFD(t, f.binary, f.config, protocol, signal, expectFailure)
 				return conn, stop, child
 			}

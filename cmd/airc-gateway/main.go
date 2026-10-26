@@ -28,18 +28,6 @@ func main() {
 }
 
 func run(args []string, out io.Writer) error {
-	if len(args) > 0 && args[0] == "scp-inbox" {
-		return serveSCPInbox(args[1:])
-	}
-	if len(args) > 0 && args[0] == "import-bpv7" {
-		return importBPv7(args[1:], out)
-	}
-	if len(args) > 0 && args[0] == "import-bundle" {
-		return importOfflineBundle(args[1:], out)
-	}
-	if len(args) >= 2 && args[0] == "oscore" && args[1] == "init" {
-		return initializeOSCORE(args[2:], out)
-	}
 	command := ""
 	if len(args) >= 2 && args[0] == "config" && args[1] == "validate" {
 		command = "validate"
@@ -57,7 +45,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --listener ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | scp-inbox --file CONFIG | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]] | import-bpv7 --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]]")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | mailbox-once --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -110,8 +98,7 @@ func run(args []string, out io.Writer) error {
 }
 
 // processCommands serve the Process carriers, one listener each, under the
-// command their descriptor names; scp-inbox and the importers parse their own
-// flags.
+// command their descriptor names.
 var processCommands = map[string]func(config.Config) error{
 	"serve-stdio": func(c config.Config) error {
 		stream, err := adapter.OpenPipeStream(os.Stdin, os.Stdout)
@@ -123,8 +110,6 @@ var processCommands = map[string]func(config.Config) error{
 	},
 	"serve-socketpair": parentStream(adapter.OpenSocketPairStream, service.RunSocketPair),
 	"serve-inherited":  parentStream(adapter.OpenInheritedUnixStream, service.RunInheritedUnixStream),
-	"serve-fifo":       configured(service.RunFIFO),
-	"serve-uart":       configured(service.RunUART),
 	"mailbox-once":     configured(service.RunFileMailbox),
 }
 

@@ -2,7 +2,7 @@
 
 `airc-gateway` lets clients reach an AIRC server (`aircd`) over transports
 other than IRC: HTTP, WebSocket, gRPC, MQTT, a Unix socket, a mailbox
-directory, a UDP datagram and about fifty more, and carries IRC itself
+directory, a UDP datagram and about twenty more, and carries IRC itself
 over WebSocket and HTTP CONNECT ([native tunnels](native.md)). It is a separate process
 with its own durable journal. It holds no identities of its own: every
 request names its author, and aircd decides whether that author may post.
@@ -19,8 +19,8 @@ airc service start
 ```
 
 `--gateway` accepts `http`, `http3`, `websocket`, `mcp_http`, `framed`,
-`unix`, `irc_websocket`, `irc_connect`, `grpc`, `mqtt`, `mqtt_websocket`, `amqp`, `stomp`,
-`coap_udp`, `coap_tcp`, `zeromq`, `nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
+`unix`, `irc_websocket`, `irc_connect`, `grpc`, `mqtt`, `mqtt_websocket`,
+`coap_udp`, `zeromq`, `nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
 [SERVICE.md](../SERVICE.md#bundled-gateway). Clients can discover the
 carriers from aircd's `005 CARRIERS` token, the `770` STATUS reply, or
 `GET /v1/capabilities` on the gateway, so a client can fall back from one to
@@ -62,21 +62,19 @@ retries on another carrier still posts once. See
 |---|---|
 | [contract-v1.md](contract-v1.md) | Request and result JSON, operations, errors, replay and cursors |
 | [configuration.md](configuration.md) | Configuration file, listener policy, limits, running the service |
-| [authentication.md](authentication.md) | Authors, listener access, bound authors, provider-verified senders, abuse limits |
+| [authentication.md](authentication.md) | Authors, listener access, bound authors, abuse limits |
 | [http.md](http.md) | HTTP/1.1 and HTTP/2, JSON-RPC, SSE, WebSocket, MCP, gRPC, HTTP/3, WebTransport, browsers |
-| [streams.md](streams.md) | Framed TCP/TLS and Unix streams, stdio and inherited descriptors, FIFO, UART, queues, shared memory, Mach IPC |
+| [streams.md](streams.md) | Framed TCP/TLS and Unix streams, stdio and inherited descriptors |
 | [native.md](native.md) | Native tunnels: IRC over WebSocket and through HTTP CONNECT, the whole native protocol through the gateway |
-| [network.md](network.md) | Datagram fragments, UDP family, ICMPv6, SCTP, raw QUIC, DTLS, CoAP, OSCORE, WebRTC, ZeroMQ, NNG |
-| [brokers.md](brokers.md) | MQTT, MQTT-SN, AMQP 1.0, STOMP, Redis Pub/Sub and Streams, PostgreSQL NOTIFY |
-| [offline.md](offline.md) | File and directory mailboxes, append log, SFTP and SCP, offline bundles, QR sequences, BPv7 |
-| [bridges.md](bridges.md) | IRC and XMPP bridges; syslog and SNMPv3 ingress |
+| [network.md](network.md) | Datagram fragments, UDP, raw QUIC, DTLS, CoAP, WebRTC, ZeroMQ, NNG |
+| [brokers.md](brokers.md) | MQTT 3.1.1 and 5, MQTT over WebSocket |
+| [offline.md](offline.md) | File and directory mailboxes, append log |
 | [ROADMAP.md](ROADMAP.md) | Open verification work |
-| [removed-identity.md](removed-identity.md), [removed-modes.md](removed-modes.md) | What was removed, and the configuration errors that point here |
+| [removed-identity.md](removed-identity.md), [removed-modes.md](removed-modes.md), [removed-carriers.md](removed-carriers.md) | What was removed, and the configuration errors that point here |
 
 ## Carriers
 
-`protocol` is the listener's configuration value; top-level sections are
-marked. Evidence levels:
+`protocol` is the listener's configuration value. Evidence levels:
 
 - **Real client**: a third-party client or server (named) posted through the
   gateway as a guest and as a registered account to a scratch aircd built
@@ -85,9 +83,9 @@ marked. Evidence levels:
   directory).
 - **In-repo**: the repository's tests drive the carrier end to end against
   aircd with Go clients; no third-party implementation was involved.
-- **Unit**: adapter and configuration tests only.
-- **Not run**: builds, but this author model has not run on the carrier's
-  platform. Earlier evidence for the removed identity model is in git history.
+
+Carriers with no evidence beyond building, and those nobody is known to
+use, were [removed](removed-carriers.md) on 2026-10-26.
 
 | Carrier | `protocol` | Page | Evidence |
 |---|---|---|---|
@@ -102,56 +100,31 @@ marked. Evidence levels:
 | IRC through HTTP CONNECT (native tunnel) | `irc_connect` | [native](native.md#irc-through-http-connect) | Real client: WeeChat 4.1.1 ([run](../research/stay-connected-measure-2026-10-17/README.md#an-irc-client-through-the-connect-tunnel)) |
 | Unix stream, seqpacket (Linux), datagram | `unix`, `unixpacket`, `unixgram` | [streams](streams.md#unix-sockets) | In-repo |
 | stdio, socket pair, inherited FD | `stdio`, `socketpair`, `inherited` | [streams](streams.md#parent-owned-streams) | In-repo |
-| FIFO pair | `fifo` | [streams](streams.md#fifo-pair) | In-repo |
-| UART / serial | `uart` | [streams](streams.md#uart) | In-repo (PTY); no physical line |
-| System V queue | `system_v_queue` | [streams](streams.md#queues-shared-memory-and-mapped-files) | In-repo (Linux AMD64) |
-| POSIX message queue | `posix_mqueue` | [streams](streams.md#queues-shared-memory-and-mapped-files) | Not run (needs `/dev/mqueue`) |
-| Shared memory, mapped file | `shared_memory`, `mapped_file` | [streams](streams.md#queues-shared-memory-and-mapped-files) | Not run (ARM64 only) |
-| Mach IPC, XPC and D-Bus bridges | `mach_ipc` | [streams](streams.md#mach-ipc-xpc-and-d-bus) | Not run (Darwin ARM64 only) |
-| UDP | `udp` | [network](network.md#udp-family) | In-repo |
-| UDP-Lite, IPv4/IPv6 multicast, IPv4 broadcast | `udp_lite`, `ipv4_multicast`, `ipv6_multicast`, `ipv4_broadcast` | [network](network.md#udp-family) | Not run (shares the UDP path) |
-| ICMPv6 Echo | `icmp_v6` | [network](network.md#icmpv6) | Not run (Darwin ARM64 only) |
-| SCTP ordered, unordered, PR-SCTP TTL | `sctp`, `sctp_unordered`, `sctp_pr_ttl` | [network](network.md#sctp) | Not run (Linux ARM64 only) |
+| UDP | `udp` | [network](network.md#udp) | In-repo |
 | Raw QUIC streams, datagrams | `rawquic`, `rawquic_datagrams` | [network](network.md#raw-quic) | In-repo |
 | DTLS datagrams | `dtls` | [network](network.md#dtls) | In-repo |
-| CoAP over UDP, TCP | `coap_udp`, `coap_tcp` | [network](network.md#coap) | Real client: aiocoap (UDP CON/NON, TCP) |
-| CoAP over DTLS, TLS | `coaps`, `coaps_tcp` | [network](network.md#coap) | In-repo |
-| Native OSCORE | `coap_oscore` | [network](network.md#oscore) | Not run (needs the native worker) |
+| CoAP over UDP | `coap_udp` | [network](network.md#coap) | Real client: aiocoap (CON and NON) |
+| CoAP over DTLS | `coaps` | [network](network.md#coap) | In-repo |
 | WebRTC DataChannels (four modes) | `webrtc` | [network](network.md#webrtc) | In-repo (loopback) |
 | ZeroMQ REQ/REP | `zeromq` | [network](network.md#zeromq-and-nng) | Real client: pyzmq 27.2 |
 | NNG REQ0/REP0 | `nng` | [network](network.md#zeromq-and-nng) | Real client: pynng |
 | MQTT 3.1.1 and 5 | `mqtt` | [brokers](brokers.md#mqtt) | Real clients: mosquitto 2.0.18 (3.1.1 and 5), paho-mqtt 2.1.0 (5) |
 | MQTT over WebSocket | `mqtt_websocket` | [brokers](brokers.md#mqtt-over-websocket) | Real clients: MQTT.js 5.16.0 in Chromium 141, paho-mqtt 2.1.0 |
-| MQTT-SN 1.2 | `mqtt_sn` | [brokers](brokers.md#mqtt-sn) | In-repo |
-| AMQP 1.0 | `amqp` | [brokers](brokers.md#amqp) | Real client: Qpid Proton 0.40 |
-| STOMP 1.2 | `stomp` | [brokers](brokers.md#stomp) | Real client: stomp.py 9.0 |
-| Redis Pub/Sub, Streams | top-level `redis_pubsub`, `redis_streams` | [brokers](brokers.md#redis) | Real server: Redis 7.0.15 |
-| PostgreSQL NOTIFY | top-level `postgres_notify` | [brokers](brokers.md#postgresql-notify) | Real server: PostgreSQL 16.15 |
 | File, directory mailbox, append log | `file_mailbox`, `directory_mailbox`, `append_log` | [offline](offline.md#local-mailboxes) | In-repo |
-| SFTP mailbox | top-level `sftp` | [offline](offline.md#sftp-mailbox) | Real server: OpenSSH 9.6 |
-| SCP upload inbox | `scp_inbox` | [offline](offline.md#scp-inbox) | Real client: OpenSSH 9.6 `scp -O` |
-| Offline bundle import | `offline_bundle` | [offline](offline.md#offline-bundles) | In-repo |
-| QR image sequence | (bundle tool) | [offline](offline.md#qr-image-sequences) | Not run (Darwin ARM64 only) |
-| BPv7 bundle import | `bpv7` | [offline](offline.md#bpv7) | In-repo |
-| IRC bridge | top-level `irc_bridges` | [bridges](bridges.md#irc-bridge) | Real server: Ergo 2.14 |
-| XMPP bridge | top-level `xmpp_bridges` | [bridges](bridges.md#xmpp-bridge) | Real server: Prosody |
-| TLS syslog | `syslog_tls` | [bridges](bridges.md#tls-syslog) | Real client: `openssl s_client` |
-| RFC 5848 signed syslog | `syslog_signed` | [bridges](bridges.md#signed-syslog) | In-repo |
-| SNMPv3 traps | `snmp_v3` | [bridges](bridges.md#snmpv3-traps) | In-repo |
 
 ## Adding a carrier
 
 Each carrier is one descriptor in
 [`internal/gateway/config/transports.go`](../../internal/gateway/config/transports.go):
-kind (stream, packet, process or bridge), network, address shape, TLS
+kind (stream, packet or process), network, address shape, TLS
 policy, author model, platforms, and the listener options it owns (their
 validators run from `listener_blocks.go`). Configuration validation, the
 `capabilities` report, the dispatcher's author policy and
 `airc service install --gateway` read it. `serve` starts the carrier through
 its entry in
 [`internal/gateway/service/owners.go`](../../internal/gateway/service/owners.go);
-a process carrier names its own `airc-gateway` command instead, and a bridge
-its preparation in `bridgeOwners`. `TestOwnersCoverTheRegistry` fails until
+a process carrier names its own `airc-gateway` command instead.
+`TestOwnersCoverTheRegistry` fails until
 the descriptor and its owner both exist. Then write the adapter, register a
 suite carrier in `integration/gateway` and add a row to the table above.
 

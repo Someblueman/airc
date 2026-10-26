@@ -27,10 +27,9 @@ import (
 var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 
 // TestEveryCarrierGolden runs one gateway with every carrier this host can
-// serve (the cross-carrier suite's carriers whose setup does not skip, and
-// the route carriers) and pins what clients discover: the carrier list
-// aircd advertises in 005 CARRIERS and STATUS for an install of every
-// bundled carrier, the bridges the gateway reports ready, and
+// serve (the cross-carrier suite's carriers whose setup does not skip) and
+// pins what clients discover: the carrier list aircd advertises in 005
+// CARRIERS and STATUS for an install of every bundled carrier, and
 // capabilities.get over each carrier (GET /v1/capabilities on HTTP). The
 // ready record must list the listeners in configuration order. Entries for
 // carriers this host cannot run are kept in the golden file and skipped.
@@ -73,19 +72,11 @@ func TestEveryCarrierGolden(t *testing.T) {
 	cfg := authorConfig(t, socket, gatewayToken, listeners...)
 	cfg.Carriers = discovery
 	cfg.Limits.Sessions = 128
-	for _, c := range routeCarriers {
-		c.provider(t, &routeEnv{carrier: c}, &cfg)
-		for i := range cfg.Listeners {
-			if cfg.Listeners[i].ID == "route" {
-				cfg.Listeners[i].ID = c.name
-			}
-		}
-	}
 
 	distinctAddresses(t, &cfg)
 	started := time.Now()
 	ready := startReadyGateway(t, cfg)
-	t.Logf("gateway startup with %d listeners and %d bridges: %v", len(ready.Listeners), len(ready.Brokers), time.Since(started))
+	t.Logf("gateway startup with %d listeners: %v", len(ready.Listeners), time.Since(started))
 	var want, have []string
 	for _, l := range cfg.Listeners {
 		if l.Enabled {
@@ -100,9 +91,6 @@ func TestEveryCarrierGolden(t *testing.T) {
 	if !slices.Equal(have, want) {
 		t.Fatalf("ready listeners %v, want configuration order %v", have, want)
 	}
-	brokers, _ := json.Marshal(ready.Brokers)
-	got["ready bridges"] = string(brokers)
-
 	for _, c := range carriers {
 		d := suiteDial{address: addresses[c.name]}
 		if c.secure {
@@ -170,10 +158,6 @@ type readyRecord struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
 	} `json:"listeners"`
-	Brokers []struct {
-		ID       string `json:"id"`
-		Protocol string `json:"protocol"`
-	} `json:"brokers"`
 }
 
 // startReadyGateway starts the gateway like startAuthorGateway and returns

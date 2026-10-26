@@ -53,13 +53,10 @@ airc service status
 | `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([http](gateway/http.md#grpc)) |
 | `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests`; MQTT 5 adds replies, subscriptions, sessions and wills ([brokers](gateway/brokers.md#mqtt)) |
 | `mqtt_websocket` | 8083 | the same over WebSocket at `/mqtt`, for browsers ([brokers](gateway/brokers.md#mqtt-over-websocket)) |
-| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#amqp)) |
-| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#stomp)) |
 | `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([network](gateway/network.md#coap)) |
-| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([network](gateway/network.md#coap)) |
 | `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
 | `nng` | 6687 | NNG REQ0/REP0, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
-| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([network](gateway/network.md#udp-family)) |
+| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([network](gateway/network.md#udp)) |
 | `http3` | 6680 (UDP) | the HTTP routes over QUIC; needs aircd's TLS certificate, and shares `http`'s port number on UDP ([http](gateway/http.md#http3)) |
 
 An unknown or unsupported name fails before anything is written and lists the carriers this build supports (those that take plain author requests). Without `--gateway` no gateway is installed. TCP carriers bind aircd's listen IP (127.0.0.1 for a Unix-socket aircd) unless given one. As on IRC, plaintext is allowed and guests are admitted ([authentication](gateway/authentication.md)); account tokens sent over a plaintext carrier can be read on the network. `--gateway-binary PATH` overrides the default, `airc-gateway` beside `airc` or on `PATH`.
