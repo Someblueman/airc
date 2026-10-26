@@ -30,8 +30,12 @@ type persisted interface {
 	close() error
 }
 
-// storesLocked lists the stores Shutdown closes, in the order it closed
-// them before they were stores.
+// storesLocked lists the stores Shutdown closes, the ledgers before the
+// wake sender as before they were stores.
 func (s *Server) storesLocked() []persisted {
-	return []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState, &s.chatStore, &s.handoffState, &s.decisionState}
+	out := []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState, &s.chatStore, &s.handoffState, &s.decisionState}
+	if s.wake != nil {
+		out = append(out, s.wake)
+	}
+	return out
 }

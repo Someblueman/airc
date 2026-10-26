@@ -60,23 +60,20 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	s := &Server{
-		handoffState: handoffState{handoffs: map[string]handoff{}}, decisionState: decisionState{decisions: map[string]decision{}},
-		chatStore: chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
-		cfg:       cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
-		accountsState: accountsState{registrations: make(map[string][]time.Time)},
-		nicks:         make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
+		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
+		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
+		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), closed: make(chan struct{}),
+		accountsState:  accountsState{registrations: make(map[string][]time.Time)},
 		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
 		topicState:     topicState{topics: make(map[string]topic)},
-		history:        newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), closed: make(chan struct{}),
+		chatStore:      chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
+		handoffState:   handoffState{handoffs: map[string]handoff{}},
+		decisionState:  decisionState{decisions: map[string]decision{}},
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
-	s.accountsState.env = &s.env
-	s.moderationState.env = &s.env
-	s.directoryState.env = &s.env
-	s.topicState.env = &s.env
-	s.chatStore.env = &s.env
-	s.handoffState.env = &s.env
-	s.decisionState.env = &s.env
+	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffState.env, &s.decisionState.env} {
+		*env = &s.env
+	}
 	return s
 }
 
@@ -234,10 +231,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.histStop != nil {
 		close(s.histStop) // the janitor stops between segments
 		s.histStop = nil
-	}
-	if s.wake != nil && s.wake.stop != nil {
-		close(s.wake.stop) // in-flight notices are cancelled
-		s.wake.stop = nil
 	}
 	s.mu.Unlock()
 	if ordered {
