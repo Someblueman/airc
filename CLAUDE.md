@@ -8,12 +8,14 @@ IRC-style chat server and CLI for humans and AI agents. Go 1.27, module `github.
 go build ./cmd/...                      # binaries at the repo root are gitignored
 test -z "$(gofmt -l .)"                 # every file must be gofmt-clean
 go vet ./...
-GOTOOLCHAIN=go1.27.0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...  # @latest alone selects an older toolchain
-go test -race -count=1 -timeout 120m ./...  # full suite (~25 min); there is no CI, so run it before pushing
+go tool staticcheck ./...               # pinned by the tool directive in go.mod
+go test -race -count=1 -timeout 120m ./...  # full suite (~25 min); CI runs it nightly, run it locally before pushing gateway changes
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem  # FullWindow fills 1 GiB
 scripts/githooks/install.sh             # git hooks: gofmt and vet on commit; gofmt, vet, staticcheck and the skill test on push
 ```
+
+CI (`.github/workflows/ci.yml`) runs gofmt, vet, staticcheck, the build, the non-gateway tests and a 20-second fuzz smoke on every push and pull request. The full race suite, the 30-minute resource soak and the chaos soak run nightly and on demand (`nightly.yml`). Changes that touch the gateway still get the full suite locally before pushing.
 
 ## Layout
 
