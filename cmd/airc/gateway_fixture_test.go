@@ -84,7 +84,7 @@ func buildGateway() (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/airc-gateway")
-	build.Dir = "../.."
+	build.Dir = "../../gateway"
 	if output, err := build.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(root)
 		return "", "", fmt.Errorf("build airc-gateway: %w\n%s", err, output)
