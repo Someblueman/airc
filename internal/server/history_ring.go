@@ -32,7 +32,8 @@ type entry struct {
 func (e *entry) size() int {
 	m := &e.Message
 	n := entryOverhead + 2*len(m.ID) + len(m.From) + len(m.Target) + len(m.Body) + len(m.ReplyTo) + 2*len(m.ThreadID) +
-		len(m.Reaction) + len(m.AccountID) + len(m.RecipientAccountID) + 2*len(m.RequestID) + len(m.Kind) + len(m.Supersedes) + len(m.SupersededBy)
+		len(m.Reaction) + len(m.AccountID) + len(m.RecipientAccountID) + 2*len(m.RequestID) + len(m.Kind) + len(m.Supersedes) + len(m.SupersededBy) +
+		len(m.Task) + len(m.State) + len(m.Link)
 	for _, option := range m.PollOptions {
 		n += 16 + len(option)
 	}
@@ -182,6 +183,13 @@ func (h *historyRing) insert(e *entry) {
 		if original := h.entryByID(message.Supersedes); original != nil {
 			original.SupersededBy = message.ID
 			original.Retracted = message.Kind == "retract"
+		}
+	}
+	// A resolution marks its thread's root, which is older and so retained
+	// at least as long as the resolution is.
+	if message.Kind == "resolved" && message.ThreadID != "" {
+		if root := h.entryByID(message.ThreadID); root != nil {
+			root.Resolved = true
 		}
 	}
 	if key := requestKey(message.From, message.AccountID, message.RequestID); key != "" {
