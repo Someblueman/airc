@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 type addressListener struct {
@@ -126,7 +127,7 @@ func TestTLSHandshakeSlotsAreBoundedAndShutdownClosesThem(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer first.Close()
-	eventually(t, "connection not counted before handshake", func() bool {
+	testwait.Until(t, 5*time.Second, "connection not counted before handshake", func() bool {
 		srv.mu.Lock()
 		defer srv.mu.Unlock()
 		return len(srv.clients) == 1

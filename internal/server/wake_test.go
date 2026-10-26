@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // wakeReceiver collects signed notices, checking each signature.
@@ -128,7 +129,7 @@ func TestWakeNotices(t *testing.T) {
 	_, _ = io.WriteString(bob, "PRIVMSG #room :carol: a mention\r\nPRIVMSG #room :no mention here\r\nPRIVMSG carol :and again\r\nREACT "+first.Latest+" :+1\r\n")
 	// frank's hook refuses: the failure is kept for WAKE STATUS.
 	_, _ = io.WriteString(bob, "PRIVMSG frank :your hook is down\r\n")
-	eventually(t, "frank's refused notice", func() bool { return receiver.refused.Load() == 1 })
+	testwait.Until(t, 5*time.Second, "frank's refused notice", func() bool { return receiver.refused.Load() == 1 })
 	frank, frankReader = connect("AUTH frank :" + testAdminToken + "\r\nNICK frank\r\nUSER u 0 * :u\r\nWAKE\r\n")
 	if line := expectLine(t, frankReader, frank, " 787 "); !strings.Contains(line, "HTTP 503") || !strings.Contains(line, `"pending":1`) {
 		t.Fatalf("status after a refused notice %q", line)
@@ -287,7 +288,7 @@ func TestWakeNewsOutlivesARestart(t *testing.T) {
 	first := receiver.next(t, 3*time.Second)
 	sentAt := time.Now()
 	_, _ = io.WriteString(bob, "PRIVMSG carol :held by the quiet period\r\n")
-	eventually(t, "the held message counted", func() bool {
+	testwait.Until(t, 5*time.Second, "the held message counted", func() bool {
 		srv.mu.Lock()
 		defer srv.mu.Unlock()
 		for _, state := range srv.wake.byAccount {

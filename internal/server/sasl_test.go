@@ -5,6 +5,9 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func createWireAccount(t *testing.T, address, nick string) {
@@ -82,7 +85,7 @@ func TestSASLUnfinishedLoginReceivesNoLiveTraffic(t *testing.T) {
 	pending.Close()
 	// Cleanup must release the incomplete nickname claim. The server notices
 	// the closed socket asynchronously, so allow it a moment.
-	eventually(t, "the incomplete login never released its nickname", func() bool {
+	testwait.Until(t, 5*time.Second, "the incomplete login never released its nickname", func() bool {
 		s, sr := rawConn(t, address)
 		defer s.Close()
 		io.WriteString(s, "AUTH alice :"+testAdminToken+"\r\nNICK alice\r\nUSER u 0 * :u\r\n")

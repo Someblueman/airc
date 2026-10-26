@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // archiveServer opens a history file with a window of limit messages and
@@ -231,7 +232,7 @@ func TestArchiveRebuildsADamagedIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = archiveServer(t, path, 3, 2048, Config{})
-	eventually(t, "the index rebuilt", func() bool { return len(s.archive.unindexed()) == 0 })
+	testwait.Until(t, 5*time.Second, "the index rebuilt", func() bool { return len(s.archive.unindexed()) == 0 })
 	if got := readAll(t, s, "#room", first.ID); len(got) != 100 {
 		t.Fatalf("read %d messages after rebuilding the index", len(got))
 	}
