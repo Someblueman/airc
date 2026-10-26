@@ -59,12 +59,22 @@ func New(cfg Config) *Server {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
-	return &Server{
-		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, activity: map[string]*activity{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
-		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time), failedAddresses: make(map[string][]time.Time),
+	s := &Server{
+		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
-		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
+		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), closed: make(chan struct{}),
+		accountsState:  accountsState{registrations: make(map[string][]time.Time)},
+		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
+		topicState:     topicState{topics: make(map[string]topic)},
+		chatStore:      chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
+		handoffState:   handoffState{handoffs: map[string]handoff{}},
+		decisionState:  decisionState{decisions: map[string]decision{}},
 	}
+	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
+	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffState.env, &s.decisionState.env} {
+		*env = &s.env
+	}
+	return s
 }
 
 func ListenTCP(address string) (net.Listener, error) {
@@ -215,21 +225,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.commit.retire(s.histFile)
 		s.histFile = nil
 	}
-	if s.handoffLog != nil {
-		_ = s.handoffLog.file.Close() // every save completes under mu
-		s.handoffLog = nil
-	}
-	if s.decisionLog != nil {
-		_ = s.decisionLog.file.Close()
-		s.decisionLog = nil
+	for _, p := range s.storesLocked() {
+		_ = p.close() // every save completes under mu
 	}
 	if s.histStop != nil {
 		close(s.histStop) // the janitor stops between segments
 		s.histStop = nil
-	}
-	if s.wake != nil && s.wake.stop != nil {
-		close(s.wake.stop) // in-flight notices are cancelled
-		s.wake.stop = nil
 	}
 	s.mu.Unlock()
 	if ordered {

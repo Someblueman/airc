@@ -33,17 +33,19 @@ func main() {
 	historyMemory := flags.String("history-memory", "1GiB", "approximate memory the retained messages may use; the oldest are dropped first")
 	historyRetain := flags.String("history-retain", retention.DefaultAge, "how long the history file's archive keeps messages, such as 30d or 72h; 0 keeps them until --history-retain-size")
 	historyRetainSize := flags.String("history-retain-size", retention.DefaultSize, "disk the history file and its archive may use; the oldest messages are deleted first; 0 means no limit")
-	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window)")
-	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
-	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
+	stateDir := flags.String("state-dir", "", "keep the history file and every state file in this directory under fixed names (history.jsonl, accounts.json, chat.json, handoffs.jsonl, decisions.jsonl, wakes.json, topics.json, profiles.json, moderation.json); state files still at their older names beside history.jsonl are used as they are")
+	var files statePaths
+	flags.StringVar(&files.history, "history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window; default with --state-dir: history.jsonl in it)")
+	flags.StringVar(&files.profiles, "profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted (deprecated: use --state-dir)")
+	flags.StringVar(&files.topics, "topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file) (deprecated: use --state-dir)")
 	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file")
-	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
-	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
-	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
-	handoffFile := flags.String("handoff-file", "", "open and recent handoffs, appended as JSON lines (default: next to history or accounts file)")
-	decisionFile := flags.String("decision-file", "", "open and recent decisions, appended as JSON lines (default: next to history or accounts file)")
+	flags.StringVar(&files.moderation, "moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token (deprecated: use --state-dir)")
+	flags.StringVar(&files.accounts, "accounts-file", "", "registered users (default: next to history file or admin token) (deprecated: use --state-dir)")
+	flags.StringVar(&files.chat, "chat-file", "", "pins, room settings and polls (default: next to history or accounts file) (deprecated: use --state-dir)")
+	flags.StringVar(&files.handoffs, "handoff-file", "", "open and recent handoffs, appended as JSON lines (default: next to history or accounts file) (deprecated: use --state-dir)")
+	flags.StringVar(&files.decisions, "decision-file", "", "open and recent decisions, appended as JSON lines (default: next to history or accounts file) (deprecated: use --state-dir)")
 	wakeAllow := flags.String("wake-allow", "", "comma-separated URL prefixes accounts may register for wake notices, such as https://ntfy.sh/ (requires an accounts file; default: wake notices off)")
-	wakeFile := flags.String("wake-file", "", "wake registrations (default: next to the accounts file)")
+	flags.StringVar(&files.wakes, "wake-file", "", "wake registrations (default: next to the accounts file) (deprecated: use --state-dir)")
 	maxConnections := flags.Int("max-connections", 4096, "maximum simultaneous clients (1-16384)")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
@@ -103,65 +105,27 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	if *accountsFile == "" && *historyFile != "" {
-		*accountsFile = *historyFile + ".accounts.json"
-	}
-	if *accountsFile == "" && *adminTokenFile != "" {
-		*accountsFile = *adminTokenFile + ".accounts.json"
-	}
-	if *chatFile == "" && *historyFile != "" {
-		*chatFile = *historyFile + ".chat.json"
-	}
-	if *chatFile == "" && *accountsFile != "" {
-		*chatFile = *accountsFile + ".chat.json"
-	}
-	if *handoffFile == "" && *historyFile != "" {
-		*handoffFile = *historyFile + ".handoffs.jsonl"
-	}
-	if *handoffFile == "" && *accountsFile != "" {
-		*handoffFile = *accountsFile + ".handoffs.jsonl"
-	}
-	if *decisionFile == "" && *historyFile != "" {
-		*decisionFile = *historyFile + ".decisions.jsonl"
-	}
-	if *decisionFile == "" && *accountsFile != "" {
-		*decisionFile = *accountsFile + ".decisions.jsonl"
+	paths, notes, err := resolveState(*stateDir, files, *adminTokenFile, *wakeAllow != "")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
 	}
 	var wakePrefixes []string
 	if *wakeAllow != "" {
-		if *accountsFile == "" {
+		if paths.accounts == "" {
 			fmt.Fprintln(os.Stderr, "--wake-allow needs an accounts file: wake notices are for registered accounts")
 			os.Exit(2)
 		}
 		wakePrefixes = strings.Split(*wakeAllow, ",")
-		if *wakeFile == "" {
-			*wakeFile = *accountsFile + ".wakes.json"
-		}
 	}
-
-	if *historyFile != "" && *history == 0 {
+	if paths.history != "" && *history == 0 {
 		*history = 10_000_000 // the window is bounded by --history-memory
-	}
-	if *topicsFile == "" && *historyFile != "" {
-		*topicsFile = *historyFile + ".topics.json"
-	}
-	if *profilesFile == "" && *historyFile != "" {
-		*profilesFile = *historyFile + ".profiles.json"
-	}
-	if *profilesFile == "" && *accountsFile != "" {
-		*profilesFile = *accountsFile + ".profiles.json"
-	}
-	if *moderationFile == "" && *adminTokenFile != "" {
-		*moderationFile = *adminTokenFile + ".moderation.json"
-		if *historyFile != "" {
-			*moderationFile = *historyFile + ".moderation.json"
-		}
 	}
 	logBackup := ""
 	if *logFile != "" {
 		logBackup = *logFile + ".1"
 	}
-	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *handoffFile, *decisionFile, *wakeFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
+	if err := pathcheck.Distinct(append(paths.list(), *adminTokenFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup)...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -182,6 +146,13 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
+	for _, note := range notes {
+		if note.event == "state_file_shadowed" {
+			logger.Warn(note.event, "path", note.path, "canonical", note.canonical)
+		} else {
+			logger.Info(note.event, "path", note.path, "canonical", note.canonical)
+		}
+	}
 	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, HistoryRetain: retainAge, HistoryRetainBytes: retainSize, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
@@ -199,54 +170,54 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if *accountsFile != "" {
-		if err := srv.RestoreAccounts(*accountsFile); err != nil {
+	if paths.accounts != "" {
+		if err := srv.RestoreAccounts(paths.accounts); err != nil {
 			logger.Error("accounts_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if *chatFile != "" {
-		if err := srv.RestoreChat(*chatFile); err != nil {
+	if paths.chat != "" {
+		if err := srv.RestoreChat(paths.chat); err != nil {
 			logger.Error("chat_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if *handoffFile != "" {
-		if err := srv.RestoreHandoffs(*handoffFile); err != nil {
+	if paths.handoffs != "" {
+		if err := srv.RestoreHandoffs(paths.handoffs); err != nil {
 			logger.Error("handoff_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if *decisionFile != "" {
-		if err := srv.RestoreDecisions(*decisionFile); err != nil {
+	if paths.decisions != "" {
+		if err := srv.RestoreDecisions(paths.decisions); err != nil {
 			logger.Error("decision_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
 	if wakePrefixes != nil {
-		if err := srv.EnableWake(wakePrefixes, *wakeFile, nil); err != nil {
+		if err := srv.EnableWake(wakePrefixes, paths.wakes, nil); err != nil {
 			logger.Error("wake_config_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if err := configureAdmin(srv, *adminTokenFile, *moderationFile, *historyFile, *topicsFile, *profilesFile, *accountsFile, *chatFile); err != nil {
+	if err := configureAdmin(srv, *adminTokenFile, paths.moderation, paths.history, paths.topics, paths.profiles, paths.accounts, paths.chat, paths.handoffs, paths.decisions, paths.wakes); err != nil {
 		logger.Error("admin_config_failed", "error", err.Error())
 		os.Exit(1)
 	}
-	if *historyFile != "" {
-		if err := srv.RestoreHistory(*historyFile); err != nil {
+	if paths.history != "" {
+		if err := srv.RestoreHistory(paths.history); err != nil {
 			logger.Error("history_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if *topicsFile != "" {
-		if err := srv.RestoreTopics(*topicsFile); err != nil {
+	if paths.topics != "" {
+		if err := srv.RestoreTopics(paths.topics); err != nil {
 			logger.Error("topics_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
-	if *profilesFile != "" {
-		if err := srv.RestoreProfiles(*profilesFile); err != nil {
+	if paths.profiles != "" {
+		if err := srv.RestoreProfiles(paths.profiles); err != nil {
 			logger.Error("profiles_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}

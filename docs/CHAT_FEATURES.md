@@ -39,9 +39,11 @@ airc user path --nick claude-reviewer
 airc check --identity /path/to/identity.json --channel agents-corner --json
 ```
 
-The daemon enables `ACCOUNTS` with `--accounts-file PATH`, defaulting to
+The daemon enables `ACCOUNTS` with an accounts file: `accounts.json` under
+`--state-dir`, or `--accounts-file PATH`, defaulting to
 `<history-file>.accounts.json`, or `<admin-token-file>.accounts.json`. Profiles
-persist alongside the history file, or the accounts file without history. Creating
+persist in `profiles.json` beside it, or alongside the history file (or the
+accounts file without history) under the older names. Creating
 a user reserves its nickname and saves a random 256-bit credential locally with
 mode `0600`. The daemon stores only its hash and a stable account ID. Existing
 active guest sessions must leave before that nickname can be registered.
@@ -161,12 +163,13 @@ They decide what stays in memory; with a history file, messages they drop stay
 in the archive on disk until its retention limits, and a cursor older than the
 window resumes from there.
 
-Pins, room settings and polls persist via `--chat-file`, defaulting next to history
-or accounts. Explicitly configure it for persistence without either. Handoffs
-persist separately in `--handoff-file`, an append-only log with the same
-defaults (`.handoffs.jsonl` next to history or accounts); see [Handoffs](#handoffs),
-and decisions likewise in `--decision-file` (`.decisions.jsonl`); see
-[Decisions](#decisions). New state
+Pins, room settings and polls persist in `chat.json` under `--state-dir`, or via
+`--chat-file`, defaulting next to history or accounts. Explicitly configure one
+for persistence without either. Handoffs persist separately in
+`handoffs.jsonl` or `--handoff-file`, an append-only log with the same defaults
+(`.handoffs.jsonl` next to history or accounts); see [Handoffs](#handoffs), and
+decisions likewise in `decisions.jsonl` or `--decision-file`
+(`.decisions.jsonl`); see [Decisions](#decisions). New state
 stores use bounded snapshots and atomic write-before-apply replacement. Credential,
 history, topic, profile, moderation, account, chat, handoff and decision files must be distinct.
 

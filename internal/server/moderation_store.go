@@ -2,17 +2,24 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
-	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
+
+// moderationState is the mutes and bans by rule key and the file they are
+// saved to. Every field is read and written with s.mu held; saves run under
+// s.mu with env.sync, and a failed save refuses the change.
+type moderationState struct {
+	moderation   map[string]protocol.ModerationRule
+	moderationAt string
+	env          *storeEnv
+}
+
+var moderationSnapshot = snapshot{limit: 4 << 20, tooLarge: "moderation file exceeds 4 MiB"}
 
 func sortedRules(rules map[string]protocol.ModerationRule, now time.Time) []protocol.ModerationRule {
 	result := make([]protocol.ModerationRule, 0, len(rules))
@@ -35,18 +42,16 @@ func (s *Server) RestoreModeration(path string) error {
 	if !s.adminEnabled || s.listener != nil || s.moderationAt != "" {
 		return errors.New("configure moderation once after EnableAdmin, before Serve")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	data, err := atomicfile.ReadBounded(path, 4<<20)
-	if errors.Is(err, atomicfile.ErrTooLarge) {
-		return errors.New("moderation file exceeds 4 MiB")
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	return s.moderationState.load(path)
+}
+
+func (st *moderationState) load(path string) error {
+	data, found, err := moderationSnapshot.bytes(path)
+	if err != nil {
 		return err
 	}
 	loaded := make(map[string]protocol.ModerationRule)
-	if err == nil {
+	if found {
 		var rules []protocol.ModerationRule
 		if err := decodeStrict(bytes.NewReader(data), &rules); err != nil {
 			return fmt.Errorf("read moderation: %w", err)
@@ -55,7 +60,7 @@ func (s *Server) RestoreModeration(path string) error {
 			return errors.New("moderation file must contain one bounded JSON array")
 		}
 		for _, rule := range rules {
-			if rule.Kind != "mute" && rule.Kind != "ban" || validateAdminRequest(protocol.AdminRequest{Action: rule.Kind, Nick: rule.Nick, Scope: rule.Scope, Reason: rule.Reason}) != nil || rule.Scope == "" || !protocol.ValidNick(rule.SetBy) || rule.SetAt.IsZero() || !rule.ExpiresAt.IsZero() && (!rule.ExpiresAt.After(rule.SetAt) || rule.ExpiresAt.Sub(rule.SetAt) > 30*24*time.Hour) {
+			if !validRule(rule) {
 				return errors.New("invalid saved moderation rule")
 			}
 			key := ruleKey(rule.Kind, rule.Nick, rule.Scope)
@@ -65,17 +70,31 @@ func (s *Server) RestoreModeration(path string) error {
 			loaded[key] = rule
 		}
 	}
-	s.moderation, s.moderationAt = loaded, path
+	st.moderation, st.moderationAt = loaded, path
 	return nil
 }
 
-func (s *Server) saveModerationLocked(next map[string]protocol.ModerationRule) error {
-	if s.moderationAt == "" {
-		return nil
+// validRule is a saved rule the daemon would have made itself.
+func validRule(rule protocol.ModerationRule) bool {
+	return (rule.Kind == "mute" || rule.Kind == "ban") && validateAdminRequest(protocol.AdminRequest{Action: rule.Kind, Nick: rule.Nick, Scope: rule.Scope, Reason: rule.Reason}) == nil && rule.Scope != "" && protocol.ValidNick(rule.SetBy) && !rule.SetAt.IsZero() && (rule.ExpiresAt.IsZero() || rule.ExpiresAt.After(rule.SetAt) && rule.ExpiresAt.Sub(rule.SetAt) <= 30*24*time.Hour)
+}
+
+func (st *moderationState) close() error { return nil }
+
+func (st *moderationState) saveModerationLocked(next map[string]protocol.ModerationRule) error {
+	return moderationSnapshot.write(st.moderationAt, sortedRules(next, st.env.now()), st.env.sync)
+}
+
+func (st *moderationState) restrictionLocked(kind, nick, scope string) (protocol.ModerationRule, bool) {
+	if len(st.moderation) == 0 {
+		return protocol.ModerationRule{}, false // the common case, checked per recipient
 	}
-	data, err := json.Marshal(sortedRules(next, s.now()))
-	if err != nil {
-		return err
+	now := st.env.now()
+	for _, where := range []string{"*", scope} {
+		rule, ok := st.moderation[ruleKey(kind, nick, where)]
+		if ok && ruleActive(rule, now) {
+			return rule, true
+		}
 	}
-	return atomicfile.Write(s.moderationAt, append(data, '\n'), 0o600, s.cfg.Sync)
+	return protocol.ModerationRule{}, false
 }

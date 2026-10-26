@@ -25,25 +25,25 @@ type activity struct {
 }
 
 // noteActivityLocked records nick as active now, in rooms.
-func (s *Server) noteActivityLocked(nick string, rooms ...string) {
-	now := s.now().UTC()
+func (st *directoryState) noteActivityLocked(nick string, rooms ...string) {
+	now := st.env.now().UTC()
 	key := nickKey(nick)
-	a := s.activity[key]
+	a := st.activity[key]
 	if a == nil {
-		if len(s.activity) >= maxActivity {
-			s.pruneActivityLocked(now)
+		if len(st.activity) >= maxActivity {
+			st.pruneActivityLocked(now)
 		}
-		for len(s.activity) >= maxActivity {
+		for len(st.activity) >= maxActivity {
 			oldest := ""
-			for k, other := range s.activity {
-				if oldest == "" || other.seen.Before(s.activity[oldest].seen) {
+			for k, other := range st.activity {
+				if oldest == "" || other.seen.Before(st.activity[oldest].seen) {
 					oldest = k
 				}
 			}
-			delete(s.activity, oldest)
+			delete(st.activity, oldest)
 		}
 		a = &activity{rooms: map[string]time.Time{}}
-		s.activity[key] = a
+		st.activity[key] = a
 	}
 	a.nick, a.seen = nick, now
 	for _, room := range rooms {
@@ -62,18 +62,18 @@ func (s *Server) noteActivityLocked(nick string, rooms ...string) {
 	}
 }
 
-func (s *Server) pruneActivityLocked(now time.Time) {
-	for key, a := range s.activity {
+func (st *directoryState) pruneActivityLocked(now time.Time) {
+	for key, a := range st.activity {
 		if now.Sub(a.seen) >= activeWindow {
-			delete(s.activity, key)
+			delete(st.activity, key)
 		}
 	}
 }
 
 // recentLocked reports when nick was last active and the rooms it used,
 // sorted, if that was within activeWindow.
-func (s *Server) recentLocked(nick string, now time.Time) (time.Time, []string, bool) {
-	a := s.activity[nickKey(nick)]
+func (st *directoryState) recentLocked(nick string, now time.Time) (time.Time, []string, bool) {
+	a := st.activity[nickKey(nick)]
 	if a == nil || now.Sub(a.seen) >= activeWindow {
 		return time.Time{}, nil, false
 	}

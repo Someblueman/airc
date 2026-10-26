@@ -75,6 +75,10 @@ type wakeState struct {
 	lastError  string
 }
 
+// wakes is the wake registrations and the file they are saved to. Every
+// field is read and written with s.mu held, except by send, which runs
+// without it on what it was handed; saves run under s.mu with env.soft, at
+// most once per wakeSaveEvery.
 type wakes struct {
 	allow     []string
 	path      string
@@ -82,6 +86,7 @@ type wakes struct {
 	kick      chan struct{}
 	stop      chan struct{}
 	client    *http.Client
+	env       *storeEnv
 	// pruned is when expired registrations and those of deleted accounts
 	// were last dropped: once a minute, not on every inbox message.
 	pruned time.Time
@@ -123,9 +128,8 @@ func (s *Server) EnableWake(allow []string, path string, client *http.Client) er
 	if client == nil {
 		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
-	w := &wakes{allow: allow, path: path, byAccount: map[string]*wakeState{}, kick: make(chan struct{}, 1), stop: make(chan struct{}), client: client}
-	saved := map[string]savedWake{}
-	if err := readState(path, &saved); err != nil {
+	w := &wakes{allow: allow, byAccount: map[string]*wakeState{}, kick: make(chan struct{}, 1), stop: make(chan struct{}), client: client, env: &s.env}
+	if err := w.load(path); err != nil {
 		return err
 	}
 	// A registration the daemon would no longer accept (its account was
@@ -133,22 +137,46 @@ func (s *Server) EnableWake(allow []string, path string, client *http.Client) er
 	// dropped, not fatal: starting must not depend on what an account
 	// registered.
 	now := s.now()
-	for id, entry := range saved {
-		reg := entry.wakeRegistration
+	dropped := false
+	for id, state := range w.byAccount {
+		reg := state.reg
 		if id != reg.Account || !s.wakeValidLocked(w, reg) || !now.Before(reg.ExpiresAt) {
 			s.logger.Warn("wake_registration_dropped", "account_id", reg.Account, "nick", reg.Nick)
-			continue
+			delete(w.byAccount, id)
+			dropped = true
 		}
-		w.byAccount[id] = &wakeState{reg: reg, pending: max(entry.Pending, 0), latest: entry.Latest, nextAt: entry.NextAt}
 	}
-	if len(w.byAccount) != len(saved) {
-		if err := s.saveWakesLocked(w, w.byAccount); err != nil {
+	if dropped {
+		if err := w.saveWakesLocked(w.byAccount); err != nil {
 			return err
 		}
 	}
 	s.wake = w
 	s.wg.Add(1)
 	go s.runWakes(w, w.stop)
+	return nil
+}
+
+// load reads every saved registration, with the news not yet announced;
+// EnableWake drops those the daemon would no longer accept.
+func (w *wakes) load(path string) error {
+	saved := map[string]savedWake{}
+	if err := readState(path, &saved); err != nil {
+		return err
+	}
+	for id, entry := range saved {
+		w.byAccount[id] = &wakeState{reg: entry.wakeRegistration, pending: max(entry.Pending, 0), latest: entry.Latest, nextAt: entry.NextAt}
+	}
+	w.path = path
+	return nil
+}
+
+// close stops the sender; in-flight notices are cancelled.
+func (w *wakes) close() error {
+	if w.stop != nil {
+		close(w.stop)
+		w.stop = nil
+	}
 	return nil
 }
 
@@ -188,26 +216,26 @@ func validWakeSecret(secret string) bool {
 	return err == nil
 }
 
-func (s *Server) saveWakesLocked(w *wakes, next map[string]*wakeState) error {
+func (w *wakes) saveWakesLocked(next map[string]*wakeState) error {
 	saved := make(map[string]savedWake, len(next))
 	for id, state := range next {
 		saved[id] = savedWake{wakeRegistration: state.reg, Pending: state.pending, Latest: state.latest, NextAt: state.nextAt}
 	}
-	if err := writeState(w.path, saved, s.softSync()); err != nil {
+	if err := writeState(w.path, saved, w.env.soft); err != nil {
 		return err
 	}
-	w.dirty, w.saved = false, s.now()
+	w.dirty, w.saved = false, w.env.now()
 	return nil
 }
 
 // flushWakesLocked saves news not yet in the file.
-func (s *Server) flushWakesLocked(w *wakes) {
+func (w *wakes) flushWakesLocked() {
 	if !w.dirty {
 		return
 	}
-	if err := s.saveWakesLocked(w, w.byAccount); err != nil {
-		w.saved = s.now() // try again after wakeSaveEvery, not at once
-		s.logger.Error("wake_save_failed", "error", err.Error())
+	if err := w.saveWakesLocked(w.byAccount); err != nil {
+		w.saved = w.env.now() // try again after wakeSaveEvery, not at once
+		w.env.logger.Error("wake_save_failed", "error", err.Error())
 	}
 }
 
@@ -234,7 +262,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 					next[id] = state
 				}
 			}
-			if err := s.saveWakesLocked(w, next); err != nil {
+			if err := w.saveWakesLocked(next); err != nil {
 				s.numericLocked(client, "437", nil, "Unable to save wake registrations; no change applied")
 				return
 			}
@@ -275,7 +303,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 			next[id] = existing
 		}
 		next[client.accountID] = state
-		if err := s.saveWakesLocked(w, next); err != nil {
+		if err := w.saveWakesLocked(next); err != nil {
 			s.numericLocked(client, "437", nil, "Unable to save wake registrations; no change applied")
 			return
 		}
@@ -394,7 +422,7 @@ func (s *Server) runWakes(w *wakes, stop <-chan struct{}) {
 		select {
 		case <-stop:
 			s.mu.Lock()
-			s.flushWakesLocked(w)
+			w.flushWakesLocked()
 			s.mu.Unlock()
 			return
 		case <-w.kick:
@@ -435,7 +463,7 @@ func (s *Server) dueWakesLocked(w *wakes, now time.Time, room int) ([]dueWake, t
 		if until := w.saved.Add(wakeSaveEvery).Sub(s.now()); until > 0 {
 			wait = min(wait, until)
 		} else {
-			s.flushWakesLocked(w)
+			w.flushWakesLocked()
 		}
 	}
 	var due []dueWake

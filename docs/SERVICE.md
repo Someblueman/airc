@@ -21,7 +21,7 @@ Install writes the definition; start enables it and starts it now. Start and res
 The defaults are:
 
 - Bind `127.0.0.1:6667`; no remote listener.
-- Keep about 1 GiB of recent messages in memory and archive them in `history.jsonl` and its sealed segments for 30 days or up to 10 GiB, beside the existing adjacent state files. The default data directory is `$AIRC_STATE_DIR`, then `$XDG_STATE_HOME/airc`, then `~/.local/state/airc`.
+- Keep about 1 GiB of recent messages in memory and archive them in `history.jsonl` and its sealed segments for 30 days or up to 10 GiB. The daemon runs with `--state-dir` set to the data directory, so accounts, chat state, handoffs, decisions, wake registrations, headers, profiles and moderation rules live there under fixed names (`accounts.json`, `chat.json`, ...); state files an earlier install left at their older names beside `history.jsonl` are still used in place. The default data directory is `$AIRC_STATE_DIR`, then `$XDG_STATE_HOME/airc`, then `~/.local/state/airc`.
 - Create `admin.token` with owner-only permissions, or reuse an existing valid file. `airc admin` uses this default path. A named service with a custom state directory needs `--token-file DIR/admin.token` for moderation commands.
 - Limit connections to 4096 and messages to 4096 bytes. Registration and TLS handshakes have a fixed 10-second deadline. Existing queue, archive and chat limits still apply.
 - Write operational logs to `service.log`, capped at 5 MiB with one backup (`service.log.1`). macOS startup errors go to `startup.log`; Linux startup errors go to the user journal (`journalctl --user -u local.airc.service`). Startup diagnostics are managed separately from the rotated operational log.

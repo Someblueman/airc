@@ -90,7 +90,8 @@ type Message struct {
 type Server struct {
 	cfg              Config
 	logger           *slog.Logger
-	mu               sync.Mutex
+	env              storeEnv   // clock, durability policy and log handed to every store (set in New)
+	mu               sync.Mutex // guards everything below except where noted
 	messageMu        sync.Mutex // serializes posts while mu is released for history I/O; released while a post waits for its sync
 	commit           groupCommit
 	clients          map[string]*session
@@ -98,33 +99,22 @@ type Server struct {
 	channels         map[string]map[string]*session
 	watchers         map[string]map[string]*session
 	history          historyRing
-	topics           map[string]topic // channel headers; independent of who is connected
-	topicsAt         string           // file the topics are saved to, if any
-	directory        map[string]protocol.AgentCard
-	profilesAt       string
+	topicState       // channel headers; see topics.go
+	directoryState   // profiles, presence and activity; see profiles.go
 	accessEnabled    bool
 	accessHash       [32]byte
 	adminEnabled     bool
 	adminHash        [32]byte
 	gatewayEnabled   bool
 	gatewayHash      [32]byte
-	moderation       map[string]protocol.ModerationRule
-	moderationAt     string
-	accounts         map[string]account
-	accountsAt       string
+	moderationState                         // mutes and bans; see moderation_store.go
+	accountsState                           // registered users; see accounts.go
 	wake             *wakes                 // nil unless EnableWake
 	pending          map[string]int         // unregistered connections by remote address
-	registrations    map[string][]time.Time // recent account creations by remote address
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
-	chat             chatState
-	chatAt           string
-	handoffs         map[string]handoff   // by offer ID; see handoffs.go
-	handoffLog       *appendLog[handoff]  // nil keeps handoffs in memory only
-	decisions        map[string]decision  // by offer ID; see decisions.go
-	decisionLog      *appendLog[decision] // nil keeps decisions in memory only
-	activity         map[string]*activity // by nickname; see activity.go
-	slowPosts        map[string]time.Time
-	signals          map[string]activitySignal
+	chatStore                               // pins, rooms, polls, operators, slow mode and signals; see chat_state.go
+	handoffState                            // handoffs and their log; see handoffs.go
+	decisionState                           // decisions and their log; see decisions.go
 	seq              uint64
 	histFile         *os.File
 	histPath         string
