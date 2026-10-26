@@ -10,6 +10,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -61,26 +62,16 @@ func nativeObserverCount(t *testing.T, client *irc.Client) int {
 
 func waitNativeObserverCount(t *testing.T, statusClient *irc.Client, want int) {
 	t.Helper()
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, statusClient) >= want {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("native observer count did not reach %d", want)
+	testwait.Every(t, 4*time.Second, 50*time.Millisecond, fmt.Sprintf("the native observer count to reach %d", want), func() bool {
+		return nativeObserverCount(t, statusClient) >= want
+	})
 }
 
 func waitNativeObserverCountAtMost(t *testing.T, statusClient *irc.Client, want int) {
 	t.Helper()
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, statusClient) <= want {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("native observer count did not fall to %d or below", want)
+	testwait.Every(t, 4*time.Second, 50*time.Millisecond, fmt.Sprintf("the native observer count to fall to %d or below", want), func() bool {
+		return nativeObserverCount(t, statusClient) <= want
+	})
 }
 
 func nextRawLiveSignal(t *testing.T, observer *irc.Client, action string) irc.ChatEntry {

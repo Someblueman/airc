@@ -164,18 +164,9 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedSt
 		if admitted.Result == nil || !admitted.Result.Durable {
 			t.Fatal("framed send was not durable", admitted)
 		}
-		var accepted *core.Result
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-			result := call(id+"-receipt", core.Request{Version: 1, RequestID: id + "-receipt", Operation: core.ReceiptGet, LookupID: id}, "")
-			if result.Result != nil && result.Result.State == core.Accepted {
-				accepted = result.Result
-				break
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-		if accepted == nil {
-			t.Fatal("framed send did not reach native acceptance")
-		}
+		accepted := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the framed send "+id+" to reach native acceptance", func() *core.Result {
+			return call(id+"-receipt", core.Request{Version: 1, RequestID: id + "-receipt", Operation: core.ReceiptGet, LookupID: id}, "").Result
+		})
 		seen := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
 		if seen.From != "fixture-author" || seen.Target != room.Name || seen.Message != request.Message {
 			t.Fatal("framed native observer mismatch", seen)

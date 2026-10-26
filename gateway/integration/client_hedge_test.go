@@ -189,16 +189,11 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	renewals := other.accepted.Load()
 	testwait.Until(t, 10*time.Second, "a lease renewal on the other link", func() bool { return other.accepted.Load() > renewals })
 	post(10)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
+	testwait.Every(t, 10*time.Second, 50*time.Millisecond, "every post to arrive", func() bool {
 		mu.Lock()
-		n := len(got)
-		mu.Unlock()
-		if n >= len(sent) || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+		defer mu.Unlock()
+		return len(got) >= len(sent)
+	})
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)

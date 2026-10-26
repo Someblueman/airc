@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlogwriter"
@@ -81,14 +82,10 @@ seed:
 		t.Fatalf("unexpected peer pressure: %+v", event)
 	}
 	t.Logf("peer blocked on %s credit at %d bytes after %d accepted native posts", event.kind, event.limit, seeded)
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) && nativeObserverCount(t, statusClient) > baseline {
-		time.Sleep(50 * time.Millisecond)
-	}
+	testwait.Every(t, 8*time.Second, 50*time.Millisecond, "the WebTransport slow reader's native watch to be released within the write bound", func() bool {
+		return nativeObserverCount(t, statusClient) <= baseline
+	})
 	elapsed := time.Since(started)
-	if nativeObserverCount(t, statusClient) > baseline {
-		t.Fatal("WebTransport slow reader retained native watch past write bound")
-	}
 	if time.Since(event.at) < 2*time.Second {
 		t.Fatalf("native watch released before write deadline after peer pressure: %s", time.Since(event.at))
 	}

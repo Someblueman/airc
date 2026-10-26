@@ -16,6 +16,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestGatewayServeCLIShutdownJoinsActiveReadLease(t *testing.T) {
@@ -79,13 +80,7 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 			t.Error("owned HTTP caller survived cleanup")
 		}
 	})
-	deadline := time.Now().Add(3 * time.Second)
-	for checks.Load() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("CLI read did not issue snapshot command")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	testwait.Every(t, 3*time.Second, 10*time.Millisecond, "the CLI read to issue its snapshot command", func() bool { return checks.Load() > 0 })
 	if err := p.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}

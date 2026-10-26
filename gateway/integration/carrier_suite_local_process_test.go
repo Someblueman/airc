@@ -255,20 +255,15 @@ func localReplayPostsOnce(t *testing.T, e *localProcessEnv) {
 	id, nick, text := e.id("replay"), e.guest("replay"), e.text("replay")
 	e.admitted(t, e.send(t, id, text, nick, ""), id)
 	seen := e.posted(t, text, nick)
-	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+	r := acceptedReceipt(t, 10*time.Second, 50*time.Millisecond, "the replay to report acceptance", func() *core.Result {
 		o := e.send(t, id, text, nick, "")
 		if o.result == nil || o.result.Result == nil || o.result.Result.RequestID != id {
 			t.Fatalf("replay: %v", o)
 		}
-		if r := o.result.Result; r.State == core.Accepted {
-			if r.MessageID != seen.ID || r.SendAttempts != 1 {
-				t.Fatalf("replay answered another delivery: %+v", r)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("replay never reported acceptance: %v", o)
-		}
+		return o.result.Result
+	})
+	if r.MessageID != seen.ID || r.SendAttempts != 1 {
+		t.Fatalf("replay answered another delivery: %+v", r)
 	}
 	if n := (&suiteEnv{socket: e.socket}).nativeCount(t, localRoom, text); n != 1 {
 		t.Fatalf("AIRC holds %d messages for one request ID", n)

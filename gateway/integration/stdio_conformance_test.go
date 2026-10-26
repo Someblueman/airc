@@ -120,18 +120,10 @@ func TestStdioPipeExecutesReadAndReactionOperations(t *testing.T) {
 		t.Fatalf("stdio reaction was not admitted: %+v", reactionResult)
 	}
 	receiptRequest := core.Request{Version: 1, RequestID: "stdio-reaction-receipt", Operation: core.ReceiptGet, LookupID: reaction.RequestID}
-	var receiptResult adapter.FrameResponse
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		receiptResult = call("reaction-receipt", receiptRequest)
-		if receiptResult.Result.Result != nil && receiptResult.Result.Result.State == core.Accepted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("stdio reaction receipt was not accepted: %+v", receiptResult)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	observed := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == receiptResult.Result.Result.MessageID })
+	receiptResult := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the stdio reaction receipt to be accepted", func() *core.Result {
+		return call("reaction-receipt", receiptRequest).Result.Result
+	})
+	observed := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == receiptResult.MessageID })
 	if observed.Reaction != reaction.Reaction || observed.Message != reaction.Reaction || observed.ReplyTo != parent.ID || observed.Target != target.Name {
 		t.Fatalf("stdio reaction native facts mismatch: %+v", observed)
 	}

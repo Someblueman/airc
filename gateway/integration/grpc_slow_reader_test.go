@@ -11,6 +11,7 @@ import (
 
 	v1 "github.com/Someblueman/airc/gateway/api/v1"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -73,13 +74,9 @@ seed:
 	// while that flush is blocked. Use this test's original overall bound,
 	// rather than the generic four-second observer polling bound, so both
 	// immediate-next-post and quiet-heartbeat cleanup remain covered.
-	deadline := started.Add(8 * time.Second)
-	for nativeObserverCount(t, statusClient) > baseline {
-		if !time.Now().Before(deadline) {
-			t.Fatal("native observer survived the eight-second write cleanup bound")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	testwait.Every(t, time.Until(started.Add(8*time.Second)), 50*time.Millisecond, "the native observer to go within the eight-second write cleanup bound", func() bool {
+		return nativeObserverCount(t, statusClient) <= baseline
+	})
 	if ctx.Err() != nil || time.Since(pressureAt) < 2*time.Second {
 		t.Fatalf("cleanup did not follow real write pressure: elapsed=%s ctx=%v", time.Since(pressureAt), ctx.Err())
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -102,13 +103,14 @@ func TestUnixStreamExecutesRoomContextPinsWaitingAndReaction(t *testing.T) {
 
 func unixAccepted(t *testing.T, call func(core.Request) dispatch.DetachedResult, requestID string) string {
 	t.Helper()
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	messageID := ""
+	testwait.Every(t, 5*time.Second, 20*time.Millisecond, "the Unix mutation "+requestID+" to be accepted", func() bool {
 		result := call(core.Request{Version: 1, RequestID: "receipt-" + requestID, Operation: core.ReceiptGet, LookupID: requestID}).Result
-		if result != nil && result.State == core.Accepted && result.MessageID != "" {
-			return result.MessageID
+		if result == nil || result.State != core.Accepted || result.MessageID == "" {
+			return false
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("Unix mutation was not accepted", requestID)
-	return ""
+		messageID = result.MessageID
+		return true
+	})
+	return messageID
 }

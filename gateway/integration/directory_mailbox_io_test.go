@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func directoryMailboxCall(t *testing.T, f *directoryMailboxFixture, r core.Request, encrypted bool) adapter.FrameResponse {
@@ -68,22 +69,18 @@ func directoryMailboxResult(t *testing.T, f *directoryMailboxFixture, name strin
 	var data []byte
 	var err error
 	output := filepath.Join(f.directory, "results", name+".json")
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		data, err = os.ReadFile(output)
-		if err == nil {
-			break
-		}
-		if !os.IsNotExist(err) || !time.Now().Before(deadline) {
-			t.Fatal("missing directory result", err)
-		}
+	testwait.Every(t, 5*time.Second, 10*time.Millisecond, "the directory result", func() bool {
 		select {
 		case <-f.process.done:
 			t.Fatal("directory service stopped", f.process.err, f.process.stderr.String())
 		default:
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
+		data, err = os.ReadFile(output)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal("missing directory result", err)
+		}
+		return err == nil
+	})
 	var response adapter.FrameResponse
 	if err := json.Unmarshal(data, &response); err != nil || response.Version != 1 {
 		t.Fatal("directory RPC failure", err, response)

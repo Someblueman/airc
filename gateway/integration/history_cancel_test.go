@@ -11,6 +11,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/backend"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -61,13 +62,7 @@ func readCancellation(t *testing.T, op core.Operation) {
 			t.Error("history survived cancellation")
 		}
 	})
-	deadline := time.Now().Add(3 * time.Second)
-	for checks.Load() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("history never issued snapshot command")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	testwait.Every(t, 3*time.Second, 10*time.Millisecond, "the history read to issue its snapshot command", func() bool { return checks.Load() > 0 })
 	cancel()
 	select {
 	case err := <-done:

@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -50,15 +51,10 @@ func grpcAccepted(t *testing.T, f grpcGatewayFixture, request core.Request) core
 	if !result.Durable {
 		t.Fatalf("gRPC %s was not durable: %+v", request.Operation, result)
 	}
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	return acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, fmt.Sprintf("gRPC %s to reach accepted", request.Operation), func() *core.Result {
 		receipt := grpcCall(t, f, f.token, core.Request{Version: 1, RequestID: request.RequestID + "-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID})
-		if receipt.State == core.Accepted {
-			return receipt
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	t.Fatalf("gRPC %s did not reach accepted", request.Operation)
-	return core.Result{}
+		return &receipt
+	})
 }
 
 func TestGRPCCapabilitiesAndAllMutationOperations(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -33,18 +34,11 @@ func TestAppendLogPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			}
 			// This control terminates after transport publication/checkpoint cleanup;
 			// filesystem gap controls cover interruptions inside publication.
-			checkpointDeadline := time.Now().Add(time.Second)
-			for {
+			testwait.Every(t, time.Second, 10*time.Millisecond, "the initial publication to be checkpointed", func() bool {
 				_, cursorErr := os.Stat(filepath.Join(f.directory, "cursor.json"))
 				_, claimErr := os.Lstat(filepath.Join(f.directory, "claim.json"))
-				if cursorErr == nil && os.IsNotExist(claimErr) {
-					break
-				}
-				if !time.Now().Before(checkpointDeadline) {
-					t.Fatal("initial publication not completed", cursorErr, claimErr)
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+				return cursorErr == nil && os.IsNotExist(claimErr)
+			})
 
 			select {
 			case <-relay.accepted:

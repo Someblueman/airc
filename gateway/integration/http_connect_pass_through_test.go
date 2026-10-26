@@ -24,6 +24,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/backend"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -248,22 +249,19 @@ addons = [ConnectLog()]
 	t.Cleanup(func() {
 		proxy.stop(t)
 	})
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		conn, dialErr := net.DialTimeout("tcp", proxyHost, 100*time.Millisecond)
-		if dialErr == nil {
-			_ = conn.Close()
-			break
-		}
+	if !testwait.Poll(5*time.Second, 25*time.Millisecond, func() bool {
 		select {
 		case <-proxy.done:
 			t.Fatalf("mitmdump exited during startup: %v; stderr=%s", proxy.err, proxy.stderr())
 		default:
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("mitmdump did not listen; stderr is in %s", proxy.stderrPath)
+		conn, dialErr := net.DialTimeout("tcp", proxyHost, 100*time.Millisecond)
+		if dialErr == nil {
+			_ = conn.Close()
 		}
-		time.Sleep(25 * time.Millisecond)
+		return dialErr == nil
+	}) {
+		t.Fatalf("mitmdump did not listen; stderr is in %s", proxy.stderrPath)
 	}
 	proxy.address = &url.URL{Scheme: "http", Host: proxyHost}
 	return proxy
@@ -306,25 +304,20 @@ func (p *passThroughProxy) stderr() string {
 
 func (p *passThroughProxy) assertConnectObserved(t *testing.T, originHost string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	var lines []string
+	if !testwait.Poll(2*time.Second, 25*time.Millisecond, func() bool {
 		data, err := os.ReadFile(p.logPath)
-		if err == nil {
-			lines := strings.Fields(string(data))
-			if len(lines) > 0 {
-				for _, line := range lines {
-					if line != originHost {
-						t.Fatalf("mitmdump tunneled unexpected CONNECT authority %q; want only %q", line, originHost)
-					}
-				}
-				return
-			}
-		} else if !os.IsNotExist(err) {
+		if err != nil && !os.IsNotExist(err) {
 			t.Fatalf("read mitmdump CONNECT evidence: %v", err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("mitmdump observed no CONNECT request for %s; stderr=%s", originHost, p.stderr())
+		lines = strings.Fields(string(data))
+		return len(lines) > 0
+	}) {
+		t.Fatalf("mitmdump observed no CONNECT request for %s; stderr=%s", originHost, p.stderr())
+	}
+	for _, line := range lines {
+		if line != originHost {
+			t.Fatalf("mitmdump tunneled unexpected CONNECT authority %q; want only %q", line, originHost)
 		}
-		time.Sleep(25 * time.Millisecond)
 	}
 }

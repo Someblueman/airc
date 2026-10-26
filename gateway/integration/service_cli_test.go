@@ -58,9 +58,7 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 		t.Fatal("CLI HTTPS admission failed", response.StatusCode, response.Proto)
 	}
 	seen := next(t, observer, func(e *irc.MessageEvent) bool { return e.Message == r.Message })
-	deadline := time.Now().Add(5 * time.Second)
-	var result core.Result
-	for {
+	result := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the CLI to save acceptance", func() *core.Result {
 		request, err = http.NewRequest(http.MethodGet, "https://"+address+"/v1/requests/"+r.RequestID, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -70,19 +68,14 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		var result core.Result
 		err = json.NewDecoder(response.Body).Decode(&result)
 		_ = response.Body.Close()
 		if err != nil || response.StatusCode != 200 {
 			t.Fatal("CLI status failed", err, response.StatusCode)
 		}
-		if result.State == core.Accepted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("CLI did not save acceptance", result)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+		return &result
+	})
 	if result.MessageID != seen.ID || seen.From != "fixture-author" || seen.Target != r.Target.Name {
 		t.Fatal("CLI observer mismatch", result, seen)
 	}

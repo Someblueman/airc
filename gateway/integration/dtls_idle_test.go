@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/pion/dtls/v3"
 )
 
@@ -115,15 +116,11 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 	}
 
 	var replacement *dtls.Conn
-	for time.Now().Before(started.Add(idle + 10*time.Second)) {
+	if !testwait.Poll(time.Until(started.Add(idle+10*time.Second)), 250*time.Millisecond, func() bool {
 		replacement, err = dialDTLSIdlePeer(f, 2*time.Second)
-		if err == nil {
-			break
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-	if replacement == nil {
-		t.Fatal("DTLS association remained admitted past idle bound")
+		return err == nil
+	}) {
+		t.Fatal("DTLS association remained admitted past idle bound", err)
 	}
 	defer replacement.Close()
 	if elapsed := time.Since(started); elapsed < idle-2*time.Second || elapsed > idle+10*time.Second {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -26,7 +27,7 @@ func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
 	if err := os.WriteFile(source, data[:len(data)/2], 0600); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	f.process.mailboxPassAfter(t, time.Now(), "a mailbox pass over the partial record")
 	for _, name := range []string{"claim.json", "cursor.json", "response.json"} {
 		if _, err := os.Lstat(filepath.Join(f.directory, name)); !os.IsNotExist(err) {
 			t.Fatal("partial record advanced state", name, err)
@@ -84,25 +85,20 @@ func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
 		}
 		if i == 0 {
 			appendLogPublish(t, f, "", nil)
-			deadline := time.Now().Add(3 * time.Second)
-			for {
+			testwait.Every(t, 3*time.Second, 10*time.Millisecond, "the seal to be checkpointed", func() bool {
 				data, err := os.ReadFile(filepath.Join(f.directory, "cursor.json"))
 				var checkpoint struct {
 					Version int                     `json:"version"`
 					Cursor  adapter.AppendLogCursor `json:"cursor"`
 				}
-				if err == nil && json.Unmarshal(data, &checkpoint) == nil && checkpoint.Version == 1 && checkpoint.Cursor.Sealed {
-					break
-				}
-				if !time.Now().Before(deadline) {
-					t.Fatal("seal not checkpointed", err)
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+				return err == nil && json.Unmarshal(data, &checkpoint) == nil && checkpoint.Version == 1 && checkpoint.Cursor.Sealed
+			})
 			if err := os.Remove(source); err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(150 * time.Millisecond)
+			// A pass that found the next generation absent idles the poller
+			// rather than ending the service.
+			f.process.mailboxPassAfter(t, time.Now(), "a mailbox pass after the sealed source went")
 			select {
 			case <-f.process.done:
 				t.Fatal("absent next generation not idle", f.process.err)

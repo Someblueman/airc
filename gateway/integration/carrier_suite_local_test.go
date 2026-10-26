@@ -24,6 +24,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/internal/testfs"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -239,18 +240,19 @@ func dialDirectoryMailboxSuite(_ *testing.T, d suiteDial) (suiteClient, error) {
 // takeLocalFile waits for a published result and consumes it.
 func takeLocalFile(t *testing.T, path string) []byte {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		body, err := os.ReadFile(path)
-		if err == nil {
-			if err := os.Remove(path); err != nil {
-				t.Fatal(err)
-			}
-			return body
-		}
-		if !errors.Is(err, os.ErrNotExist) || time.Now().After(deadline) {
+	var body []byte
+	testwait.Every(t, 10*time.Second, 20*time.Millisecond, "the result "+path, func() bool {
+		var err error
+		body, err = os.ReadFile(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("no result", path, err)
 		}
+		return err == nil
+	})
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
 	}
+	return body
 }
 
 func prepareAppendLog(t *testing.T, l *config.Listener) {

@@ -3,6 +3,8 @@ package gateway_test
 import (
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestNativeStatusReaderOwnsOneNonObservingConnection(t *testing.T) {
@@ -17,16 +19,11 @@ func TestNativeStatusReaderOwnsOneNonObservingConnection(t *testing.T) {
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
+	testwait.Until(t, 2*time.Second, "the STATUS reader's owned close to end its connection", func() bool {
 		status := nativeStatus(t, probe)
 		if status.Observers != 0 {
 			t.Fatalf("STATUS reader became an observer: %+v", status)
 		}
-		if status.Connections == 1 {
-			return
-		}
-		time.Sleep(time.Millisecond)
-	}
-	t.Fatal("STATUS reader survived its owned close")
+		return status.Connections == 1
+	})
 }

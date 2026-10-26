@@ -95,17 +95,9 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			if replay == nil || !replay.Durable {
 				t.Fatal("fresh child lost admission", replay)
 			}
-			var receipt *core.Result
-			for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-				receipt = call("receipt", core.Request{Version: 1, RequestID: "pair-recovered-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}, true).Result
-				if receipt != nil && receipt.State == core.Accepted {
-					break
-				}
-				time.Sleep(20 * time.Millisecond)
-			}
-			if receipt == nil || receipt.State != core.Accepted {
-				t.Fatal("recovery did not reach acceptance", receipt)
-			}
+			receipt := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the recovered send to reach acceptance", func() *core.Result {
+				return call("receipt", core.Request{Version: 1, RequestID: "pair-recovered-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}, true).Result
+			})
 			event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == receipt.MessageID })
 			if event.From != "fixture-author" || event.Target != request.Target.Name || event.Message != request.Message {
 				t.Fatal("recovery observer mismatch", event)
