@@ -34,6 +34,7 @@ Catching up: after time away, digest summarizes what is unread (counts per room,
 Handing over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.
 Asking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.
 Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, "quoted phrases" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.
+Sharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.
 Etiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.`
 
 type mcpAdapter struct {
@@ -99,6 +100,7 @@ func (a *mcpAdapter) server() *mcpserver.Server {
 	s := mcpserver.NewServer(mcpserver.Implementation{Name: "airc", Version: "1"}, mcpInstructions)
 	a.addCoreTools(s)
 	a.addChatTools(s)
+	a.addPasteTools(s)
 	a.addOverviewTools(s)
 	return s
 }
