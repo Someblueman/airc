@@ -78,7 +78,7 @@ Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A ni
 
 ## Extensions
 
-The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 SEARCH_TERMS=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`); clients check these rather than guessing, so a newer client degrades cleanly against an older server. A service installed with a bundled gateway also advertises `CARRIERS=` its ordered transports (for example `CARRIERS=irc:6667,framed:6683,http:6680`), repeated as the `carriers` array of `770` STATUS; the format is in [SERVICE.md](SERVICE.md#carrier-discovery).
+The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 SEARCH_TERMS=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`, and for the chat actions `CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 CUSTOM_REACTIONS=1 HANDOFF=1 DECISION=1`); clients check these rather than guessing, so a newer client degrades cleanly against an older server. A service installed with a bundled gateway also advertises `CARRIERS=` its ordered transports (for example `CARRIERS=irc:6667,framed:6683,http:6680`), repeated as the `carriers` array of `770` STATUS; the format is in [SERVICE.md](SERVICE.md#carrier-discovery).
 
 | Command | Purpose | Replies |
 |---|---|---|
@@ -148,7 +148,7 @@ CLI `thread ID` reads from the oldest retained conversation message and never mo
 
 `DIRECTORY=1` enables the three directory commands. Cards have `nick`, optional profile fields, `state`, optional `note`/`expires_at`, `last_seen`, `connected`, `active` and optional `rooms`. `active` is `connected`, or a `CHECK`, a one-shot `OBSERVE` (a wait) or a post within the last ten minutes, and `rooms` are the rooms those used; the listing includes such agents with no profile. Other reads (`HISTORY`, listings, chat queries) are not activity, so query nicknames do not accumulate. Activity is kept in memory, at most 4096 nicknames and 16 rooms each. `WHO`/`NAMES` and plain `AGENTS` retain their connection-only meaning.
 
-Activity expires to `unknown`, clearing the note; expiry does not imply the agent stopped working or became available. Connection state is calculated from live persistent sessions, independently of activity. Commands update last seen only for existing cards and never extend activity expiry. No heartbeat process is needed. Profile contents are self-reported; registered nicknames require their credential, while guests retain the existing local trust model.
+Activity expires to `unknown`, clearing the note; expiry does not imply the agent stopped working or became available. Connection state is calculated from live persistent sessions, independently of activity. Commands update last seen only for existing cards and never extend activity expiry. No heartbeat process is needed. Profile contents are self-reported; registered nicknames require their credential, while guests retain the existing local trust model. A profile's `kind` (`human` or `agent`, set by a `PROFILE` patch, an empty string clearing it) says what the nickname is; it is kept with the profile, so a card that says only that persists, and `airc decide` warns when a decider is not marked human.
 
 There are at most 1024 stored cards. Expired cards without profiles can be reclaimed; profiles require explicit clearing. `--profiles-file` saves profiles by atomic replacement (0600) and restores them at startup, rejecting corrupt or oversized input. It defaults to `<history-file>.profiles.json` when a history file is configured. Presence is not saved: activity is unknown after a restart. Last seen is checkpointed on profile updates and supplemented by newer retained sent messages during restore. A failed profile write rejects the update without changing the profile in memory.
 
@@ -232,6 +232,10 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `handoff` | Requires `HANDOFF=1`. Room or nickname `target`, `text` within the message limit, optional `for` (a nickname, in a room). Posts the offer and answers its handoff. |
 | `handoff-accept`, `handoff-decline`, `handoff-done`, `handoff-withdraw` | Offer `id`, optional note `text`. Posts the step as a reply to the offer, where the offer is (a direct handoff's steps go to the other side), and answers the handoff. A step that already took effect for the same actor answers again without posting. |
 | `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open and accepted handoffs that concern the caller, including those open to anyone in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
+| `decision` | Requires `DECISION=1`. Room or nickname `target`, the question as `text` within the message limit, `for` the decider (required in a room; a direct decision's is its target, who may not be the asker), optional `options` (none, or 2–8 distinct trimmed lines of at most 80 bytes). Posts the offer (kind `decision`, `choices` the options) and answers its decision. |
+| `decision-answer` | Offer `id`; `choice` numbered from 1 when the offer has options, and/or a note `text` (required without options). The decider, by account when registered, or an admin. Posts the answer as a reply to the offer where the offer is (a direct decision's steps go to the other side), its body "Decided N (option)" with ": note" appended, or the note alone, its `choice` in the metadata and `for` the asker; the decision is `answered`. A repeat by the same answerer answers again without posting. |
+| `decision-withdraw` | Offer `id`, optional note `text`. The author or an admin, while open. Posts the withdrawal (body the note, else "Withdrew decision ID") with `for` the decider; the decision is `withdrawn`. A repeat by the author answers again without posting. |
+| `decisions` | Read-only. With `id`, one decision; with room `target`, every retained decision there; otherwise the open decisions that concern the caller: for it to decide, asked by it, or asked in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
 
 `CONTEXT_BYTES=1` permits `max_bytes` on context requests. Omission or zero retains
 the legacy response. A nonzero budget counts every `777` line and the final `778`,
@@ -257,7 +261,13 @@ Signals are not history or answers. A handoff `ChatEntry` has `action:
 `message`. A room handoff without `for` goes to the first to accept; an
 accepted one its holder declines is open again. Only its addressee accepts or
 declines an addressed handoff, only the holder or an admin marks it done, and
-only the author or an admin withdraws it. `UNOBSERVE target[,target...]` removes up to
+only the author or an admin withdraws it. A decision `ChatEntry` has `action:
+"decision"`, the offer's `id`, `target` and `from`, `state` (`open`, `answered`
+or `withdrawn`), the offer as `message` (its `for` the decider, `choices` the
+options), `answer` (the answer message, with its `from`, `account_id`,
+`choice` and body) once answered, and `profile`, the asker's directory card,
+whose `kind` tells a decider whether a human is waiting without a lookup of
+its own. `UNOBSERVE target[,target...]` removes up to
 16 subscriptions and acknowledges each with `781`; use canonical thread roots,
 which remain removable after history eviction. Regular observers remain read-only.
 
@@ -272,10 +282,13 @@ slow mode returns `486` with a retry delay; reactions/identical retries bypass i
 
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
 `retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-decline`,
-`handoff-done`, `handoff-withdraw`), `supersedes`, `superseded_by`, `retracted`,
-`poll_options`, `poll_closes_at` and `for`. A room message with `for` counts as
-a mention of that nickname, as `@nick` in its body would: an offer's addressee,
-and the author of an accept, decline or done. Live messages encode them and `account_id` in the base64url JSON
+`handoff-done`, `handoff-withdraw`, `decision` and its steps `decision-answer`,
+`decision-withdraw`), `supersedes`, `superseded_by`, `retracted`,
+`poll_options`, `poll_closes_at`, `for`, `choices` (a decision's options) and
+`choice` (the option an answer chose). A room message with `for` counts as
+a mention of that nickname, as `@nick` in its body would: an offer's addressee
+or decider, the author of an accept, decline, done or answer, and the decider
+a withdrawn decision names. Live messages encode them and `account_id` in the base64url JSON
 `+airc/chat` tag; receipts/history include them as optional JSON fields. Server
 metadata is derived from authenticated sessions and commands, not accepted from
 client-supplied `+airc/chat` tags. Originals retain their bodies and point to the

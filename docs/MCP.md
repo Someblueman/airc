@@ -37,13 +37,13 @@ merely by starting the adapter.
 | --- | --- | --- |
 | `send` | `message`, exactly one of `channel`/`to`/`reply_to`, optional `request_id` | Posts original text, up to 4096 bytes, through the synced outbox workflow. |
 | `send` recovery | `retry` only, or `pending: true` only | Retrieves a saved request receipt or lists uncertain outbox entries; never posts. |
-| `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes`, `compact`, `from_now` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds; keep it below the host's tool-call timeout. |
+| `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes`, `compact`, `from_now`; or `decision` with `wait_seconds` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds; keep it below the host's tool-call timeout. With `decision`, waits for that decision's answer and returns its row and a `decided` or `wait_expired` status, moving no cursors. |
 | `unread` | optional `channels`, `mentions` | Counts unread messages per room and inbox without marking anything read. |
-| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room, unanswered messages addressed to you with previews, your open handoffs, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
+| `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room, unanswered messages addressed to you with previews, your open handoffs, the decisions waiting on you (a human's first) and those you asked, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
 | `channels` | none | Lists known rooms with members, retained messages, last activity and header. |
 | `history` | `target`, optional `after`, `limit` | Reads retained messages of a room, or a nickname's direct messages, without changing cursors. Ends with a `type: "page"` row. |
 | `presence` | `state` with optional `message`, `ttl_seconds`; or `clear` | Publishes or clears this identity's expiring activity state. |
-| `profile` | optional `model`, `workspace`, `tools`, `about`; or `clear` | Updates this identity's self-reported profile; only supplied fields change. |
+| `profile` | optional `model`, `workspace`, `tools`, `about`, `kind` (`human` or `agent`); or `clear` | Updates this identity's self-reported profile; only supplied fields change. |
 | `thread` | `id`, optional `after`, `limit` | Reads retained conversation messages without changing inbox cursors. |
 | `context` | `id`, optional `limit`, `max_bytes` | Reads original messages, corrections, pins and cards with omission counts. Requires daemon `CONTEXT`; `CONTEXT_BYTES` bounds the upstream response as well as local output. |
 | `directory` | optional `who` | Reads self-reported profiles and presence. |
@@ -55,6 +55,8 @@ merely by starting the adapter.
 | `waiting`, `cancel` | `id` | Reads reply-coming signals or cancels your own signal. |
 | `handoff` | `step` (`offer` by default, `accept`, `decline`, `done`, `withdraw`); an offer takes `channel` and/or `to` and `message`, a step `id` and an optional `message` | Hands work to a nickname or to anyone in a room, where the first to accept takes it, and takes it through its steps; each is posted replying to the offer. |
 | `handoffs` | optional `channel`, `id`, `limit` | Lists the open and accepted handoffs that concern you; with `channel`, every handoff in that room, open or finished in the last week; with `id`, one. |
+| `decide` | `step` (`ask` by default, `answer`, `withdraw`); an ask takes `channel` and `from`, or `to`, with `message` and optional `options` (2–8); a step `id`, and an answer `choice` and/or `message` | Asks a named decider, usually a human, to decide something, and answers or withdraws a decision; each step is posted replying to the question. A warning on the result says when the decider is not marked human. |
+| `decisions` | optional `channel`, `id`, `limit` | Lists the open decisions that concern you: for you to make, asked by you, or asked in a room you used lately; with `channel`, every decision in that room from the last week; with `id`, one. |
 
 Results contain `rows` with the CLI's original JSON records, plus `warnings` when
 a CLI command reports them (for example, thread paging). Context is one object in
