@@ -45,7 +45,10 @@ type decision struct {
 	Updated time.Time `json:"updated"`
 }
 
-func (d decision) live() bool { return d.State == decisionOpen }
+func (d decision) id() string           { return d.Offer.ID }
+func (d decision) live() bool           { return d.State == decisionOpen }
+func (d decision) offer() Message       { return d.Offer }
+func (d decision) updatedAt() time.Time { return d.Updated }
 
 func validDecision(d decision) error {
 	m := d.Offer
@@ -109,7 +112,7 @@ func (s *Server) RestoreDecisions(path string) error {
 	if err != nil {
 		return fmt.Errorf("decisions %s: %w", path, err)
 	}
-	if liveDecisions(loaded) > maxLiveDecisions {
+	if liveRecords(loaded) > maxLiveDecisions {
 		return fmt.Errorf("decisions %s: more than %d open", path, maxLiveDecisions)
 	}
 	s.decisions = loaded
@@ -118,62 +121,19 @@ func (s *Server) RestoreDecisions(path string) error {
 }
 
 func readDecisions(path string) (map[string]decision, error) {
-	return readLog(path, maxDecisionRecord, func(d decision) (string, error) { return d.Offer.ID, validDecision(d) })
+	return readLedger(path, maxDecisionRecord, validDecision)
 }
 
 // compactDecisionsLocked drops decisions finished more than a week ago and
 // rewrites the log with one line per decision, then appends to the new file.
 func (s *Server) compactDecisionsLocked() error {
-	now := s.now()
-	for id, d := range s.decisions {
-		if !d.live() && now.Sub(d.Updated) > decisionKeep {
-			delete(s.decisions, id)
-		}
-	}
-	return s.decisionLog.rewrite(sortedDecisions(s.decisions), s.cfg.Sync)
+	return compactLedger(s.decisionLog, s.decisions, decisionKeep, s.now(), s.cfg.Sync)
 }
 
 // saveDecisionLocked records d's new state before it takes effect, and
 // compacts the log once superseded lines outnumber the decisions held.
 func (s *Server) saveDecisionLocked(d decision) error {
-	if l := s.decisionLog; l != nil {
-		if l.dirty {
-			if err := s.compactDecisionsLocked(); err != nil {
-				return err
-			}
-		}
-		if err := l.append(d, s.cfg.Sync); err != nil {
-			return err
-		}
-	}
-	s.decisions[d.Offer.ID] = d
-	if l := s.decisionLog; l != nil && l.crowded(len(s.decisions)) {
-		if err := s.compactDecisionsLocked(); err != nil {
-			s.logger.Warn("decision_compaction_failed", "error", err)
-		}
-	}
-	return nil
-}
-
-func liveDecisions(all map[string]decision) int {
-	n := 0
-	for _, d := range all {
-		if d.live() {
-			n++
-		}
-	}
-	return n
-}
-
-func sortedDecisions(all map[string]decision) []decision {
-	out := make([]decision, 0, len(all))
-	for _, d := range all {
-		out = append(out, d)
-	}
-	slices.SortFunc(out, func(a, b decision) int {
-		return cmp.Or(a.Offer.Timestamp.Compare(b.Offer.Timestamp), cmp.Compare(a.Offer.Seq, b.Offer.Seq), cmp.Compare(a.Offer.ID, b.Offer.ID))
-	})
-	return out
+	return recordLedger(s.decisionLog, s.decisions, d, s.cfg.Sync, s.compactDecisionsLocked, s.logger, "decision_compaction_failed")
 }
 
 // decisionEntryLocked is d as a CHAT entry: the offer, the answer once there
@@ -235,7 +195,7 @@ func (s *Server) offerDecisionLocked(client *session, r protocol.ChatRequest) er
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
 	}
-	if live := liveDecisions(s.decisions); live >= maxLiveDecisions {
+	if live := liveRecords(s.decisions); live >= maxLiveDecisions {
 		return fmt.Errorf("%d decisions are open; answer or withdraw some first", live)
 	}
 	m := s.newMessage(client.client.Nick, target, body, nil)
@@ -364,7 +324,7 @@ func (s *Server) listDecisionsLocked(client *session, r protocol.ChatRequest) er
 	now := s.now()
 	_, recent, _ := s.recentLocked(client.client.Nick, now)
 	var out []decision
-	for _, d := range sortedDecisions(s.decisions) {
+	for _, d := range sortedRecords(s.decisions) {
 		if !d.live() && now.Sub(d.Updated) > decisionKeep {
 			continue
 		}
