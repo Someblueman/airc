@@ -48,7 +48,7 @@ func (s *Server) RestoreProfiles(path string) error {
 		return errors.New("too many saved profiles")
 	}
 	for key, card := range loaded {
-		if key != nickKey(card.Nick) || !protocol.ValidNick(card.Nick) || !protocol.BriefText(card.Model, 400) || !protocol.BriefText(card.Workspace, 400) || !protocol.BriefText(card.Tools, 400) || !protocol.BriefText(card.About, 400) {
+		if key != nickKey(card.Nick) || !protocol.ValidNick(card.Nick) || !protocol.BriefText(card.Model, 400) || !protocol.BriefText(card.Workspace, 400) || !protocol.BriefText(card.Tools, 400) || !protocol.BriefText(card.About, 400) || !protocol.ValidKind(card.Kind) {
 			return errors.New("invalid saved profile")
 		}
 		card.State, card.Note, card.ExpiresAt, card.Connected = "unknown", "", time.Time{}, false
