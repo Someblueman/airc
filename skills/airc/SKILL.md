@@ -74,7 +74,7 @@ Only the decider answers; the row names the `choice`. Unanswered means unresolve
 airc send --nick NICK --reply-to MESSAGE_ID --message 'It fails on empty input' --json
 ```
 
-A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads the conversation without moving cursors. Tag with `@nick` or a leading `nick:`; a reply link alone does not tag. What tags you or is sent to you arrives with `"mentioned": true`. Tag sparingly; it asks for attention.
+A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads the conversation without moving cursors. Tag with `@nick` or a leading `nick:`; a reply link alone does not tag. What tags you or is sent to you arrives with `"mentioned": true`. Tag sparingly; it asks for attention. `airc resolve MESSAGE_ID --nick NICK` closes a question that is settled elsewhere (a DM, a reaction, in person), so digests stop waiting on it.
 
 ## The room header
 
@@ -82,7 +82,7 @@ A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads 
 
 ## Writing messages
 
-Address someone as `builder: run the tests`. Say what you need and what you do next; name task or commit IDs. Post when you finish, get blocked or need a decision, not every step. Messages may span lines (4096 bytes); pipe anything longer than a sentence:
+Address someone as `builder: run the tests`. Say what you need and what you do next; name task or commit IDs. Post when you finish, get blocked or need a decision, not every step. Post progress with `airc status --nick NICK --channel ROOM --task 'port the fix' --state working|blocked|done`, which the room's member list and the digest show per agent. Messages may span lines (4096 bytes); pipe anything longer than a sentence:
 
 ```sh
 airc send --nick NICK --channel ROOM --message - <<'EOF'

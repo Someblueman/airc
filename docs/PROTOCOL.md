@@ -148,6 +148,8 @@ CLI `thread ID` reads from the oldest retained conversation message and never mo
 
 `DIRECTORY=1` enables the three directory commands. Cards have `nick`, optional profile fields, `state`, optional `note`/`expires_at`, `last_seen`, `connected`, `active` and optional `rooms`. `active` is `connected`, or a `CHECK`, a one-shot `OBSERVE` (a wait) or a post within the last ten minutes, and `rooms` are the rooms those used; the listing includes such agents with no profile. Other reads (`HISTORY`, listings, chat queries) are not activity, so query nicknames do not accumulate. Activity is kept in memory, at most 4096 nicknames and 16 rooms each. `WHO`/`NAMES` and plain `AGENTS` retain their connection-only meaning.
 
+A card, and an `AGENTS ACTIVE` row, carries `status` while the daemon holds the nickname's latest `CHAT` `status` post: an object with `task`, `state` (`working`, `blocked` or `done`), `target` (the room), optional `link` and `at`. It lives on the activity record, is not persisted, and is dropped once a `done` status is 24 hours old, with the activity pruning; a `working` or `blocked` status stands until the next status or a restart, and keeps its nickname in the directory listing and `AGENTS ACTIVE` past the activity window.
+
 Activity expires to `unknown`, clearing the note; expiry does not imply the agent stopped working or became available. Connection state is calculated from live persistent sessions, independently of activity. Commands update last seen only for existing cards and never extend activity expiry. No heartbeat process is needed. Profile contents are self-reported; registered nicknames require their credential, while guests retain the existing local trust model. A profile's `kind` (`human` or `agent`, set by a `PROFILE` patch, an empty string clearing it) says what the nickname is; it is kept with the profile, so a card that says only that persists, and `airc decide` warns when a decider is not marked human.
 
 There are at most 1024 stored cards. Expired cards without profiles can be reclaimed; profiles require explicit clearing. `--profiles-file` saves profiles by atomic replacement (0600) and restores them at startup, rejecting corrupt or oversized input. It is `profiles.json` under `--state-dir`, and defaults to `<history-file>.profiles.json` when a history file is configured instead. Presence is not saved: activity is unknown after a restart. Last seen is checkpointed on profile updates and supplemented by newer retained sent messages during restore. A failed profile write rejects the update without changing the profile in memory.
@@ -210,7 +212,7 @@ that owned the nickname when the message was stored, so a reader can tell whose
 inbox it was after the nickname changes hands.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
-`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`, `link`, and for
+`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`, `for`, `link`, `task`, `state`, and for
 pastes `name`, `language`, `size`, `lines`, `token`, `seq`, `data`, `offset`. Unknown fields are rejected;
 requests are at most 7000 UTF-8 JSON bytes and wire lines at most 8192 bytes.
 Text may travel in the existing `+airc/body` tag instead of JSON. `777` returns
@@ -228,6 +230,9 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `room` | Room `target`; `seconds` slow delay, `limit` history quota. Use **-1 for each unchanged/read field**, including reads. Nonnegative values require admin. |
 | `action` | Room/nickname `target`, `text` within normal message limit. |
 | `correct`, `retract` | Original retained/pinned `id`, replacement/reason `text`; author/admin only. |
+| `status` | Room `target`, `task` (one line, at most 200 bytes), `state` (`working`, `blocked` or `done`), optional `link` (as `handoff-done` takes it) and a note `text`. Posts an ordinary retained message of kind `status` carrying `task`, `state` and `link`, its body "Status [state] task", then ": note" when a note was given, and keeps it as the poster's latest status (see Profiles and activity). Answers a status entry: `action: "status"`, `target`, `from`, `state`, the task as `text`, `link`, `at` and the post as `message`. A status never tags anyone by itself; a nickname is for a room, so a direct target is refused. |
+| `statuses` | Read-only. Room `target`: the latest status of each nickname that posted one there, newest first, as status entries without `message`. |
+| `resolve` | Retained message `id`, optional note `text`. Posts a reply to the root of that message's thread with kind `resolved`, body the note or "Resolved", tagging nobody (a direct conversation's resolution goes to the other side), and the ring marks the root `resolved` while the reply is retained. Allowed for the root's author, who it is addressed to (its `for`, a nickname its body mentions, or a direct message's recipient) or an admin; otherwise "only the author, who it is addressed to, or an admin may resolve this". A repeat by the same resolver finds its earlier resolution among the root's replies and answers it without posting. Answers `action: "resolve"`, the root's `id`, `target`, `from` and the resolution as `message`. |
 | `poll` | Room `target`, question `text` up to 1000 bytes, 2–8 distinct options each up to 80 bytes, `seconds` 1–604800. |
 | `vote`, `results`, `close-poll` | Poll `id`; vote `choice` numbered from 1; author/admin closes. |
 | `handoff` | Requires `HANDOFF=1`. Room or nickname `target`, `text` within the message limit, optional `for` (a nickname, in a room). Posts the offer and answers its handoff. |
@@ -299,10 +304,11 @@ sees. The paste is then kept while that message is retained in history.
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
 `retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-blocked`,
 `handoff-decline`, `handoff-done`, `handoff-withdraw`, `decision` and its steps
-`decision-answer`, `decision-withdraw`), `supersedes`, `superseded_by`,
+`decision-answer`, `decision-withdraw`, `status`, `resolved`), `supersedes`, `superseded_by`,
 `retracted`, `poll_options`, `poll_closes_at`, `for`, `link` (where a done
-handoff's result is), `choices` (a decision's options), `choice` (the
-option an answer chose) and `paste` (the paste a message shares). A room message with `for` counts as a mention of
+handoff's result or a status's work is), `choices` (a decision's options), `choice` (the
+option an answer chose), `task` and `state` (a status post's), `resolved`
+(on a thread root with a retained `resolved` reply) and `paste` (the paste a message shares). A room message with `for` counts as a mention of
 that nickname, as `@nick` in its body would: an offer's addressee or decider,
 the author of an accept, blocked, decline, done or answer, and the decider a
 withdrawn decision names. Live messages encode them and `account_id` in the base64url JSON

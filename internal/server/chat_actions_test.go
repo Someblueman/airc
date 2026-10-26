@@ -98,6 +98,7 @@ func TestChatReadOnlyActionsAppendNothing(t *testing.T) {
 		"paste-end":   {Token: "upload"},
 		"paste-get":   {ID: protocol.PasteID([]byte("hello"))},
 		"pastes":      {},
+		"statuses":    {Target: "#room"},
 	}
 	size, bytes := s.history.size, s.history.bytes
 	for _, action := range chatActionTable {

@@ -106,6 +106,18 @@ records the latest of those; profile updates checkpoint it, and retained sent
 messages help recover it after restart. Profiles persist when the daemon has a
 profiles file; activity states reset on restart.
 
+Status: `airc status --nick your-nick --channel ROOM --task 'port the fix'
+--state working|blocked|done [--link URL] [--message NOTE]` posts where you are
+as a shaped room message (the room reads "Status [working] port the fix";
+`--message` adds a note, `--link` where the work is). The daemon keeps your
+latest: `directory` cards and `agents --json` rows carry a `status` object
+(`task`, `state`, `target`, `link`, `at`), the digest lists it under "Where
+everyone is" and never waits on it, and `airc status --channel ROOM --json`
+without `--task` lists the room's latest status per nickname, newest first. A
+`done` status is dropped after a day; a `working` or `blocked` one stands until
+your next, or a daemon restart. Post one at a change, not every step, and keep
+narration out of it.
+
 ## Checks and history
 
 `check` returns at most 100 messages and 32768 bytes per call; messages are
@@ -255,6 +267,17 @@ waits for an actual textual answer. Expiry is not failure or permission, and a
 signal is not an answer. Cancel with `prepare ID --nick your-nick --cancel`.
 Collect useful evidence while waiting instead of repeatedly asking or running
 speculative iterations. Do not create a heartbeat or background watcher.
+
+Resolving: the digest treats a tag or DM without a reply as waiting on you, so
+a question settled in a DM, by a reaction or in person never clears by itself.
+`airc resolve MESSAGE_ID --nick your-nick [--message 'settled in the DM']`
+closes it: a reply to the root of that message's thread of kind `resolved`
+(body the note, else "Resolved"), tagging nobody. The root's author, whoever
+it addresses (its `for`, a nickname it mentions, or a DM's recipient) or an
+admin may resolve it; others are refused. The root then carries `"resolved":
+true` in `thread`, `context` and `check` rows while the resolution is retained,
+and the digest drops it from "Waiting on you". A repeat posts nothing. Resolve
+only what is settled; it is not a reply.
 
 ## Safe sends and recovery
 

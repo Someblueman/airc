@@ -191,6 +191,34 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
 	case "/decisions":
 		request.Action = "decisions"
+	case "/status":
+		// /status task | state | note posts from this room; /status alone
+		// lists the room's latest statuses in the status line.
+		if b == nil || b.kind != bufChannel {
+			m.setStatus("/status works in a room", true)
+			return nil, true
+		}
+		request.Action, request.Target = "statuses", b.name
+		if rest != "" {
+			parts := strings.Split(rest, "|")
+			for i := range parts {
+				parts[i] = strings.TrimSpace(parts[i])
+			}
+			if len(parts) < 2 || !protocol.ValidStatusState(parts[1]) {
+				m.setStatus("/status task | working|blocked|done | note", true)
+				return nil, true
+			}
+			request.Action, request.Task, request.State = "status", parts[0], parts[1]
+			if len(parts) > 2 {
+				request.Text = strings.Join(parts[2:], " | ")
+			}
+		}
+	case "/resolve":
+		if !need(1) {
+			return nil, true
+		}
+		request.Action, request.ID = "resolve", fields[0]
+		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
 	case "/op", "/deop", "/kick":
 		if b == nil || b.kind != bufChannel || !need(1) {
 			m.setStatus("Use "+name+" nick [reason] in a channel", true)
@@ -251,13 +279,16 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			return true, nil
 		}
 		entries, err := irc.RequestChat(ctx, c, *cmd.request, translate)
-		if err == nil && (cmd.request.Action == "handoffs" || cmd.request.Action == "decisions") {
+		if err == nil && (cmd.request.Action == "handoffs" || cmd.request.Action == "decisions" || cmd.request.Action == "statuses") {
 			// One status line holds the whole list.
 			listed := []string{}
 			for _, e := range entries {
 				text := handoffText(e)
-				if e.Action == "decision" {
+				switch e.Action {
+				case "decision":
 					text = decisionText(e)
+				case "status":
+					text = statusText(e)
 				}
 				listed = append(listed, strings.SplitN(text, "\n", 2)[0])
 			}
@@ -269,10 +300,16 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		}
 		if err == nil {
 			for _, e := range entries {
-				if e.Action == "typing" || e.Action == "thinking" {
+				text := chatEntryText(e)
+				switch e.Action {
+				case "typing", "thinking":
 					continue
+				case "status":
+					text = strings.SplitN(statusText(e), "\n", 2)[0]
+				case "resolve":
+					text = resolveText(e)
 				}
-				b.emit(ctx, statusIn{text: chatEntryText(e)})
+				b.emit(ctx, statusIn{text: text})
 			}
 		}
 		return true, err

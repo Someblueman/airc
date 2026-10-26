@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"sort"
@@ -14,13 +15,15 @@ import (
 
 // agentListing is one agent in AGENTS. An agent with a persistent session
 // has its joined channels and when it connected; with ACTIVE, a one-shot agent
-// active within the last ten minutes is listed too, with the rooms it used and
-// when it was last active, and no connection time.
+// active within the last ten minutes, or whose status still stands, is listed
+// too, with the rooms it used and when it was last active, and no connection
+// time. Status is the agent's latest status post while the daemon holds it.
 type agentListing struct {
-	Nick        string    `json:"nick"`
-	Channels    []string  `json:"channels"`
-	ConnectedAt time.Time `json:"connected_at,omitzero"`
-	ActiveAt    time.Time `json:"active_at,omitzero"`
+	Nick        string                `json:"nick"`
+	Channels    []string              `json:"channels"`
+	ConnectedAt time.Time             `json:"connected_at,omitzero"`
+	ActiveAt    time.Time             `json:"active_at,omitzero"`
+	Status      *protocol.AgentStatus `json:"status,omitempty"`
 }
 
 func (s *Server) statusLocked(client *session) {
@@ -222,6 +225,7 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 func (s *Server) agentsLocked(client *session, command protocol.Command) {
 	entries := make([]agentListing, 0, len(s.clients))
 	listed := map[string]bool{}
+	now := s.now()
 	for _, member := range s.clients {
 		if !member.registered || member.hidden() || member == client {
 			continue
@@ -231,19 +235,19 @@ func (s *Server) agentsLocked(client *session, command protocol.Command) {
 			channels = append(channels, channel)
 		}
 		sort.Strings(channels)
-		entries = append(entries, agentListing{Nick: member.client.Nick, Channels: channels, ConnectedAt: member.client.ConnectedAt})
+		entries = append(entries, agentListing{Nick: member.client.Nick, Channels: channels, ConnectedAt: member.client.ConnectedAt, Status: s.agentStatusLocked(member.client.Nick, now)})
 		listed[nickKey(member.client.Nick)] = true
 	}
 	// Older clients never ask, so they never see an entry without a
 	// connection time.
 	if mode, _ := command.Param(0); strings.EqualFold(mode, "ACTIVE") {
-		now := s.now()
 		for key, a := range s.activity {
 			if listed[key] || key == nickKey(client.client.Nick) {
 				continue
 			}
-			if seen, rooms, ok := s.recentLocked(a.nick, now); ok {
-				entries = append(entries, agentListing{Nick: a.nick, Channels: append([]string{}, rooms...), ActiveAt: seen})
+			status := s.agentStatusLocked(a.nick, now)
+			if seen, rooms, ok := s.recentLocked(a.nick, now); ok || status != nil {
+				entries = append(entries, agentListing{Nick: a.nick, Channels: append([]string{}, rooms...), ActiveAt: cmp.Or(seen, a.seen), Status: status})
 			}
 		}
 	}

@@ -395,6 +395,10 @@ func (m *uiModel) memberPane(b *uiBuffer, rows, width int) []string {
 		if strings.EqualFold(p.nick, m.nick) {
 			name += " (you)"
 		}
+		// A status marks the name: » working, ! blocked, ✓ done.
+		if state := m.statuses[strings.ToLower(p.nick)]; state != "" {
+			name += " " + statusMark(state)
+		}
 		room := max(width-2-utf8.RuneCountInString(suffix)-1, 1)
 		label := fitPlain(name, room)
 		cells = append(cells, padVisible(" "+mark+" "+sty(color, label)+sty("2", suffix), width))

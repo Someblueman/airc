@@ -355,6 +355,16 @@ func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 		if label := protocol.DecisionStepText(m.Kind, replyTo, 0, "", ""); body != label {
 			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
 		}
+	case "status":
+		// The body already reads "Status [state] task: note"; a link follows.
+		if m.Link != "" && !strings.Contains(body, m.Link) {
+			body += " " + m.Link
+		}
+	case "resolved":
+		body = "[resolved " + replyTo + "] " + body
+	}
+	if m.Resolved {
+		body = "[resolved] " + body
 	}
 	if m.Retracted {
 		body = "[retracted; see " + m.SupersededBy + "] " + body

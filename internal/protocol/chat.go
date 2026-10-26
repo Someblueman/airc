@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -41,6 +42,44 @@ type ChatMetadata struct {
 	// Paste describes the paste a message shares (PasteTag), whose
 	// reference line ends the body.
 	Paste *PasteInfo `json:"paste,omitempty"`
+	// Task and State are a status post's shape: what its author is on and
+	// whether it is working, blocked or done with it; Link, where the work
+	// is, when given.
+	Task  string `json:"task,omitempty"`
+	State string `json:"state,omitempty"`
+	// Resolved marks a thread root that has a retained reply of kind
+	// resolved: what it asked is settled, wherever that happened.
+	Resolved bool `json:"resolved,omitempty"`
+}
+
+// StatusStates are the states a status post may be in.
+var StatusStates = []string{"working", "blocked", "done"}
+
+// MaxTaskBytes bounds a status post's task.
+const MaxTaskBytes = 200
+
+// ValidStatusState reports whether state is one of StatusStates.
+func ValidStatusState(state string) bool {
+	return slices.Contains(StatusStates, state)
+}
+
+// StatusText is the body a status post carries, readable as it stands by a
+// client that knows no statuses: "Status [working] task", then ": note"
+// when a note was given.
+func StatusText(state, task, note string) string {
+	text := "Status [" + state + "] " + task
+	if note != "" {
+		text += ": " + note
+	}
+	return text
+}
+
+// ResolvedText is the body a resolution carries: the note, else "Resolved".
+func ResolvedText(note string) string {
+	if note != "" {
+		return note
+	}
+	return "Resolved"
 }
 
 // DecisionStepText is the body a decision step carries. An answer names its
@@ -174,7 +213,8 @@ type ChatRequest struct {
 	Options  []string `json:"options,omitempty"`
 	Choice   int      `json:"choice,omitempty"`
 	For      string   `json:"for,omitempty"`
-	// Link is where a finished handoff's result is, on handoff-done.
+	// Link is where a finished handoff's result is, on handoff-done, or
+	// where a status post's work is.
 	Link string `json:"link,omitempty"`
 	// Pastes: paste-begin names the upload (Name, Language, Size, Lines)
 	// under a client-chosen Token; paste-chunk adds Data, base64 of at most
@@ -188,6 +228,9 @@ type ChatRequest struct {
 	Seq      int    `json:"seq,omitempty"`
 	Data     string `json:"data,omitempty"`
 	Offset   int    `json:"offset,omitempty"`
+	// Task and State are a status post's.
+	Task  string `json:"task,omitempty"`
+	State string `json:"state,omitempty"`
 }
 
 type ChatEntry struct {
@@ -224,6 +267,8 @@ type ChatEntry struct {
 	Referenced time.Time  `json:"referenced,omitzero"`
 	Data       string     `json:"data,omitempty"`
 	Offset     int        `json:"offset,omitempty"`
+	// At is when a status entry's status was posted.
+	At time.Time `json:"at,omitzero"`
 }
 
 func CustomReaction(kind string) bool {

@@ -161,6 +161,11 @@ var commandTable = []command{
 		help: `  airc paste get PASTE_ID [--out FILE] [--json]   a shared paste's text; info PASTE_ID its name, size and author
   airc paste list [--nick N] [--limit N] [--json]   your own pastes; put FILE|- [--name N] uploads one without posting`,
 		notes: `  airc send ... --paste PATH|- [--language L] [--message CAPTION]   share a diff, a log or test output larger than a message`},
+	{name: "status", run: reading(runStatusSession), session: true, mcp: true, group: groupAgent,
+		help: `  airc status --nick N --channel #room --task TEXT --state working|blocked|done [--link URL] [--message NOTE] [--json]   post where you are
+  airc status --channel #room [--json]           the room's latest status per nickname, newest first`},
+	{name: "resolve", run: reading(runResolveSession), session: true, mcp: true, group: groupAgent,
+		help: `  airc resolve MESSAGE_ID --nick N [--message NOTE] [--json]   close a question settled elsewhere; author, addressee or admin`},
 	{name: "handoff", run: reading(runHandoffSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
   airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off

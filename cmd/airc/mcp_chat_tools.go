@@ -64,6 +64,17 @@ type mcpDecideInput struct {
 	Options []string `json:"options,omitempty" jsonschema:"Ask: 2-8 choices, each up to 80 bytes; omit for a free-text decision"`
 	Choice  int      `json:"choice,omitempty" jsonschema:"Answer: the chosen option, numbered from 1"`
 }
+type mcpStatusInput struct {
+	Task    string `json:"task" jsonschema:"What you are on, one line of at most 200 bytes"`
+	State   string `json:"state" jsonschema:"working, blocked or done"`
+	Channel string `json:"channel,omitempty" jsonschema:"The room the status is for; defaults to AIRC_CHANNEL"`
+	Link    string `json:"link,omitempty" jsonschema:"Where the work is: an absolute http(s) URL of a PR, a branch or a document, up to 400 bytes"`
+	Message string `json:"message,omitempty" jsonschema:"A note on the status, such as what is blocking you"`
+}
+type mcpResolveInput struct {
+	ID      string `json:"id" jsonschema:"ID of the question, or of any message in its thread"`
+	Message string `json:"message,omitempty" jsonschema:"How it was settled; default \"Resolved\""`
+}
 type mcpDecisionsInput struct {
 	Channel string `json:"channel,omitempty" jsonschema:"Every decision asked in this room, answered ones from the last week included"`
 	ID      string `json:"id,omitempty" jsonschema:"One decision"`
@@ -374,6 +385,28 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		}
 		if in.Limit != 0 {
 			args = append(args, "--limit", strconv.Itoa(in.Limit))
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step."}, func(ctx context.Context, _ *mcpserver.Call, in mcpStatusInput) (*mcpserver.Result, mcpOutput, error) {
+		if strings.TrimSpace(in.Task) == "" || !protocol.ValidStatusState(in.State) {
+			return nil, mcpOutput{}, errors.New("task and a state of working, blocked or done required")
+		}
+		args := []string{"status", "--task=" + in.Task, "--state=" + in.State}
+		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--link", in.Link}, {"--message", in.Message}} {
+			if pair[1] != "" {
+				args = append(args, pair[0]+"="+pair[1])
+			}
+		}
+		return a.call(ctx, args, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in mcpResolveInput) (*mcpserver.Result, mcpOutput, error) {
+		if !protocol.ValidMessageID(in.ID) {
+			return nil, mcpOutput{}, errors.New("valid message ID required")
+		}
+		args := []string{"resolve", in.ID}
+		if in.Message != "" {
+			args = append(args, "--message="+in.Message)
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})

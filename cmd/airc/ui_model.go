@@ -112,6 +112,7 @@ type uiModel struct {
 	features        map[string]string       // nil until the daemon has advertised its capabilities
 	decisions       map[string]openDecision // open decisions that concern this user, by ID
 	kinds           *nickKinds              // who is a human, from the directory
+	statuses        map[string]string       // each nickname's latest status state, by lowercase nickname
 	clipboard       string                  // text to offer the terminal's clipboard on the next draw
 	width, height   int
 	connected       bool
@@ -145,7 +146,7 @@ func (k *nickKinds) kind(nick string) string {
 }
 
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
-	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}}
+	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}, statuses: map[string]string{}}
 	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox), newBuffer(irc.AllDirectMessages, bufDirectMessages)}
 	m.find(irc.AllDirectMessages).topic = "waiting for daemon capabilities"
 	for _, channel := range channels {
@@ -262,8 +263,21 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 				}
 			}
 		}
+		// A resolution marks its thread's root wherever it is shown, the
+		// inbox included.
+		if message.Kind == "resolved" && message.ThreadID != "" {
+			for _, item := range b.items {
+				if root, ok := item.(*irc.MessageEvent); ok && root.ID == message.ThreadID && !root.Resolved {
+					root.Resolved = true
+					b.version++
+				}
+			}
+		}
 	}
 	m.noteDecisionStep(message)
+	if message.Kind == "status" && message.State != "" {
+		m.noteStatus(message.From, message.State)
+	}
 	own := strings.EqualFold(message.From, m.nick)
 	addressed := !own && addressedTo(m.nick, message.Target, message.Message, message.For)
 	if protocol.IsChannel(message.Target) {
@@ -308,6 +322,23 @@ func (m *uiModel) pendingDecisions() (n, humans int) {
 		}
 	}
 	return n, humans
+}
+
+// noteStatus records nick's latest status state, which the member pane
+// marks; "" forgets it. A change redraws the panes.
+func (m *uiModel) noteStatus(nick, state string) {
+	key := strings.ToLower(nick)
+	if m.statuses[key] == state {
+		return
+	}
+	if state == "" {
+		delete(m.statuses, key)
+	} else {
+		m.statuses[key] = state
+	}
+	for _, b := range m.buffers {
+		b.version++
+	}
 }
 
 // noteKind records what the directory says nick is. A change redraws every
@@ -445,8 +476,15 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 	case pastePageIn:
 		m.pagePaste(v)
 	case directoryIn:
+		// The directory is authoritative on statuses: it has what the
+		// daemon still holds, so a cleared one goes.
 		for _, card := range v.cards {
 			m.noteKind(card.Nick, card.Kind)
+			state := ""
+			if card.Status != nil {
+				state = card.Status.State
+			}
+			m.noteStatus(card.Nick, state)
 		}
 	case channelsIn:
 		for _, info := range v.list {

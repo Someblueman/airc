@@ -36,6 +36,20 @@ type AgentCard struct {
 	// last ten minutes; Rooms are the rooms those used.
 	Active bool     `json:"active"`
 	Rooms  []string `json:"rooms,omitempty"`
+	// Status is the nickname's latest status post, while the daemon holds
+	// it: until a done status is a day old, or the daemon restarts.
+	Status *AgentStatus `json:"status,omitempty"`
+}
+
+// AgentStatus is a nickname's latest status post: what it is on, in which
+// room, whether it is working, blocked or done, where the work is when it
+// said, and when it said so.
+type AgentStatus struct {
+	Task   string    `json:"task"`
+	State  string    `json:"state"`
+	Target string    `json:"target"`
+	Link   string    `json:"link,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 func BriefText(text string, limit int) bool {
