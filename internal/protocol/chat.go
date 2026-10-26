@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -26,10 +27,13 @@ type ChatMetadata struct {
 	PollOptions        []string  `json:"poll_options,omitempty"`
 	PollClosesAt       time.Time `json:"poll_closes_at,omitzero"`
 	// For names who a handoff or decision step is addressed to: on an
-	// offer, the nick it is handed to or who decides; on accept, decline,
-	// done and an answer, the offer's author. A room message counts as a
-	// mention of it.
+	// offer, the nick it is handed to or who decides; on accept, blocked,
+	// decline, done and an answer, the offer's author. A room message
+	// counts as a mention of it.
 	For string `json:"for,omitempty"`
+	// Link is where a handoff's result is, on the done step that recorded
+	// it: an absolute http(s) URL (ValidLink) of a PR, a commit or a document.
+	Link string `json:"link,omitempty"`
 	// Choices are a decision's options, numbered from 1; Choice is the one
 	// an answer chose, 0 when it gave only a note.
 	Choices []string `json:"choices,omitempty"`
@@ -63,18 +67,63 @@ func DecisionStepText(kind, offer string, choice int, option, note string) strin
 
 // HandoffStepText is the body a handoff step carries when it has no note
 // of its own, readable as it stands by a client that knows no handoffs.
-func HandoffStepText(kind, offer string) string {
+// detail is what the step records besides a note: a blocked step's reason
+// ("Blocked handoff ID: reason"), which it always carries, or a done step's
+// link ("Finished handoff ID: URL"). "handoff-resume" is an accept that
+// takes a blocked handoff up again ("Resumed handoff ID").
+func HandoffStepText(kind, offer, detail string) string {
+	text := ""
 	switch kind {
 	case "handoff-accept":
-		return "Accepted handoff " + offer
+		text = "Accepted handoff " + offer
+	case "handoff-resume":
+		text = "Resumed handoff " + offer
+	case "handoff-blocked":
+		text = "Blocked handoff " + offer
 	case "handoff-decline":
-		return "Declined handoff " + offer
+		text = "Declined handoff " + offer
 	case "handoff-done":
-		return "Done with handoff " + offer
+		text = "Done with handoff " + offer
+		if detail != "" {
+			text = "Finished handoff " + offer
+		}
 	case "handoff-withdraw":
-		return "Withdrew handoff " + offer
+		text = "Withdrew handoff " + offer
 	}
-	return ""
+	if text != "" && detail != "" {
+		text += ": " + detail
+	}
+	return text
+}
+
+// PlainHandoffStep reports whether body is what a step of kind on offer
+// reads without a note of its own, whatever detail it names, so a client
+// that marks steps need not mark it.
+func PlainHandoffStep(kind, offer, body string) bool {
+	kinds := []string{kind}
+	if kind == "handoff-accept" {
+		kinds = append(kinds, "handoff-resume")
+	}
+	for _, k := range kinds {
+		if text := HandoffStepText(k, offer, ""); text != "" && (body == text || strings.HasPrefix(body, text+": ")) {
+			return true
+		}
+	}
+	return kind == "handoff-done" && strings.HasPrefix(body, "Finished handoff "+offer+": ")
+}
+
+// MaxLinkBytes bounds the link a done step records.
+const MaxLinkBytes = 400
+
+// ValidLink reports a link a done step may record: an absolute http or
+// https URL of at most MaxLinkBytes bytes with a host, without credentials
+// or whitespace, written as the URL parser writes it back.
+func ValidLink(link string) bool {
+	if link == "" || len(link) > MaxLinkBytes || strings.IndexFunc(link, unicode.IsSpace) >= 0 {
+		return false
+	}
+	u, err := url.Parse(link)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.String() == link
 }
 
 func EncodeChat(meta ChatMetadata) string {
@@ -122,26 +171,33 @@ type ChatRequest struct {
 	Options  []string `json:"options,omitempty"`
 	Choice   int      `json:"choice,omitempty"`
 	For      string   `json:"for,omitempty"`
+	// Link is where a finished handoff's result is, on handoff-done.
+	Link string `json:"link,omitempty"`
 }
 
 type ChatEntry struct {
-	Context      *ContextSummary  `json:"context,omitempty"`
-	Profile      *AgentCard       `json:"profile,omitempty"`
-	Action       string           `json:"action"`
-	Target       string           `json:"target,omitempty"`
-	ID           string           `json:"id,omitempty"`
-	From         string           `json:"from,omitempty"`
-	AccountID    string           `json:"account_id,omitempty"`
-	Text         string           `json:"text,omitempty"`
-	ExpiresAt    time.Time        `json:"expires_at,omitzero"`
-	SlowSeconds  int64            `json:"slow_seconds,omitempty"`
-	HistoryLimit int              `json:"history_limit,omitempty"`
-	Options      []string         `json:"options,omitempty"`
-	Votes        []int            `json:"votes,omitempty"`
-	Closed       bool             `json:"closed,omitempty"`
-	State        string           `json:"state,omitempty"`
-	Holder       string           `json:"holder,omitempty"`
-	Message      *MessageMetadata `json:"message,omitempty"`
+	Context      *ContextSummary `json:"context,omitempty"`
+	Profile      *AgentCard      `json:"profile,omitempty"`
+	Action       string          `json:"action"`
+	Target       string          `json:"target,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	From         string          `json:"from,omitempty"`
+	AccountID    string          `json:"account_id,omitempty"`
+	Text         string          `json:"text,omitempty"`
+	ExpiresAt    time.Time       `json:"expires_at,omitzero"`
+	SlowSeconds  int64           `json:"slow_seconds,omitempty"`
+	HistoryLimit int             `json:"history_limit,omitempty"`
+	Options      []string        `json:"options,omitempty"`
+	Votes        []int           `json:"votes,omitempty"`
+	Closed       bool            `json:"closed,omitempty"`
+	State        string          `json:"state,omitempty"`
+	Holder       string          `json:"holder,omitempty"`
+	// Link is where a done handoff's result is; BlockedReason and BlockedAt
+	// are why and since when a blocked handoff is stuck.
+	Link          string           `json:"link,omitempty"`
+	BlockedReason string           `json:"blocked_reason,omitempty"`
+	BlockedAt     time.Time        `json:"blocked_at,omitzero"`
+	Message       *MessageMetadata `json:"message,omitempty"`
 	// Answer is a decision's answer message once it has one.
 	Answer *MessageMetadata `json:"answer,omitempty"`
 }
