@@ -63,6 +63,8 @@ type (
 		nicks   []string
 	}
 	channelsIn     struct{ list []irc.ChannelInfo }
+	decisionsIn    struct{ entries []irc.ChatEntry } // the open decisions that concern this user
+	directoryIn    struct{ cards []irc.AgentCard }   // every card, for who is a human
 	auditIn        struct{ available bool }
 	capabilitiesIn struct{ features map[string]string } // the daemon's 005 tokens
 	statusIn       struct {
@@ -97,8 +99,10 @@ type uiModel struct {
 	input           []rune
 	cursor          int
 	complete        completion
-	features        map[string]string // nil until the daemon has advertised its capabilities
-	clipboard       string            // text to offer the terminal's clipboard on the next draw
+	features        map[string]string       // nil until the daemon has advertised its capabilities
+	decisions       map[string]openDecision // open decisions that concern this user, by ID
+	kinds           *nickKinds              // who is a human, from the directory
+	clipboard       string                  // text to offer the terminal's clipboard on the next draw
 	width, height   int
 	connected       bool
 	status          string
@@ -109,8 +113,29 @@ type uiModel struct {
 	now             func() time.Time
 }
 
+// openDecision is an open decision as the status bar counts it.
+type openDecision struct {
+	asker, decider string
+	human          bool // the asker is marked as a human
+}
+
+// nickKinds is the directory's word on who is a human or an agent. The
+// renderer holds a pointer to it, so a changed kind invalidates its cache
+// through the buffers' versions rather than through the renderer itself.
+type nickKinds struct {
+	kinds map[string]string // by lowercase nickname
+}
+
+// kind is nick's profile kind, "" when unknown or when kinds is nil.
+func (k *nickKinds) kind(nick string) string {
+	if k == nil {
+		return ""
+	}
+	return k.kinds[strings.ToLower(nick)]
+}
+
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
-	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now()}
+	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}}
 	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox), newBuffer(irc.AllDirectMessages, bufDirectMessages)}
 	m.find(irc.AllDirectMessages).topic = "waiting for daemon capabilities"
 	for _, channel := range channels {
@@ -228,6 +253,7 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 			}
 		}
 	}
+	m.noteDecisionStep(message)
 	own := strings.EqualFold(message.From, m.nick)
 	addressed := !own && addressedTo(m.nick, message.Target, message.Message, message.For)
 	if protocol.IsChannel(message.Target) {
@@ -245,6 +271,56 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 			m.notify(audit, false)
 		}
 	}
+}
+
+// noteDecisionStep keeps the open decisions current between listings: an
+// offer for this user opens one, and an answer or withdrawal closes it.
+func (m *uiModel) noteDecisionStep(message *irc.MessageEvent) {
+	switch message.Kind {
+	case "decision":
+		if strings.EqualFold(message.For, m.nick) || strings.EqualFold(message.From, m.nick) {
+			m.decisions[message.ID] = openDecision{asker: message.From, decider: message.For, human: m.kinds.kind(message.From) == "human"}
+		}
+	case "decision-answer", "decision-withdraw":
+		delete(m.decisions, message.ReplyTo)
+	}
+}
+
+// pendingDecisions counts the open decisions waiting on this user, and how
+// many of them a human asked.
+func (m *uiModel) pendingDecisions() (n, humans int) {
+	for _, d := range m.decisions {
+		if strings.EqualFold(d.decider, m.nick) {
+			n++
+			if d.human {
+				humans++
+			}
+		}
+	}
+	return n, humans
+}
+
+// noteKind records what the directory says nick is. A change redraws every
+// view, since the renderer marks humans.
+func (m *uiModel) noteKind(nick, kind string) {
+	key := strings.ToLower(nick)
+	if m.kinds.kinds[key] == kind {
+		return
+	}
+	if kind == "" {
+		delete(m.kinds.kinds, key)
+	} else {
+		m.kinds.kinds[key] = kind
+	}
+	for _, b := range m.buffers {
+		b.version++
+	}
+}
+
+// has reports a daemon capability the daemon has actually advertised, unlike
+// supports, which assumes everything before the first connection.
+func (m *uiModel) has(feature string) bool {
+	return m.features != nil && m.supports(feature)
 }
 
 func (m *uiModel) setStatus(text string, isError bool) {
@@ -334,6 +410,24 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		if b := m.find(v.channel); b != nil {
 			b.live = v.nicks
 		}
+	case decisionsIn:
+		// The listing is authoritative: it has what is open now.
+		m.decisions = map[string]openDecision{}
+		for _, e := range v.entries {
+			if e.Action != "decision" || e.State != "open" || e.Message == nil {
+				continue
+			}
+			d := openDecision{asker: e.From, decider: e.Message.For}
+			if e.Profile != nil {
+				d.human = e.Profile.Kind == "human"
+				m.noteKind(e.From, e.Profile.Kind)
+			}
+			m.decisions[e.ID] = d
+		}
+	case directoryIn:
+		for _, card := range v.cards {
+			m.noteKind(card.Nick, card.Kind)
+		}
 	case channelsIn:
 		for _, info := range v.list {
 			b := m.ensureChannel(info.Name)
@@ -372,6 +466,12 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			cmds = append(cmds, uiCmd{kind: "channels"})
 			if b := m.cur(); b != nil && b.kind == bufChannel {
 				cmds = append(cmds, uiCmd{kind: "names", target: b.name})
+			}
+			if m.has("DECISION") {
+				cmds = append(cmds, uiCmd{kind: "decisions"})
+			}
+			if m.has("DIRECTORY") {
+				cmds = append(cmds, uiCmd{kind: "directory"})
 			}
 		}
 	case keyIn:

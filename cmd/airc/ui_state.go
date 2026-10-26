@@ -178,7 +178,7 @@ func uncertainChat(cmd *uiCmd) bool {
 		return false
 	}
 	switch cmd.request.Action {
-	case "action", "correct", "retract", "poll", "vote", "close-poll":
+	case "action", "correct", "retract", "poll", "vote", "close-poll", "decision":
 		return true
 	}
 	return false

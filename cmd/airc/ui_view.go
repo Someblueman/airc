@@ -124,6 +124,13 @@ func (m *uiModel) statusBar(b *uiBuffer, width int) string {
 	if id := threadReplyTarget(b); id != "" {
 		return sty("2", fitPlain(" Enter replies to "+id+quoted(m.messagePreview(id))+" · Ctrl-R on a selected message answers that one instead", width))
 	}
+	if n, humans := m.pendingDecisions(); n > 0 {
+		hint := fmt.Sprintf("%d %s waiting on you", n, plural(n, "decision", "decisions"))
+		if humans > 0 {
+			hint = "a human is waiting on you: " + hint
+		}
+		return sty("1;38;5;"+fmt.Sprint(humanColor), fitPlain(" "+hint+" · /decisions · /answer ID N · Tab: complete, or next view · /help", width))
+	}
 	return sty("2", fitPlain(" Tab: complete, or next view · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
 }
 
@@ -165,6 +172,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 		return lines
 	}
 	view := newRenderer(true, width, b.kind != bufChannel)
+	view.kinds = m.kinds
 	for _, event := range b.items {
 		if message, ok := event.(*irc.MessageEvent); ok {
 			view.reserve(message.From)
@@ -285,9 +293,10 @@ func (m *uiModel) channelPane(rows, width int) []string {
 }
 
 type participant struct {
-	nick string
-	last time.Time
-	live bool
+	nick  string
+	last  time.Time
+	live  bool
+	human bool // the directory says so
 }
 
 // participants lists who is in a channel: sessions connected right now, and
@@ -314,14 +323,18 @@ func (m *uiModel) participants(b *uiBuffer) []participant {
 	}
 	out := make([]participant, 0, len(byNick))
 	for _, p := range byNick {
+		p.human = m.kinds.kind(p.nick) == "human"
 		out = append(out, *p)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].live != out[j].live {
 			return out[i].live
 		}
-		// Connected sessions keep a stable alphabetical order; speakers who are
-		// merely around come newest first.
+		// Humans lead the connected sessions, which keep a stable alphabetical
+		// order; speakers who are merely around come newest first.
+		if out[i].live && out[i].human != out[j].human {
+			return out[i].human
+		}
 		if !out[i].live && !out[i].last.Equal(out[j].last) {
 			return out[i].last.After(out[j].last)
 		}
@@ -356,9 +369,18 @@ func (m *uiModel) memberPane(b *uiBuffer, rows, width int) []string {
 			cells = append(cells, sty("2", fitPlain(fmt.Sprintf(" +%d more", len(people)-i), width)))
 			break
 		}
-		mark, suffix := " ", ""
-		if p.live {
+		// A human is marked ☺, bright while connected; an agent's session ●.
+		mark, suffix, color := " ", "", fmt.Sprint(nickColor(p.nick))
+		switch {
+		case p.human && p.live:
+			mark = sty("38;5;"+fmt.Sprint(humanColor), "☺")
+		case p.human:
+			mark = sty("2", "☺")
+		case p.live:
 			mark = sty("38;5;41", "●")
+		}
+		if p.human {
+			color = "1;38;5;" + fmt.Sprint(humanColor)
 		}
 		if !p.live {
 			suffix = age(p.last, m.now())
@@ -369,7 +391,7 @@ func (m *uiModel) memberPane(b *uiBuffer, rows, width int) []string {
 		}
 		room := max(width-2-utf8.RuneCountInString(suffix)-1, 1)
 		label := fitPlain(name, room)
-		cells = append(cells, padVisible(" "+mark+" "+sty("38;5;"+fmt.Sprint(nickColor(p.nick)), label)+sty("2", suffix), width))
+		cells = append(cells, padVisible(" "+mark+" "+sty(color, label)+sty("2", suffix), width))
 	}
 	for len(cells) < rows {
 		cells = append(cells, strings.Repeat(" ", width))
