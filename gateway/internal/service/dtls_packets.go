@@ -153,6 +153,7 @@ func (l *dtlsPacketListener) readLoop() {
 		select {
 		case peer.packets <- append([]byte(nil), buf[:n]...):
 		default:
+			peer.dropped.Add(1)
 		}
 	}
 }
