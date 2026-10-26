@@ -12,6 +12,10 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// errSnippetTooLarge reports a snippet that cannot fit a message; send then
+// shares the file as a paste instead.
+var errSnippetTooLarge = errors.New("the snippet does not fit a message")
+
 // Snippets are ordinary fenced Markdown messages: older clients preserve the
 // text and the existing history/receipt schema needs no migration.
 func snippetMessage(path, language, message string, stdin io.Reader) (string, error) {
@@ -55,7 +59,7 @@ func snippetMessage(path, language, message string, stdin io.Reader) (string, er
 			return "", fmt.Errorf("read snippet: %w", err)
 		}
 		if len(data) > 2*4096 {
-			return "", errors.New("snippet input exceeds the message limit; share a smaller excerpt")
+			return "", fmt.Errorf("%w: the input exceeds the message limit; share a smaller excerpt or use --paste", errSnippetTooLarge)
 		}
 		source = string(data)
 	}
@@ -94,7 +98,7 @@ func snippetMessage(path, language, message string, stdin io.Reader) (string, er
 		body = caption + "\n" + body
 	}
 	if len(body) > 4096 {
-		return "", errors.New("formatted snippet exceeds 4096 bytes including its caption and fences; share a smaller excerpt")
+		return "", fmt.Errorf("%w: the formatted snippet exceeds 4096 bytes including its caption and fences; share a smaller excerpt or use --paste", errSnippetTooLarge)
 	}
 	return body, nil
 }
