@@ -171,14 +171,42 @@ func holdsHandoff(client *session, h handoff) bool {
 	return h.State == handoffAccepted && heldBy(client, h)
 }
 
-func (s *Server) handoffLocked(client *session, r protocol.ChatRequest) error {
+// handoffRequest offers a handoff (Text to Target, For a nickname when the
+// target is a room), steps handoff ID with an optional note, or lists
+// handoffs: one by ID, a room's by Target, or up to Limit of the caller's.
+type handoffRequest struct {
+	Action string
+	Target string
+	ID     string
+	Text   string
+	For    string
+	Limit  int
+}
+
+// decodeHandoffRequest checks the fields of an offer and a listing. An offer
+// to a nickname is for that nickname, so For is resolved here.
+func decodeHandoffRequest(_ Config, r protocol.ChatRequest) (handoffRequest, error) {
+	request := handoffRequest{Action: r.Action, Target: r.Target, ID: r.ID, Text: r.Text, For: r.For, Limit: r.Limit}
 	switch r.Action {
 	case "handoffs":
-		return s.listHandoffsLocked(client, r)
+		if r.Target != "" && !validChannel(r.Target) {
+			return handoffRequest{}, errors.New("list a room's handoffs by its channel name")
+		}
+		if r.Limit < 0 || r.Limit > maxHandoffPage {
+			return handoffRequest{}, fmt.Errorf("a handoff listing holds at most %d", maxHandoffPage)
+		}
 	case "handoff":
-		return s.offerHandoffLocked(client, r)
+		if !protocol.IsChannel(r.Target) {
+			if r.For != "" && !strings.EqualFold(r.For, r.Target) {
+				return handoffRequest{}, errors.New("a direct handoff is for the nickname it is sent to")
+			}
+			request.For = r.Target
+		}
+		if request.For != "" && !protocol.ValidNick(request.For) {
+			return handoffRequest{}, errors.New("a handoff is for a valid nickname")
+		}
 	}
-	return s.stepHandoffLocked(client, r)
+	return request, nil
 }
 
 func (s *Server) handoffBody(text, fallback string) (string, error) {
@@ -217,17 +245,18 @@ func (s *Server) chatTargetLocked(client *session, target, what string) (string,
 	return target, nil
 }
 
+// offerHandoffLocked is the table's handler for an offer; the handoff tests
+// drive it with the wire request.
 func (s *Server) offerHandoffLocked(client *session, r protocol.ChatRequest) error {
+	request, err := decodeHandoffRequest(s.cfg, r)
+	if err != nil {
+		return err
+	}
+	return s.openHandoffLocked(client, request)
+}
+
+func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 	forNick := r.For
-	if !protocol.IsChannel(r.Target) {
-		if forNick != "" && !strings.EqualFold(forNick, r.Target) {
-			return errors.New("a direct handoff is for the nickname it is sent to")
-		}
-		forNick = r.Target
-	}
-	if forNick != "" && !protocol.ValidNick(forNick) {
-		return errors.New("a handoff is for a valid nickname")
-	}
 	if forNick != "" && strings.EqualFold(forNick, client.client.Nick) {
 		return errors.New("hand off to someone else")
 	}
@@ -258,7 +287,7 @@ func (s *Server) offerHandoffLocked(client *session, r protocol.ChatRequest) err
 	return nil
 }
 
-func (s *Server) stepHandoffLocked(client *session, r protocol.ChatRequest) error {
+func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 	h, found := s.handoffs[r.ID]
 	if !found {
 		return errors.New("handoff is not retained")
@@ -370,13 +399,7 @@ func describeHandoff(h handoff) string {
 // for it, held by it, offered by it, or open to anyone in a room it is in.
 // A one-shot agent joins no room, so the rooms it checked, waited or posted
 // in within the activity window count as its rooms.
-func (s *Server) listHandoffsLocked(client *session, r protocol.ChatRequest) error {
-	if r.Target != "" && !validChannel(r.Target) {
-		return errors.New("list a room's handoffs by its channel name")
-	}
-	if r.Limit < 0 || r.Limit > maxHandoffPage {
-		return fmt.Errorf("a handoff listing holds at most %d", maxHandoffPage)
-	}
+func (s *Server) listHandoffsLocked(client *session, r handoffRequest) error {
 	limit := cmp.Or(r.Limit, handoffPage)
 	now := s.now()
 	_, recent, _ := s.recentLocked(client.client.Nick, now)

@@ -9,15 +9,27 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-// contextLocked returns original retained text, with correction links intact.
-// It never manufactures a summary or moves a reader's cursor.
-func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
+// contextRequest asks for the thread around message ID: up to Limit
+// messages, within MaxBytes when it is set.
+type contextRequest struct {
+	ID       string
+	Limit    int
+	MaxBytes int
+}
+
+func decodeContextRequest(_ Config, r protocol.ChatRequest) (contextRequest, error) {
 	if !protocol.ValidMessageID(r.ID) || r.Limit < 1 || r.Limit > 1000 {
-		return errors.New("context requires a message ID and limit 1-1000")
+		return contextRequest{}, errors.New("context requires a message ID and limit 1-1000")
 	}
 	if r.MaxBytes != 0 && (r.MaxBytes < 1024 || r.MaxBytes > 1<<20) {
-		return errors.New("context max_bytes must be 1024-1048576 or zero")
+		return contextRequest{}, errors.New("context max_bytes must be 1024-1048576 or zero")
 	}
+	return contextRequest{ID: r.ID, Limit: r.Limit, MaxBytes: r.MaxBytes}, nil
+}
+
+// contextLocked returns original retained text, with correction links intact.
+// It never manufactures a summary or moves a reader's cursor.
+func (s *Server) contextLocked(client *session, r contextRequest) error {
 	target, err := s.history.conversation("thread:" + r.ID)
 	if err != nil {
 		return err

@@ -174,30 +174,62 @@ func (s *Server) decisionEntryLocked(d decision) protocol.ChatEntry {
 	return entry
 }
 
-func (s *Server) decisionLocked(client *session, r protocol.ChatRequest) error {
-	switch r.Action {
-	case "decisions":
-		return s.listDecisionsLocked(client, r)
-	case "decision":
-		return s.offerDecisionLocked(client, r)
-	}
-	return s.stepDecisionLocked(client, r)
+// decisionRequest asks For to decide (Text, with Options to choose from, in
+// Target), answers decision ID with Choice and a note, withdraws it, or
+// lists decisions: one by ID, a room's by Target, or up to Limit of the
+// caller's.
+type decisionRequest struct {
+	Action  string
+	Target  string
+	ID      string
+	Text    string
+	For     string
+	Options []string
+	Choice  int
+	Limit   int
 }
 
-func (s *Server) offerDecisionLocked(client *session, r protocol.ChatRequest) error {
-	decider := r.For
-	if !protocol.IsChannel(r.Target) {
-		if decider != "" && !strings.EqualFold(decider, r.Target) {
-			return errors.New("a direct decision is for the nickname it is sent to")
+// decodeDecisionRequest checks the fields of an offer and a listing. An offer
+// to a nickname is for that nickname, so For is resolved here.
+func decodeDecisionRequest(_ Config, r protocol.ChatRequest) (decisionRequest, error) {
+	request := decisionRequest{Action: r.Action, Target: r.Target, ID: r.ID, Text: r.Text, For: r.For, Options: r.Options, Choice: r.Choice, Limit: r.Limit}
+	switch r.Action {
+	case "decisions":
+		if r.Target != "" && !validChannel(r.Target) {
+			return decisionRequest{}, errors.New("list a room's decisions by its channel name")
 		}
-		decider = r.Target
+		if r.Limit < 0 || r.Limit > maxDecisionPage {
+			return decisionRequest{}, fmt.Errorf("a decision listing holds at most %d", maxDecisionPage)
+		}
+	case "decision":
+		if !protocol.IsChannel(r.Target) {
+			if r.For != "" && !strings.EqualFold(r.For, r.Target) {
+				return decisionRequest{}, errors.New("a direct decision is for the nickname it is sent to")
+			}
+			request.For = r.Target
+		}
+		if request.For == "" {
+			return decisionRequest{}, errors.New("a decision names who decides")
+		}
+		if !protocol.ValidNick(request.For) {
+			return decisionRequest{}, errors.New("a decision is for a valid nickname")
+		}
 	}
-	if decider == "" {
-		return errors.New("a decision names who decides")
+	return request, nil
+}
+
+// offerDecisionLocked is the table's handler for an offer; the decision
+// tests drive it with the wire request.
+func (s *Server) offerDecisionLocked(client *session, r protocol.ChatRequest) error {
+	request, err := decodeDecisionRequest(s.cfg, r)
+	if err != nil {
+		return err
 	}
-	if !protocol.ValidNick(decider) {
-		return errors.New("a decision is for a valid nickname")
-	}
+	return s.openDecisionLocked(client, request)
+}
+
+func (s *Server) openDecisionLocked(client *session, r decisionRequest) error {
+	decider := r.For
 	if strings.EqualFold(decider, client.client.Nick) {
 		return errors.New("ask someone else to decide")
 	}
@@ -232,7 +264,7 @@ func (s *Server) offerDecisionLocked(client *session, r protocol.ChatRequest) er
 	return nil
 }
 
-func (s *Server) stepDecisionLocked(client *session, r protocol.ChatRequest) error {
+func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
 	d, found := s.decisions[r.ID]
 	if !found {
 		return errors.New("decision is not retained")
@@ -337,13 +369,7 @@ func describeDecision(d decision) string {
 // to decide, asked by it, or asked in a room it is in. A one-shot agent
 // joins no room, so the rooms it checked, waited or posted in within the
 // activity window count as its rooms.
-func (s *Server) listDecisionsLocked(client *session, r protocol.ChatRequest) error {
-	if r.Target != "" && !validChannel(r.Target) {
-		return errors.New("list a room's decisions by its channel name")
-	}
-	if r.Limit < 0 || r.Limit > maxDecisionPage {
-		return fmt.Errorf("a decision listing holds at most %d", maxDecisionPage)
-	}
+func (s *Server) listDecisionsLocked(client *session, r decisionRequest) error {
 	limit := cmp.Or(r.Limit, decisionPage)
 	now := s.now()
 	_, recent, _ := s.recentLocked(client.client.Nick, now)
