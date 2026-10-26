@@ -25,10 +25,3 @@ func (c *detachedCredentials) token(t *testing.T, r core.Request, _ bool) string
 	t.Helper()
 	return authorRequest(t, r, c.nick, c.secret)
 }
-
-// validityToken is token with the request's own validity window.
-func (c *detachedCredentials) validityToken(t *testing.T, r core.Request, issued, expiry int64, _ bool) string {
-	t.Helper()
-	r.IssuedAt, r.ExpiresAt = &issued, &expiry
-	return authorRequest(t, r, c.nick, c.secret)
-}

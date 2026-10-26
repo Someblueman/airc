@@ -7,9 +7,11 @@ import (
 
 // schemaVersion is the journal schema, the whole schema in one step with no
 // migrations. Version 26 squashed versions 1–25; version 27 holds each
-// accepted job's evidence in one outcome column. initialize creates it in an
-// empty journal and refuses any older one (ErrPreviousJournal).
-const schemaVersion = 27
+// accepted job's evidence in one outcome column; version 28 dropped the
+// tables of the removed carriers (docs/gateway/removed-carriers.md).
+// initialize creates it in an empty journal and refuses any older one
+// (ErrPreviousJournal).
+const schemaVersion = 28
 
 // ErrPreviousJournal refuses a journal written by an earlier gateway, of any
 // lower schema version. Its jobs cannot be carried over, so it is never
@@ -29,9 +31,6 @@ func previousJournal(version int) error {
 // an accepted job's evidence, encoded as its operation's core.Acceptance
 // (a receipt or a native acknowledgement). The retention index on
 // terminal_at serves Ready and Maintain, which read only unfinished jobs.
-//
-// Provider replay tables record the author scope (OSCORE: the listener) that
-// first used an origin, engine or context.
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 CREATE TABLE jobs (
@@ -74,70 +73,5 @@ CREATE TABLE replay (
  fingerprint TEXT NOT NULL, replay_until INTEGER NOT NULL,
  PRIMARY KEY(author_scope,request_id)
 ) STRICT;
-CREATE TABLE oscore_state (
- digest BLOB PRIMARY KEY CHECK(length(digest)=32),
- listener TEXT NOT NULL,
- sender_end INTEGER NOT NULL CHECK(sender_end>=0 AND sender_end<1099511627775),
- receiver_seq INTEGER CHECK(receiver_seq>=0 AND receiver_seq<1099511627775),
- receiver_window BLOB,
- CHECK((receiver_seq IS NULL AND receiver_window IS NULL) OR
-       (receiver_seq IS NOT NULL AND receiver_window IS NOT NULL AND length(receiver_window)=8))
-) STRICT;
-CREATE TABLE posix_queue_ownership (
- listener TEXT PRIMARY KEY CHECK(length(listener) BETWEEN 1 AND 64),
- name TEXT NOT NULL UNIQUE CHECK(length(name) BETWEEN 2 AND 255),
- depth INTEGER NOT NULL CHECK(depth BETWEEN 1 AND 10),
- boot_id TEXT NOT NULL CHECK(length(boot_id)=36),
- namespace_device INTEGER NOT NULL CHECK(namespace_device>=0),
- namespace_inode INTEGER NOT NULL CHECK(namespace_inode>0),
- queue_device INTEGER NOT NULL CHECK(queue_device>=0),
- queue_inode INTEGER NOT NULL CHECK(queue_inode>0)
-) STRICT;
-CREATE TABLE system_v_queue_ownership (
- listener TEXT PRIMARY KEY CHECK(length(listener) BETWEEN 1 AND 64 AND listener NOT GLOB '*[^a-zA-Z0-9_-]*'),
- platform TEXT NOT NULL CHECK(platform IN ('darwin-arm64','linux-arm64','linux-amd64')),
- queue_key INTEGER NOT NULL UNIQUE CHECK(queue_key BETWEEN 1 AND 2147483647),
- queue_id INTEGER NOT NULL CHECK(queue_id BETWEEN 0 AND 2147483647),
- sequence INTEGER NOT NULL CHECK(sequence BETWEEN 0 AND 65535),
- changed INTEGER NOT NULL CHECK(changed>0),
- boot_id TEXT NOT NULL CHECK(length(boot_id)=36),
- namespace_device INTEGER NOT NULL CHECK(namespace_device>=0),
- namespace_inode INTEGER NOT NULL CHECK(namespace_inode>=0),
- CHECK((platform='darwin-arm64' AND namespace_device=0 AND namespace_inode=0) OR (platform IN ('linux-arm64','linux-amd64') AND namespace_inode>0))
-) STRICT;
-CREATE TABLE signed_syslog_state (
- signer BLOB NOT NULL CHECK(length(signer)=32),
- hostname TEXT NOT NULL CHECK(length(hostname) BETWEEN 1 AND 253),
- author_scope TEXT NOT NULL, target BLOB NOT NULL,
- reboot INTEGER NOT NULL CHECK(reboot BETWEEN 1 AND 9999999999),
- started TEXT NOT NULL,
- block INTEGER NOT NULL CHECK(block BETWEEN 0 AND 9999999999),
- last_message INTEGER NOT NULL CHECK(last_message BETWEEN 1 AND 9999999999),
- block_digest BLOB NOT NULL CHECK(length(block_digest)=32),
- PRIMARY KEY(signer,hostname)
-) STRICT;
-CREATE TABLE snmp_engines (
- engine BLOB PRIMARY KEY CHECK(length(engine) BETWEEN 5 AND 32),
- boots INTEGER NOT NULL CHECK(boots BETWEEN 0 AND 2147483646),
- engine_time INTEGER NOT NULL CHECK(engine_time BETWEEN 0 AND 2147483647),
- latest_received INTEGER NOT NULL CHECK(latest_received BETWEEN 0 AND 2147483647),
- anchor INTEGER NOT NULL CHECK(anchor>=0), last_seen INTEGER NOT NULL CHECK(last_seen>=anchor)
-) STRICT;
-CREATE TABLE snmp_owners (
- engine BLOB NOT NULL CHECK(length(engine) BETWEEN 5 AND 32),
- user TEXT NOT NULL CHECK(length(user) BETWEEN 1 AND 32),
- author_scope TEXT NOT NULL, target BLOB NOT NULL,
- context_engine BLOB NOT NULL CHECK(length(context_engine) BETWEEN 5 AND 32),
- context_name TEXT NOT NULL,
- PRIMARY KEY(engine,user)
-) STRICT;
-CREATE TABLE snmp_seen (
- request_id TEXT PRIMARY KEY CHECK(length(request_id)=64),
- engine BLOB NOT NULL CHECK(length(engine) BETWEEN 5 AND 32),
- user TEXT NOT NULL, boots INTEGER NOT NULL CHECK(boots BETWEEN 0 AND 2147483646),
- engine_time INTEGER NOT NULL CHECK(engine_time BETWEEN 0 AND 2147483647),
- digest BLOB NOT NULL CHECK(length(digest)=32)
-) STRICT;
-CREATE INDEX snmp_seen_clock ON snmp_seen(engine,boots,engine_time);
-PRAGMA user_version=27;
+PRAGMA user_version=28;
 `

@@ -35,7 +35,7 @@ func TestNNGInvalidLengthsNeverAdmit(t *testing.T) {
 			if len(requests) != 0 {
 				t.Fatal("invalid frame admitted")
 			}
-			if _, err := f.lookup(t, mqttSNRequest().RequestID); err == nil {
+			if _, err := f.lookup(t, plainRequest().RequestID); err == nil {
 				t.Fatal("invalid frame journaled")
 			}
 		})

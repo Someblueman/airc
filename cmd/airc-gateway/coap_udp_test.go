@@ -13,7 +13,7 @@ import (
 )
 
 func TestPlainCoAPDiscoveryDoesNotStartRuntime(t *testing.T) {
-	for _, protocol := range []string{"coap_udp", "coap_tcp"} {
+	for _, protocol := range []string{"coap_udp"} {
 		t.Run(protocol, func(t *testing.T) {
 			root := t.TempDir()
 			c := config.Defaults()

@@ -15,11 +15,11 @@ earlier commits keep them in git history.
 | Linux sockets and devices | DCCP, virtio-vsock, raw IPv4 protocol 253, raw Ethernet, IPv4 ICMP encapsulation, Classical CAN and CAN-FD ISO-TP, Bluetooth RFCOMM, Bluetooth L2CAP, BlueZ BLE GATT, vsftpd FTPS inbox |
 | Profiles without code | I²C, SPI, USB bulk, USB serial, IEEE 802.15.4, IEEE 802.11s mesh, Thunderbolt, InfiniBand, ICMP tunnel, DNS tunnel, data diode |
 
-The QR image-sequence import, `serve-uart`, ICMPv6 encapsulation, the
-offline bundle importer and every carrier in the
-[carriers table](README.md#carriers) remain. Physical links that reach an
-existing carrier over IP or a tty, such as a USB serial adapter, still work
-as that carrier.
+Every carrier in the [carriers table](README.md#carriers) remains. The QR
+image-sequence import, `serve-uart`, ICMPv6 encapsulation and the offline
+bundle importer, kept at the time, were removed later with the other unused
+carriers ([removed-carriers.md](removed-carriers.md)). Physical links that
+reach an existing carrier over IP still work as that carrier.
 
 ## Existing configuration
 

@@ -36,7 +36,7 @@ func TestAuthorDatagramReplyAmplificationBound(t *testing.T) {
 	if err := write(FrameResponse{Version: 1, CorrelationID: "c", Event: "error", Error: &core.Failure{Code: core.CapacityExceeded}}); err != nil || conn.written == 0 {
 		t.Fatalf("final error frame: %v", err)
 	}
-	if loopbackPacketAddr(remote) || !loopbackPacketAddr(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)}) || !loopbackPacketAddr(&ICMPv6Addr{IP: net.IPv6loopback}) {
+	if loopbackPacketAddr(remote) || !loopbackPacketAddr(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)}) || !loopbackPacketAddr(&net.UDPAddr{IP: net.IPv6loopback}) {
 		t.Fatal("loopback classification")
 	}
 	loopback := &recordingPackets{}

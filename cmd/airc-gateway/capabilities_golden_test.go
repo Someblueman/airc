@@ -21,14 +21,10 @@ var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 // an unknown one.
 var goldenProtocols = []string{
 	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect", "mqtt_websocket",
-	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited", "fifo", "uart",
-	"system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc",
-	"udp", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6",
-	"sctp", "sctp_unordered", "sctp_pr_ttl", "rawquic", "rawquic_datagrams", "dtls",
-	"coap_udp", "coap_tcp", "coaps", "coaps_tcp", "coap_oscore", "webrtc", "zeromq", "nng",
-	"mqtt", "mqtt_sn", "amqp", "stomp",
-	"file_mailbox", "directory_mailbox", "append_log", "scp_inbox", "offline_bundle", "bpv7",
-	"syslog_tls", "syslog_signed", "snmp_v3",
+	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited",
+	"udp", "rawquic", "rawquic_datagrams", "dtls",
+	"coap_udp", "coaps", "webrtc", "zeromq", "nng", "mqtt",
+	"file_mailbox", "directory_mailbox", "append_log",
 	"gopher",
 }
 
@@ -65,9 +61,8 @@ func TestCapabilitiesStatusGolden(t *testing.T) {
 
 // Every Process carrier's descriptor names a command this binary runs.
 func TestProcessCarrierCommands(t *testing.T) {
-	ownFlags := []string{"scp-inbox", "import-bundle", "import-bpv7"}
 	for _, tr := range config.Transports() {
-		if tr.Kind == config.Process && processCommands[tr.Command] == nil && !slices.Contains(ownFlags, tr.Command) {
+		if tr.Kind == config.Process && processCommands[tr.Command] == nil {
 			t.Errorf("%s: no command %q", tr.Name, tr.Command)
 		}
 	}
@@ -78,9 +73,6 @@ func TestProcessCarrierCommands(t *testing.T) {
 // refuse to enable it.
 func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
 	for _, tr := range config.Transports() {
-		if tr.Kind == config.Bridge {
-			continue
-		}
 		want := "disabled"
 		if !config.Available(tr.Name) {
 			want = "disabled_unavailable"
@@ -97,7 +89,7 @@ func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
 		}
 	}
 	if status, _ := listenerStatus(config.Listener{Protocol: "irc", Enabled: true}, true); status != "disabled_unimplemented" {
-		t.Errorf("a bridge name as a listener protocol: %s", status)
+		t.Errorf("an unknown listener protocol: %s", status)
 	}
 }
 
@@ -106,7 +98,7 @@ func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
 // history, search or watch without a cursor key.
 func TestCapabilitiesReportServedOperations(t *testing.T) {
 	all := append(dispatch.ImplementedOperations(), core.AccountRegister)
-	l := config.Listener{Protocol: "udp_lite", Enabled: true}
+	l := config.Listener{Protocol: "udp", Enabled: true}
 	if _, ops := listenerStatus(l, true); !slices.Equal(ops, all) {
 		t.Errorf("unconfigured listener: %v", ops)
 	}

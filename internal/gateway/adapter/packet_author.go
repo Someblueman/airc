@@ -47,18 +47,15 @@ type AuthorPackets struct {
 	writeSlot chan struct{}
 }
 
-// NewAuthorDatagrams serves a network packet socket: UDP, UDP-Lite, IPv4/IPv6
-// multicast, IPv4 broadcast or ICMPv6 Echo.
+// NewAuthorDatagrams serves a network packet socket: UDP.
 func NewAuthorDatagrams(d *dispatch.Dispatcher, slots, requests chan struct{}) (*AuthorPackets, error) {
 	return newAuthorPackets(d, false, nil, nil, slots, requests)
 }
 
-// NewLocalAuthorPackets serves a local packet carrier: Unix datagrams, POSIX
-// and System V message queues, shared memory and mapped files. Replies go to
-// reply when it is set (queues, shared memory, mapped files), else to the
-// sender's own bound address (Unix datagrams). A sender without an address
-// gets no reply; its requests still run, and receipt.get on any carrier
-// reports them.
+// NewLocalAuthorPackets serves a local packet carrier: Unix datagrams.
+// Replies go to reply when it is set, else to the sender's own bound address.
+// A sender without an address gets no reply; its requests still run, and
+// receipt.get on any carrier reports them.
 func NewLocalAuthorPackets(d *dispatch.Dispatcher, bound *dispatch.BoundAuthor, reply net.Addr, slots, requests chan struct{}) (*AuthorPackets, error) {
 	if reply != nil && !validPacketDestination(reply) {
 		return nil, store.ErrInvalid
@@ -300,15 +297,10 @@ func (u *AuthorPackets) writer(ctx context.Context, conn net.PacketConn, destina
 }
 
 // packetSourceAddr is the address AIRC's per-source limits see: the IP of a
-// UDP or ICMPv6 peer (nil, a listener label, for other carriers).
+// UDP peer (nil, a listener label, for other carriers).
 func packetSourceAddr(addr net.Addr) net.Addr {
-	switch a := addr.(type) {
-	case *net.UDPAddr:
+	if a, ok := addr.(*net.UDPAddr); ok {
 		return a
-	case *ICMPv6Addr:
-		if a != nil {
-			return &net.UDPAddr{IP: a.IP}
-		}
 	}
 	return nil
 }

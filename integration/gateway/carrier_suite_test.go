@@ -59,7 +59,7 @@ type suiteCarrier struct {
 	// dial connects a client; a connect-time refusal is returned as an error.
 	dial func(*testing.T, suiteDial) (suiteClient, error)
 	// connectPassword: the password is checked once per connection (MQTT
-	// CONNECT, STOMP passcode, AMQP SASL PLAIN), not per request.
+	// CONNECT), not per request.
 	connectPassword bool
 	// results: replies carry the operation's result. MQTT only acknowledges
 	// intake; the suite reads its outcomes from receipts.
@@ -80,7 +80,7 @@ type suiteCarrier struct {
 	// listener as the "wire" subtest.
 	wire func(t *testing.T, e *suiteEnv)
 	// configure, if set, adjusts each of the carrier's listeners before the
-	// gateway starts (a free datagram port, a multicast group); it may skip
+	// gateway starts (a free datagram port); it may skip
 	// the carrier on a host that lacks the feature.
 	configure func(t *testing.T, l *config.Listener)
 }
@@ -129,8 +129,6 @@ var suiteCarriers = []suiteCarrier{
 	{name: "unix", listener: config.Listener{Protocol: "unix"}, dial: dialFramedSuite("unix"), results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "framed_stream"}, wire: unixSuiteWire},
 	{name: "grpc", listener: config.Listener{Protocol: "grpc"}, dial: dialGRPCSuite, results: true, tls: true, alpn: "h2", reads: true, watch: true},
 	{name: "mqtt", listener: config.Listener{Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}}, dial: dialMQTTSuite, connectPassword: true, tls: true, session: true, wire: mqttSuiteWire(mqttConnect)},
-	{name: "stomp", listener: config.Listener{Protocol: "stomp", STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response"}}}}, dial: dialSTOMPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: stompSuiteWire},
-	{name: "amqp", listener: config.Listener{Protocol: "amqp", AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response"}}}}, dial: dialAMQPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: amqpSuiteWire},
 }
 
 // registerSuiteCarriers adds carriers defined in a carrier family's own file,
@@ -441,8 +439,7 @@ func suiteGuestPost(t *testing.T, e *suiteEnv) {
 	e.posted(t, id, "#guest", text, nick, "")
 }
 
-// No reply (a result, a PUBACK, a STOMP receipt, an AMQP disposition)
-// precedes committed intake: while another writer holds the journal the
+// No reply (a result, a PUBACK) precedes committed intake: while another writer holds the journal the
 // carrier stays silent, and its reply follows the commit of exactly one job.
 func suiteReplyAfterCommit(t *testing.T, e *suiteEnv) {
 	client := e.dial(t)

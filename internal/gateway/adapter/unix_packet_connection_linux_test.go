@@ -15,7 +15,7 @@ import (
 )
 
 func TestUnixPacketProfileCapacityAndJoinedCancellation(t *testing.T) {
-	f, plain, _ := oscoreRPCFixture(t)
+	f, plain := frameFixture(t)
 	server, client := unixPacketPair(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -69,7 +69,7 @@ func TestUnixPacketProfileCapacityAndJoinedCancellation(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatal("record refusal changed someone else's request slot")
 	}
-	if f.jobs(t, "oscore-rpc-message") != 0 {
+	if f.jobs(t, "frame-message") != 0 {
 		t.Fatal("refused record reached intake")
 	}
 }

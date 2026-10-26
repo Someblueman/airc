@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -19,11 +18,6 @@ import (
 func TestPacketDiscoveryDoesNotStartRuntime(t *testing.T) {
 	listeners := []config.Listener{
 		{Protocol: "udp", Address: "127.0.0.1:9001"},
-		{Protocol: "ipv4_multicast", Address: "239.255.1.2:9001", IPv4Multicast: &config.IPv4Multicast{Interface: "lo"}},
-		{Protocol: "ipv6_multicast", Address: "[ff11::1234]:9001", IPv6Multicast: &config.IPv6Multicast{Interface: "lo"}},
-	}
-	if runtime.GOOS == "linux" {
-		listeners = append(listeners, config.Listener{Protocol: "udp_lite", Address: "127.0.0.1:9001", UDPLite: &config.UDPLite{ChecksumCoverage: "full"}})
 	}
 	for _, l := range listeners {
 		t.Run(l.Protocol, func(t *testing.T) {

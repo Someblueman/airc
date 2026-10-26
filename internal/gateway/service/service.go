@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
@@ -21,8 +20,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// readyRecord is the line Run writes once every listener and bridge is
-// bound and prepared.
+// readyRecord is the line Run writes once every listener is bound.
 type readyRecord struct {
 	Version   int    `json:"version"`
 	State     string `json:"state"`
@@ -30,16 +28,11 @@ type readyRecord struct {
 		ID      string `json:"id"`
 		Address string `json:"address"`
 	} `json:"listeners"`
-	Brokers []struct {
-		ID       string `json:"id"`
-		Protocol string `json:"protocol"`
-	} `json:"brokers,omitempty"`
 }
 
 // Run binds only explicitly enabled instances. Any preparation/bind failure
 // closes all owned resources and never emits a ready record. No upstream account
 // is provisioned and native AIRC dials require a journal lease or read grant.
-// Explicit outbound brokers dial only after preparation completes.
 func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err := c.Validate(); err != nil {
 		return err
@@ -76,9 +69,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			certificates[l.ID] = pair
 		}
 	}
-	enabled += c.EnabledBridges()
 	if enabled == 0 {
-		return errors.New("no enabled listeners or brokers")
+		return errors.New("no enabled listeners")
 	}
 	s, err := store.Open(ctx, c)
 	if err != nil {
@@ -86,31 +78,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	state := readyRecord{Version: 1, State: "ready"}
-	// Bridges are prepared, and released, kind by kind in registry order.
-	var prepared [][]bridge
-	defer func() {
-		for _, kind := range slices.Backward(prepared) {
-			for _, o := range kind {
-				o.release()
-			}
-		}
-	}()
-	for _, t := range config.Transports() {
-		if t.Kind != config.Bridge {
-			continue
-		}
-		kind, err := bridgeOwners[t.Name](c, s, b, cursors)
-		if err != nil {
-			return err
-		}
-		prepared = append(prepared, kind)
-		for _, o := range kind {
-			state.Brokers = append(state.Brokers, struct {
-				ID       string `json:"id"`
-				Protocol string `json:"protocol"`
-			}{o.bridgeID(), t.Name})
-		}
-	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
@@ -149,14 +116,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(state.Brokers)+1)
+	results := make(chan error, len(instances)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
-	for _, kind := range prepared {
-		for _, bridge := range kind {
-			work.Go(func() { results <- bridge.serve(o) })
-		}
-	}
 	for _, i := range instances {
 		work.Go(func() { results <- i.serve() })
 	}

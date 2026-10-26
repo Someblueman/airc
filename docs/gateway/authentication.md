@@ -35,14 +35,13 @@ which operations and targets it admits, whether guests may use it, an
 optional access password (IRC's `PASS`), and per-source and per-author
 rates and connection caps. An empty policy admits guests, as an open IRC
 server does. Local carriers add the boundary they already have: owner-only
-sockets, FIFOs, queues and directories, Unix peer credentials, the parent
-process for stdio and socket pairs, the serial line, the kernel-audited
-caller UID for Mach IPC, and the operator who runs an import.
+sockets and directories, Unix peer credentials, and the parent process for
+stdio and socket pairs.
 
 ## Bound authors
 
-Producers that cannot hold a token at rest, or whose provider already
-verified the sender, post as a configured author instead:
+Producers that cannot hold a token at rest post as a configured author
+instead:
 
 ```json
 "bound_author": {"nick": "alerts", "account_token_file": "/owner/alerts.token"}
@@ -53,27 +52,11 @@ writes one) the bound author is that registered account; without it, a
 guest under `nick`. The token is read once at startup, kept in memory, and a
 bad file fails startup.
 
-| Where | Rule |
-|---|---|
-| Mailboxes, queues, shared memory, mapped files, offline bundles, BPv7 (`bound_author` on the listener) | A request that names no author runs as the bound author; one that names an author runs as that author. `import-bundle` and `import-bpv7` also take `--author-nick NICK [--author-token-file PATH]` for one run. |
-| OSCORE (`oscore.author`) | The default author for requests that name none. |
-| Redis, PostgreSQL NOTIFY, SFTP and SCP routes (`bound_author`, `guests`) | A request naming a registered author always runs as it; one naming a guest only when `guests` allows; otherwise the bound author; with neither, `invalid_request`. `guests` defaults to true without a bound author and false with one. |
-| TLS syslog, signed syslog, SNMPv3 grants (required `bound_author`) | The verified sender posts as its grant's bound author; these messages are text, not requests. |
-| IRC, XMPP bridges (`accounts`, `guest_prefix`, `guests`) | See [bridge authors](bridges.md#bridge-authors). |
-
-Whoever the route's own gate admits (anyone who can PUBLISH, XADD, NOTIFY,
-write the mailbox or hold the SSH key) can post as its bound author: restrict
-that gate as you would the account's token.
-
-## Provider-verified senders
-
-Route-owned ingress checks its sender with the provider's own mechanism and
-has no listener password or guest policy: pinned TLS syslog client
-certificates, RFC 5848 origin signatures, SNMPv3 USM, SSH logins for SFTP
-and SCP, and for bridges the IRC `account` tag or the real JID a
-non-anonymous MUC reports. Provider replay tables record
-the author scope that first used an event or origin; a later grant to a
-different author conflicts.
+Only the mailboxes (`file_mailbox`, `directory_mailbox`, `append_log`)
+take a `bound_author`: a request that names no author runs as the bound
+author; one that names an author runs as that author. Whoever can write
+the mailbox directory can post as its bound author: restrict that directory
+as you would the account's token.
 
 ## Tokens and the journal
 
@@ -89,17 +72,15 @@ matching token for a registered author's.
 
 The limits are IRC's. Each listener bounds requests per source (default 120
 a minute) and per author (60), and open connections (256, 16 per source
-address, loopback exempt); route-owned ingress has the same request rates.
-With the upstream's `gateway_token_file`, each author session sends
+address, loopback exempt). With the upstream's `gateway_token_file`, each author session sends
 `WEBIRC` with the real client's source, so aircd applies its own
 per-address limits: eight account registrations per source an hour (`437`,
 reported as `capacity_exceeded`), and nine failed tokens per source in ten
 minutes, after which aircd refuses that source's tokens until the window
 passes (a correct token refused this way is retried later rather than
 failed). Sources are the client IP address without its port,
-`listener:<id>:pid:<pid>` for each client process on a Unix stream socket,
-`listener:<id>` for other carriers without addresses, `route:<id>` for
-route-owned ingress and `bridge:<id>:<nick>` for each bridged user.
+`listener:<id>:pid:<pid>` for each client process on a Unix stream socket
+and `listener:<id>` for other carriers without addresses.
 
 ## Credential files
 

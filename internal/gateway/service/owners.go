@@ -11,7 +11,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -52,7 +51,7 @@ type owner func(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance
 
 // owners holds the constructor of every transport serve owns (each Stream
 // and Packet descriptor in config), keyed by protocol. Process carriers run
-// under their own commands; bridges are in bridgeOwners.
+// under their own commands.
 var owners = map[string]owner{
 	"http":              stream{http: httpServer(plainHTTPServer)}.start,
 	"websocket":         stream{http: httpServer(webSocketServer)}.start,
@@ -68,37 +67,15 @@ var owners = map[string]owner{
 	"irc_connect":       stream{http: httpServer(ircConnectServer), native: true}.start,
 	"unix":              stream{serve: serveFramed}.start,
 	"unixpacket":        stream{serve: serveUnixPacket}.start,
-	"sctp":              stream{sctp: adapter.SCTPOrdered, serve: serveSCTP}.start,
-	"sctp_unordered":    stream{sctp: adapter.SCTPUnordered, serve: serveSCTP}.start,
-	"sctp_pr_ttl":       stream{sctp: adapter.SCTPOrderedTTL, serve: serveSCTP}.start,
 	"zeromq":            stream{serve: serveZeroMQ}.start,
 	"nng":               stream{serve: serveNNG}.start,
-	"coap_tcp":          stream{serve: serveCoAPTCP}.start,
-	"coaps_tcp":         stream{alpn: coapALPN, serve: serveCoAPTCP}.start,
 	"mqtt":              stream{alpn: noALPN, serve: serveMQTT}.start,
 	"mqtt_websocket":    stream{http: mqttWebSocketServer}.start,
-	"amqp":              stream{alpn: noALPN, selfBounded: true, serve: serveAMQP}.start,
-	"stomp":             stream{alpn: noALPN, selfBounded: true, serve: serveSTOMP}.start,
-	"syslog_tls":        stream{selfBounded: true, serve: serveSyslog}.start,
-	"syslog_signed":     stream{selfBounded: true, serve: serveSyslog}.start,
 	"dtls":              startDTLS,
 	"coaps":             startDTLS,
 	"udp":               packet(udpOwner),
-	"udp_lite":          packet(udpOwner),
-	"ipv4_multicast":    packet(udpOwner),
-	"ipv4_broadcast":    packet(udpOwner),
-	"ipv6_multicast":    packet(udpOwner),
 	"coap_udp":          packet(udpOwner),
-	"icmp_v6":           packet(icmpV6Owner),
 	"unixgram":          packet(unixgramListener),
-	"system_v_queue":    packet(systemVQueueOwner),
-	"posix_mqueue":      packet(posixQueueOwner),
-	"shared_memory":     packet(sharedMemoryOwner),
-	"mapped_file":       packet(mappedFileOwner),
-	"snmp_v3":           startSNMP,
-	"mqtt_sn":           startMQTTSN,
-	"mach_ipc":          startMachIPC,
-	"coap_oscore":       startOSCOREListener,
 	"directory_mailbox": mailbox(openDirectoryMailbox),
 	"append_log":        mailbox(openAppendLog),
 }
@@ -107,31 +84,11 @@ func udpOwner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwn
 	return newUDPOwner(l, d, o.slots, o.requests)
 }
 
-func icmpV6Owner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
-	return newICMPv6Owner(l, d, o.slots, o.requests)
-}
-
 func unixgramListener(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
 	return newUnixgramOwner(l, d, o.slots, o.requests)
 }
 
-func systemVQueueOwner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
-	return newSystemVQueueOwner(o.work, o.c, l, o.journal, d, o.slots, o.requests)
-}
-
-func posixQueueOwner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
-	return newPOSIXQueueOwner(o.work, o.c, l, o.journal, d, o.slots, o.requests)
-}
-
-func sharedMemoryOwner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
-	return newSharedMemoryOwner(o.work, o.c, l, d, o.slots, o.requests)
-}
-
-func mappedFileOwner(o *startup, l config.Listener, d *dispatch.Dispatcher) (*packetOwner, error) {
-	return newMappedFileOwner(o.work, o.c, l, d, o.slots, o.requests)
-}
-
-// packet owns a datagram, queue or shared-memory listener.
+// packet owns a datagram listener.
 func packet(open func(*startup, config.Listener, *dispatch.Dispatcher) (*packetOwner, error)) owner {
 	return func(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
 		p, err := open(o, l, d)
@@ -197,43 +154,6 @@ func keepalive(l config.Listener) adapter.Keepalive {
 	return adapter.Keepalive{Idle: idle, Ping: ping}
 }
 
-func startSNMP(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	a, err := auth.NewSNMPAuthenticator(*l.SNMP)
-	if err != nil {
-		return instance{}, err
-	}
-	return udpInstance(l, func(conn net.PacketConn) error { return adapter.ServeSNMP(o.work, conn, a, d, o.requests) })
-}
-
-func startMQTTSN(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	return udpInstance(l, func(conn net.PacketConn) error { return adapter.ServeMQTTSN(o.work, conn, d, o.requests, *l.MQTTSN) })
-}
-
-// udpInstance binds a plain UDP socket served by serve.
-func udpInstance(l config.Listener, serve func(net.PacketConn) error) (instance, error) {
-	conn, err := net.ListenPacket("udp", l.Address)
-	if err != nil {
-		return instance{}, err
-	}
-	return closing(conn.LocalAddr().String(), func() error { return serve(conn) }, func() { _ = conn.Close() }), nil
-}
-
-func startMachIPC(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	owner, err := newMachIPCOwner(o.ctx, l, d, o.requests)
-	if err != nil {
-		return instance{}, err
-	}
-	return closing(l.Address, func() error { return owner.serve(o.work) }, func() { _ = owner.close() }), nil
-}
-
-func startOSCOREListener(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	owner, err := startOSCORE(o.work, o.c, l, o.journal, d, o.requests)
-	if err != nil {
-		return instance{}, err
-	}
-	return closing(owner.Addr().String(), owner.Wait, func() { _ = owner.Close() }), nil
-}
-
 // mailbox owns a polled directory: shutdown cancels the poller, and its
 // files close only once it has joined.
 func mailbox(open func(config.Config, config.Listener, *dispatch.Dispatcher, chan struct{}) (mailboxOwner, error)) owner {
@@ -251,22 +171,18 @@ type alpn uint8
 
 const (
 	framedALPN alpn = iota // the framed contract (adapter.FramedALPN)
-	noALPN                 // MQTT, AMQP and STOMP negotiate none
-	coapALPN               // CoAP over TLS
+	noALPN                 // MQTT negotiates none
 )
 
-// stream owns a connection listener: TCP (or Unix stream, seqpacket or
-// SCTP, by the transport's network), optionally under TLS, serving each
-// connection with serve or an HTTP server.
+// stream owns a connection listener: TCP (or Unix stream or seqpacket, by
+// the transport's network), optionally under TLS, serving each connection
+// with serve or an HTTP server.
 type stream struct {
 	// http builds the HTTP server, and closes the MCP or WebRTC sessions it
 	// owns (nil if none).
 	http  func(*startup, config.Listener, *dispatch.Dispatcher) (*http.Server, func(), error)
 	serve func(context.Context, served) error
 	alpn  alpn
-	// selfBounded listeners take global session slots themselves.
-	selfBounded bool
-	sctp        adapter.SCTPMode
 	// native listeners tunnel AIRC's protocol and bound their connections
 	// as author carriers do, without a dispatcher.
 	native bool
@@ -274,15 +190,11 @@ type stream struct {
 
 // served is what a connection listener's serve function uses.
 type served struct {
-	l                 config.Listener
-	d                 *dispatch.Dispatcher
-	listener          net.Listener
-	slots, requests   chan struct{}
-	sessionsPerAuthor int
-	realm, stateDir   string
-	syslog            *auth.SyslogAuthenticator
-	signedSyslog      *auth.SignedSyslogAuthenticator
-	sctp              adapter.SCTPMode
+	l        config.Listener
+	d        *dispatch.Dispatcher
+	listener net.Listener
+	requests chan struct{}
+	stateDir string
 }
 
 func serveFramed(ctx context.Context, s served) error {
@@ -313,26 +225,6 @@ func mqttWebSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) 
 // restarts: in the private state directory, by listener ID.
 func mqttSessionsFile(stateDir string, l config.Listener) string {
 	return filepath.Join(stateDir, "mqtt-"+l.ID+".sessions")
-}
-
-func serveAMQP(ctx context.Context, s served) error {
-	return adapter.ServeAMQP(ctx, s.listener, s.slots, *s.l.AMQP, s.d, s.requests)
-}
-
-func serveSTOMP(ctx context.Context, s served) error {
-	return adapter.ServeSTOMP(ctx, s.listener, s.slots, *s.l.STOMP, s.d, s.requests)
-}
-
-func serveSCTP(ctx context.Context, s served) error {
-	return adapter.ServeSCTP(ctx, s.listener, s.d, s.requests, s.sctp)
-}
-
-func serveCoAPTCP(ctx context.Context, s served) error {
-	return serveCoAPTCPListener(ctx, s.listener, s.d, s.requests)
-}
-
-func serveSyslog(ctx context.Context, s served) error {
-	return adapter.ServeSyslog(ctx, s.listener, s.syslog, s.signedSyslog, s.slots, s.sessionsPerAuthor, s.realm, s.d, s.requests)
 }
 
 func plainHTTPServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {
@@ -426,8 +318,6 @@ func webRTCServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.
 func (s stream) listen(ctx context.Context, l config.Listener) (net.Listener, error) {
 	t, _ := config.Lookup(l.Protocol)
 	switch t.Network {
-	case "sctp":
-		return adapter.ListenSCTP(l.Address, s.sctp)
 	case "unix":
 		return adapter.ListenUnix(l.Address)
 	case "unixpacket":
@@ -456,13 +346,6 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 		closeSessions()
 		return instance{}, err
 	}
-	var syslog *auth.SyslogAuthenticator
-	if l.Syslog != nil {
-		if syslog, err = auth.NewSyslogAuthenticator(*l.Syslog); err != nil {
-			_ = listener.Close()
-			return instance{}, err
-		}
-	}
 	if config.AuthorCarrier(l.Protocol) || s.native {
 		limits := l.AccessLimits()
 		listener = adapter.LimitConnections(listener, limits.Connections, limits.ConnectionsPerSource)
@@ -470,38 +353,19 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 	// Each open client connection takes one of the global connection slots;
 	// the requests it carries take upstream sessions only while they run.
 	var transport net.Listener = limitedListener{Listener: listener, slots: o.connections}
-	var signedSyslog *auth.SignedSyslogAuthenticator
-	if l.SignedSyslog != nil {
-		if signedSyslog, err = auth.NewSignedSyslogAuthenticator(*l.SignedSyslog); err != nil {
-			listener.Close()
-			return instance{}, err
-		}
-	}
-	if s.selfBounded {
-		transport = listener
-	}
 	if pair, ok := o.certificates[l.ID]; ok {
 		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.FramedALPN}}
-		switch s.alpn {
-		case noALPN:
+		if s.alpn == noALPN {
 			tlsConfig.NextProtos = nil
-		case coapALPN:
-			tlsConfig.NextProtos = []string{adapter.CoAPALPN}
 		}
 		if server != nil {
 			tlsConfig = server.TLSConfig.Clone()
 			tlsConfig.Certificates = []tls.Certificate{pair}
 		}
-		if syslog != nil {
-			if tlsConfig, err = syslog.TLSConfig(tlsConfig); err != nil {
-				_ = transport.Close()
-				return instance{}, err
-			}
-		}
 		transport = tls.NewListener(transport, tlsConfig)
 	}
 	serve := func() error {
-		return s.serve(o.work, served{l: l, d: d, listener: transport, slots: o.slots, requests: o.requests, sessionsPerAuthor: o.c.Limits.SessionsPerAuthor, realm: o.c.Realm, stateDir: o.c.StateDir, syslog: syslog, signedSyslog: signedSyslog, sctp: s.sctp})
+		return s.serve(o.work, served{l: l, d: d, listener: transport, requests: o.requests, stateDir: o.c.StateDir})
 	}
 	if server != nil {
 		serve = func() error { return server.Serve(transport) }
@@ -526,40 +390,4 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 			_ = transport.Close()
 		},
 	}, nil
-}
-
-// bridge is one prepared top-level bridge.
-type bridge interface {
-	bridgeID() string
-	serve(*startup) error
-	// release clears its credentials or closes its server, once it joined
-	// or when a later preparation fails.
-	release()
-}
-
-type prepareBridge func(config.Config, *store.Store, *backend.Backend, *auth.CursorCodec) ([]bridge, error)
-
-// bridgeOwners prepare each Bridge transport in config, keyed by name;
-// preparation never dials.
-var bridgeOwners = map[string]prepareBridge{
-	"redis/pubsub":           bridges(prepareRedis),
-	"redis/streams":          bridges(prepareRedisStreams),
-	"irc":                    bridges(prepareIRC),
-	"xmpp":                   bridges(prepareXMPP),
-	"sftp":                   bridges(prepareSFTP),
-	"postgres/listen-notify": bridges(preparePostgresNotify),
-}
-
-func bridges[O bridge](prepare func(config.Config, *store.Store, *backend.Backend, *auth.CursorCodec) ([]O, error)) prepareBridge {
-	return func(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) ([]bridge, error) {
-		owners, err := prepare(c, s, b, cursors)
-		if err != nil {
-			return nil, err
-		}
-		prepared := make([]bridge, len(owners))
-		for i, o := range owners {
-			prepared[i] = o
-		}
-		return prepared, nil
-	}
 }

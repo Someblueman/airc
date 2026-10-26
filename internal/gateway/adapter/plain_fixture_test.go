@@ -26,6 +26,11 @@ func newPlainFixture(t *testing.T, l config.Listener) plainFixture {
 	return plainFixture{f, f.listener(t, l)}
 }
 
+// plainRequest is one send every plain carrier test can post.
+func plainRequest() core.Request {
+	return core.Request{Version: 1, RequestID: "plain-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact body\n世界"}
+}
+
 // body is r as contract JSON naming the fixture's guest author.
 func (f plainFixture) body(t *testing.T, r core.Request) string {
 	t.Helper()
