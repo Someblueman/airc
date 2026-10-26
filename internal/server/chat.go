@@ -16,13 +16,68 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 	s.numericLocked(client, "777", nil, string(data))
 }
 
-// chatReadOnlyActions are the CHAT actions that never append to history, so
-// serializesPosts lets them skip messageMu. Keep it in step with the action
-// switch in chatLocked: an action missing here is serialized, which is safe.
-var chatReadOnlyActions = map[string]bool{
-	"context": true, "pins": true, "waiting": true, "prepare": true,
-	"cancel": true, "typing": true, "thinking": true, "results": true,
-	"handoffs": true, "decisions": true,
+// chatFeatures are the 005 tokens that advertise CHAT and its actions. Every
+// one is always advertised, so no action is gated on its token today.
+var chatFeatures = []string{"CHAT=1", "CONTEXT=1", "CONTEXT_BYTES=1", "CUSTOM_REACTIONS=1", "HANDOFF=1", "DECISION=1"}
+
+// chatAction is one CHAT action: its handler, whether it never appends to
+// history (readOnly, so serializesPosts lets it skip messageMu; a test drives
+// each one and checks), and the 005 feature it is advertised under, "" for
+// the actions CHAT=1 itself covers.
+type chatAction struct {
+	name     string
+	handler  func(s *Server, client *session, r protocol.ChatRequest) error
+	readOnly bool
+	requires string
+}
+
+// chatActionTable is every CHAT action; chatLocked dispatches from it and
+// chatReadOnlyActions is derived from it, so nothing is kept in step by hand.
+var chatActionTable = []chatAction{
+	{name: "context", handler: (*Server).contextLocked, readOnly: true, requires: "CONTEXT"},
+	{name: "pins", handler: (*Server).pinsLocked, readOnly: true},
+	{name: "pin", handler: (*Server).pinsLocked},
+	{name: "unpin", handler: (*Server).pinsLocked},
+	{name: "prepare", handler: (*Server).signalLocked, readOnly: true},
+	{name: "cancel", handler: (*Server).signalLocked, readOnly: true},
+	{name: "waiting", handler: (*Server).signalLocked, readOnly: true},
+	{name: "typing", handler: (*Server).signalLocked, readOnly: true},
+	{name: "thinking", handler: (*Server).signalLocked, readOnly: true},
+	{name: "room", handler: (*Server).roomLocked},
+	{name: "action", handler: (*Server).chatPostLocked},
+	{name: "correct", handler: (*Server).chatPostLocked},
+	{name: "retract", handler: (*Server).chatPostLocked},
+	{name: "poll", handler: (*Server).pollLocked},
+	{name: "vote", handler: (*Server).pollLocked},
+	{name: "results", handler: (*Server).pollLocked, readOnly: true},
+	{name: "close-poll", handler: (*Server).pollLocked},
+	{name: "handoff", handler: (*Server).handoffLocked, requires: "HANDOFF"},
+	{name: "handoff-accept", handler: (*Server).handoffLocked, requires: "HANDOFF"},
+	{name: "handoff-decline", handler: (*Server).handoffLocked, requires: "HANDOFF"},
+	{name: "handoff-done", handler: (*Server).handoffLocked, requires: "HANDOFF"},
+	{name: "handoff-withdraw", handler: (*Server).handoffLocked, requires: "HANDOFF"},
+	{name: "handoffs", handler: (*Server).handoffLocked, readOnly: true, requires: "HANDOFF"},
+	{name: "decision", handler: (*Server).decisionLocked, requires: "DECISION"},
+	{name: "decision-answer", handler: (*Server).decisionLocked, requires: "DECISION"},
+	{name: "decision-withdraw", handler: (*Server).decisionLocked, requires: "DECISION"},
+	{name: "decisions", handler: (*Server).decisionLocked, readOnly: true, requires: "DECISION"},
+}
+
+// chatActions is chatActionTable by name. chatReadOnlyActions are the names
+// of its read-only entries, which serializesPosts reads: an action missing
+// from it is serialized, which is safe.
+var (
+	chatActions         = map[string]chatAction{}
+	chatReadOnlyActions = map[string]bool{}
+)
+
+func init() {
+	for _, action := range chatActionTable {
+		chatActions[action.name] = action
+		if action.readOnly {
+			chatReadOnlyActions[action.name] = true
+		}
+	}
 }
 
 func (s *Server) chatLocked(client *session, command protocol.Command) {
@@ -35,7 +90,6 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "max_bytes is only supported for context")
 		return
 	}
-	var err error
 	if body, exists := command.Tags[protocol.BodyTag]; exists {
 		var decodeErr error
 		r.Text, decodeErr = protocol.DecodeBody(body)
@@ -44,24 +98,10 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 			return
 		}
 	}
-	switch r.Action {
-	case "context":
-		err = s.contextLocked(client, r)
-	case "pins", "pin", "unpin":
-		err = s.pinsLocked(client, r)
-	case "prepare", "cancel", "waiting", "typing", "thinking":
-		err = s.signalLocked(client, r)
-	case "room":
-		err = s.roomLocked(client, r)
-	case "action", "correct", "retract":
-		err = s.chatPostLocked(client, r)
-	case "poll", "vote", "results", "close-poll":
-		err = s.pollLocked(client, r)
-	case "handoff", "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw", "handoffs":
-		err = s.handoffLocked(client, r)
-	case "decision", "decision-answer", "decision-withdraw", "decisions":
-		err = s.decisionLocked(client, r)
-	default:
+	var err error
+	if action, known := chatActions[r.Action]; known {
+		err = action.handler(s, client, r)
+	} else {
 		err = errors.New("unknown CHAT action")
 	}
 	if err != nil {
