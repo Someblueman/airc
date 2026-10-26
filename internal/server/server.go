@@ -60,8 +60,9 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	s := &Server{
-		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
-		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
+		handoffs: map[string]handoff{}, decisions: map[string]decision{},
+		chatStore: chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
+		cfg:       cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
 		accountsState: accountsState{registrations: make(map[string][]time.Time)},
 		nicks:         make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
@@ -73,6 +74,7 @@ func New(cfg Config) *Server {
 	s.moderationState.env = &s.env
 	s.directoryState.env = &s.env
 	s.topicState.env = &s.env
+	s.chatStore.env = &s.env
 	return s
 }
 

@@ -33,5 +33,5 @@ type persisted interface {
 // storesLocked lists the stores Shutdown closes, in the order it closed
 // them before they were stores.
 func (s *Server) storesLocked() []persisted {
-	return []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState}
+	return []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState, &s.chatStore}
 }

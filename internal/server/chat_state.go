@@ -26,12 +26,33 @@ func newChatState() chatState {
 	return chatState{Operators: map[string][]string{}, Pins: map[string][]Message{}, Rooms: map[string]roomSettings{}, Polls: map[string]poll{}}
 }
 
+// chatStore is the pins, room settings, polls and operator grants, saved
+// as one snapshot (chat), plus slow-mode and live signal state, which are
+// not saved. Every field is read and written with s.mu held; the snapshot
+// is written before the caller applies it, under s.mu, with env.sync.
+type chatStore struct {
+	chat         chatState
+	chatAt       string
+	historyLimit int // the server's, which bounds a room's own limit
+	slowPosts    map[string]time.Time
+	signals      map[string]activitySignal
+	env          *storeEnv
+}
+
 func (s *Server) RestoreChat(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.listener != nil || s.chatAt != "" {
 		return errors.New("configure chat state once before Serve")
 	}
+	if err := s.chatStore.load(path); err != nil {
+		return err
+	}
+	s.history.quotas = s.chat.Rooms
+	return nil
+}
+
+func (st *chatStore) load(path string) error {
 	loaded := newChatState()
 	if err := readState(path, &loaded); err != nil {
 		return err
@@ -75,7 +96,7 @@ func (s *Server) RestoreChat(path string) error {
 		return errors.New("too many pinned messages")
 	}
 	for channel, r := range loaded.Rooms {
-		if !validChannel(channel) || r.SlowSeconds < 0 || r.SlowSeconds > 3600 || r.HistoryLimit < 0 || r.HistoryLimit > s.cfg.HistoryLimit {
+		if !validChannel(channel) || r.SlowSeconds < 0 || r.SlowSeconds > 3600 || r.HistoryLimit < 0 || r.HistoryLimit > st.historyLimit {
 			return errors.New("invalid room settings")
 		}
 	}
@@ -84,13 +105,20 @@ func (s *Server) RestoreChat(path string) error {
 			return err
 		}
 	}
-	s.chat, s.chatAt = loaded, path
-	s.history.quotas = loaded.Rooms
+	st.chat, st.chatAt = loaded, path
 	return nil
 }
 
+func (st *chatStore) close() error { return nil }
+
+// writeChatLocked writes next, the snapshot as it will be, before the
+// caller applies it.
+func (st *chatStore) writeChatLocked(next chatState) error {
+	return writeState(st.chatAt, next, st.env.sync)
+}
+
 func (s *Server) saveChatLocked(next chatState) error {
-	if err := writeState(s.chatAt, next, s.cfg.Sync); err != nil {
+	if err := s.writeChatLocked(next); err != nil {
 		return err
 	}
 	s.chat = next
@@ -98,12 +126,12 @@ func (s *Server) saveChatLocked(next chatState) error {
 	return nil
 }
 
-func (s *Server) copyChat() chatState {
+func (st *chatStore) copyChat() chatState {
 	next := newChatState()
-	maps.Copy(next.Operators, s.chat.Operators)
-	maps.Copy(next.Pins, s.chat.Pins)
-	maps.Copy(next.Rooms, s.chat.Rooms)
-	maps.Copy(next.Polls, s.chat.Polls)
+	maps.Copy(next.Operators, st.chat.Operators)
+	maps.Copy(next.Pins, st.chat.Pins)
+	maps.Copy(next.Rooms, st.chat.Rooms)
+	maps.Copy(next.Polls, st.chat.Polls)
 	return next
 }
 
