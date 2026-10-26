@@ -44,6 +44,12 @@ type uiBuffer struct {
 	info       irc.ChannelInfo
 	version    int // bumped on every change, to invalidate cached rendering
 
+	// A channel's charter as the backend last read it: asked once the read
+	// is queued, known once it has answered. A live change forgets both.
+	charter      string
+	charterAsked bool
+	charterKnown bool
+
 	cacheWidth, cacheVersion int
 	cacheLines               []string
 	cacheEvents              map[irc.Event]renderedEvent
@@ -63,8 +69,12 @@ type (
 		history bool
 	}
 	topicIn   struct{ channel, topic, by string }
-	charterIn struct{ channel, charter string } // a room's charter, read for /charter
-	namesIn   struct {
+	charterIn struct { // a room's charter, as the backend read it
+		channel, charter string
+		open             bool // read for /charter: show the view
+		unsupported      bool // the daemon predates charters
+	}
+	namesIn struct {
 		channel string
 		nicks   []string
 	}
@@ -117,6 +127,7 @@ type uiModel struct {
 	clipboard       string                  // text to offer the terminal's clipboard on the next draw
 	width, height   int
 	connected       bool
+	everConnected   bool // a connection flipping back on is a reconnect
 	status          string
 	statusError     bool
 	statusUntil     time.Time
@@ -386,9 +397,21 @@ func (m *uiModel) switchTo(name string) []uiCmd {
 	m.restoreDraft(name)
 	b.unread, b.mention, b.scroll = 0, false, 0
 	if b.kind == bufChannel {
-		return []uiCmd{{kind: "names", target: name}}
+		return append([]uiCmd{{kind: "names", target: name}}, m.fetchCharter(b, false)...)
 	}
 	return nil
+}
+
+// fetchCharter asks the backend for a room's charter the first time the UI
+// shows the room, and again when again is set, after a reconnect: a change
+// made while the UI was away, or before it joined, sent it no signal. A
+// room shown while offline is read when the connection comes up.
+func (m *uiModel) fetchCharter(b *uiBuffer, again bool) []uiCmd {
+	if b == nil || b.kind != bufChannel || !m.connected || (b.charterAsked && !again) {
+		return nil
+	}
+	b.charterAsked = true
+	return []uiCmd{{kind: "charter", target: b.name}}
 }
 
 func (m *uiModel) step(delta int) []uiCmd {
@@ -418,6 +441,11 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		}
 		if v.entry.Action == "charter" {
 			m.setStatus(v.entry.From+" changed the charter of "+v.entry.Target+"; /charter shows it", false)
+			// What the UI read is stale: the next showing of the room
+			// reads it again and notes the rules it has not seen.
+			if b := m.find(v.entry.Target); b != nil {
+				b.charterAsked, b.charterKnown = false, false
+			}
 			break
 		}
 		if v.entry.Action == "cancel" {
@@ -500,8 +528,7 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		}
 		// Started without a channel: open the first one rather than the read-only inbox.
 		if !m.chosen && m.cur().kind == bufInbox && m.buffers[0].kind == bufChannel {
-			m.switchTo(m.buffers[0].name)
-			cmds = append(cmds, uiCmd{kind: "names", target: m.current})
+			cmds = append(cmds, m.switchTo(m.buffers[0].name)...)
 		}
 	case capabilitiesIn:
 		m.features = v.features
@@ -518,7 +545,14 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		b.version++
 	case statusIn:
 		if v.connected != nil {
+			up := *v.connected && !m.connected
 			m.connected = *v.connected
+			if up {
+				// The open room's charter, read on connecting and again
+				// after a reconnect, when a change sent no signal.
+				cmds = append(cmds, m.fetchCharter(m.cur(), m.everConnected)...)
+				m.everConnected = true
+			}
 		}
 		if v.text != "" {
 			m.setStatus(v.text, v.isError)

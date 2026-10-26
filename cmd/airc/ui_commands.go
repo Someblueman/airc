@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -109,7 +110,8 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 			break
 		}
 		m.ensureChannel(channel)
-		return append(m.switchTo(channel), uiCmd{kind: "observe", target: channel}), false
+		// Observed before its charter is read, so no change slips between.
+		return slices.Insert(m.switchTo(channel), 1, uiCmd{kind: "observe", target: channel}), false
 	case "/close":
 		if b == nil || b.kind != bufChannel && b.kind != bufQuery && b.kind != bufHelp {
 			m.setStatus("Only channels can be closed", true)

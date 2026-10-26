@@ -75,7 +75,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			m.setStatus("/charter works in a channel", true)
 			return nil, true
 		}
-		return []uiCmd{{kind: "charter", target: room}}, true
+		return []uiCmd{{kind: "charter", target: room, text: "open"}}, true
 	case "/pin", "/unpin", "/correct", "/retract", "/prepare", "/waiting", "/cancel", "/vote", "/results", "/close-poll":
 		if !need(1) {
 			return nil, true
@@ -290,7 +290,13 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 	case "context":
 		return true, b.openContext(ctx, c, cmd.target, translate)
 	case "charter":
+		// Read for /charter (text "open"), on first showing a room, or
+		// after a reconnect; the live signal only notes a change.
 		entries, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "room", Target: cmd.target, Seconds: -1, Limit: -1}, translate)
+		if charterUnsupported(err) {
+			b.emit(ctx, charterIn{channel: cmd.target, open: cmd.text == "open", unsupported: true})
+			return true, nil
+		}
 		if err != nil {
 			return true, err
 		}
@@ -298,7 +304,7 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		for _, e := range entries {
 			charter = e.Charter
 		}
-		b.emit(ctx, charterIn{channel: cmd.target, charter: charter})
+		b.emit(ctx, charterIn{channel: cmd.target, charter: charter, open: cmd.text == "open"})
 		return true, nil
 	case "react":
 		return true, c.React(cmd.target, cmd.text)
@@ -417,27 +423,64 @@ func (b *uiBackend) refreshBoard(ctx context.Context, c *irc.Client, room string
 	return nil
 }
 
-// showCharter opens a room's charter as a read-only view, line by line, or
-// says in the status line that the room has none. /close returns.
+// showCharter keeps a room's charter as the backend read it. For /charter it
+// opens the charter as a read-only view, line by line, or says in the status
+// line that the room has none; /close returns. A read made on showing the
+// room or after a reconnect notes a charter the UI had not seen, or one
+// that changed while it was away, and redraws an open view in place.
 func (m *uiModel) showCharter(c charterIn) {
-	if c.charter == "" {
-		m.setStatus(c.channel+" has no charter", false)
-		return
+	room := m.ensureChannel(c.channel)
+	known, previous := room.charterKnown, room.charter
+	if !c.unsupported {
+		room.charter, room.charterKnown = c.charter, true
 	}
 	name := "charter:" + c.channel
-	b := m.find(name)
-	if b == nil {
-		b = newBuffer(name, bufHelp)
-		b.returnTo = m.current
-		m.buffers = append(m.buffers, b)
+	view := m.find(name)
+	if !c.open {
+		switch {
+		case c.unsupported:
+		case !known && c.charter != "":
+			m.setStatus(c.channel+" has a charter; /charter shows it", false)
+		case known && c.charter != previous:
+			m.setStatus("the charter of "+c.channel+" changed while the UI was away; /charter shows it", false)
+		}
+		if view != nil {
+			renderCharter(view, c)
+		}
+		return
 	}
-	b.help = []helpLine{{head: "Charter of " + c.channel}}
-	for line := range strings.SplitSeq(c.charter, "\n") {
-		b.help = append(b.help, helpLine{body: line})
+	if c.charter == "" && !c.unsupported {
+		m.setStatus(c.channel+" has no charter", false)
+		if view != nil {
+			renderCharter(view, c) // an open view no longer shows a cleared charter
+		}
+		return
 	}
-	b.topic = "Charter of " + c.channel + " · /close returns to " + b.returnTo
-	b.version++
+	if view == nil {
+		view = newBuffer(name, bufHelp)
+		view.returnTo = m.current
+		m.buffers = append(m.buffers, view)
+	}
+	renderCharter(view, c)
 	m.switchTo(name)
+}
+
+// renderCharter draws a charter view: the heading, then the charter line by
+// line, that the room has none, or that the daemon predates charters.
+func renderCharter(view *uiBuffer, c charterIn) {
+	view.help = []helpLine{{head: "Charter of " + c.channel}}
+	switch {
+	case c.unsupported:
+		view.help = append(view.help, helpLine{body: errNoCharters.Error()})
+	case c.charter == "":
+		view.help = append(view.help, helpLine{body: c.channel + " has no charter"})
+	default:
+		for line := range strings.SplitSeq(c.charter, "\n") {
+			view.help = append(view.help, helpLine{body: line})
+		}
+	}
+	view.topic = "Charter of " + c.channel + " · /close returns to " + view.returnTo
+	view.version++
 }
 
 func (m *uiModel) showQuery(q queryIn) {
