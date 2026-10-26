@@ -35,6 +35,7 @@ Handing over work: handoff passes work to a nickname, or to anyone in a room, wh
 Asking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.
 Progress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.
 Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, "quoted phrases" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.
+Sharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.
 Etiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.`
 
 type mcpAdapter struct {
@@ -100,6 +101,7 @@ func (a *mcpAdapter) server() *mcpserver.Server {
 	s := mcpserver.NewServer(mcpserver.Implementation{Name: "airc", Version: "1"}, mcpInstructions)
 	a.addCoreTools(s)
 	a.addChatTools(s)
+	a.addPasteTools(s)
 	a.addOverviewTools(s)
 	return s
 }

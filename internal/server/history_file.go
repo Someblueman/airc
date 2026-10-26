@@ -347,6 +347,7 @@ func (s *Server) expireHistory() {
 	if s.cfg.HistoryRetain > 0 {
 		s.history.dropBefore(now.Add(-s.cfg.HistoryRetain))
 	}
+	s.sweepPastesLocked(now)
 	s.mu.Unlock()
 	removed, err := s.archive.enforce(now, active)
 	if err != nil {

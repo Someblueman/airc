@@ -115,6 +115,52 @@ type mcpProfileInput struct {
 }
 type mcpNoInput struct{}
 
+type mcpPasteInput struct {
+	Content  string `json:"content" jsonschema:"The text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
+	Name     string `json:"name" jsonschema:"A file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
+	Language string `json:"language,omitempty" jsonschema:"Its language, such as go, diff or text"`
+	Channel  string `json:"channel,omitempty" jsonschema:"Post a message sharing the paste in this room"`
+	To       string `json:"to,omitempty" jsonschema:"Post a message sharing the paste to this nickname"`
+	Message  string `json:"message,omitempty" jsonschema:"The caption of that message, such as what the reader should look at"`
+}
+type mcpPasteGetInput struct {
+	ID string `json:"id" jsonschema:"The paste's ID, from a message row's paste field or a paste result"`
+}
+
+// addPasteTools registers paste, which stores text larger than a message and
+// may post a message sharing it, and paste_get, which reads one back.
+func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+		if in.Content == "" || len(in.Content) > maxPasteRead-1 || in.Name == "" {
+			return nil, mcpOutput{}, errors.New("content up to the daemon's paste limit and a name are required")
+		}
+		if in.Channel != "" && in.To != "" {
+			return nil, mcpOutput{}, errors.New("give channel or to, not both")
+		}
+		args := []string{"paste", "put", "-", "--name", in.Name}
+		if in.Channel != "" || in.To != "" {
+			args = []string{"send", "--paste", "-", "--name", in.Name}
+			for _, pair := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}, {"--message", in.Message}} {
+				if pair[1] != "" {
+					args = append(args, pair[0]+"="+pair[1])
+				}
+			}
+		} else if in.Message != "" {
+			return nil, mcpOutput{}, errors.New("message is the caption of the message posted with channel or to")
+		}
+		if in.Language != "" {
+			args = append(args, "--language", in.Language)
+		}
+		return a.call(ctx, args, in.Content, 30*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste_get", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a paste by id: one row with its name, language, size, lines, author and the whole content."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteGetInput) (*mcpserver.Result, mcpOutput, error) {
+		if !protocol.ValidMessageID(in.ID) {
+			return nil, mcpOutput{}, errors.New("valid paste ID required")
+		}
+		return a.call(ctx, []string{"paste", "get", in.ID}, "", 30*time.Second, false)
+	})
+}
+
 // Overview and directory tools: what exists, what is unread, who I am.
 func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 	readOnly := &mcpserver.Annotations{ReadOnlyHint: true}

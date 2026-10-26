@@ -21,7 +21,7 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 			want: statePaths{
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl",
-				topics: history + ".topics.json", profiles: history + ".profiles.json",
+				topics: history + ".topics.json", profiles: history + ".profiles.json", pastes: history + ".pastes.json",
 			},
 		},
 		"history file and wake": {
@@ -29,7 +29,7 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 			want: statePaths{
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl", wakes: history + ".accounts.json.wakes.json",
-				topics: history + ".topics.json", profiles: history + ".profiles.json",
+				topics: history + ".topics.json", profiles: history + ".profiles.json", pastes: history + ".pastes.json",
 			},
 		},
 		"admin token only": {
@@ -38,6 +38,7 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 				accounts: token + ".accounts.json", chat: token + ".accounts.json.chat.json",
 				handoffs: token + ".accounts.json.handoffs.jsonl", decisions: token + ".accounts.json.decisions.jsonl",
 				profiles: token + ".accounts.json.profiles.json", moderation: token + ".moderation.json",
+				pastes: token + ".accounts.json.pastes.json",
 			},
 		},
 		"history file and admin token": {
@@ -46,12 +47,13 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl",
 				topics: history + ".topics.json", profiles: history + ".profiles.json", moderation: history + ".moderation.json",
+				pastes: history + ".pastes.json",
 			},
 		},
 		"explicit files win": {
 			flags: statePaths{history: history, accounts: "/a", chat: "/c", handoffs: "/h", decisions: "/d", wakes: "/w", topics: "/t", profiles: "/p", moderation: "/m"},
 			token: token, wake: true,
-			want: statePaths{history: history, accounts: "/a", chat: "/c", handoffs: "/h", decisions: "/d", wakes: "/w", topics: "/t", profiles: "/p", moderation: "/m"},
+			want: statePaths{history: history, accounts: "/a", chat: "/c", handoffs: "/h", decisions: "/d", wakes: "/w", topics: "/t", profiles: "/p", moderation: "/m", pastes: history + ".pastes.json"},
 		},
 		"moderation file without a token is kept for configureAdmin to refuse": {
 			flags: statePaths{moderation: "/m"},
@@ -73,6 +75,7 @@ func TestResolveStateUsesFixedNamesUnderStateDir(t *testing.T) {
 		history: history, accounts: filepath.Join(dir, "accounts.json"), chat: filepath.Join(dir, "chat.json"),
 		handoffs: filepath.Join(dir, "handoffs.jsonl"), decisions: filepath.Join(dir, "decisions.jsonl"), wakes: filepath.Join(dir, "wakes.json"),
 		topics: filepath.Join(dir, "topics.json"), profiles: filepath.Join(dir, "profiles.json"), moderation: filepath.Join(dir, "moderation.json"),
+		pastes: filepath.Join(dir, "pastes.json"),
 	}
 	got, notes, err := resolveState(dir, statePaths{}, token, true)
 	if err != nil || len(notes) != 0 || got != canonical {
@@ -101,9 +104,9 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 	legacy := statePaths{
 		accounts: history + ".accounts.json", chat: history + ".chat.json", handoffs: history + ".handoffs.jsonl",
 		decisions: history + ".decisions.jsonl", wakes: history + ".accounts.json.wakes.json", topics: history + ".topics.json",
-		profiles: history + ".profiles.json", moderation: history + ".moderation.json",
+		profiles: history + ".profiles.json", moderation: history + ".moderation.json", pastes: history + ".pastes.json",
 	}
-	for _, path := range []string{history, legacy.accounts, legacy.chat, legacy.handoffs, legacy.decisions, legacy.wakes, legacy.topics, legacy.profiles, legacy.moderation} {
+	for _, path := range []string{history, legacy.accounts, legacy.chat, legacy.handoffs, legacy.decisions, legacy.wakes, legacy.topics, legacy.profiles, legacy.moderation, legacy.pastes} {
 		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +119,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 	if got != legacy {
 		t.Fatalf("legacy layout: got %+v, want %+v", got, legacy)
 	}
-	if len(notes) != 8 {
+	if len(notes) != 9 {
 		t.Fatalf("notes: %v", notes)
 	}
 	for _, note := range notes {
@@ -125,7 +128,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 		}
 	}
 	entries, _ := os.ReadDir(dir)
-	if len(entries) != 9 {
+	if len(entries) != 10 {
 		t.Fatalf("resolution changed the directory: %v", entries)
 	}
 
@@ -146,7 +149,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 			}
 		}
 	}
-	if shadowed != 1 || len(notes) != 8 {
+	if shadowed != 1 || len(notes) != 9 {
 		t.Fatalf("notes after shadowing: %v", notes)
 	}
 

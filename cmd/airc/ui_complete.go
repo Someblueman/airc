@@ -39,6 +39,7 @@ var uiCommands = []uiCommand{
 	{"/unfollow", "ROOT_ID", "remove a followed thread", "REPLIES", "Conversations"},
 	{"/next", "", "continue an open thread or search", "REPLIES", "Conversations"},
 	{"/first", "", "restart a thread or search from the oldest retained results", "REPLIES", "Conversations"},
+	{"/paste", "ID", "open a shared paste read-only, 200 lines a page; /next continues", "PASTE", "Conversations"},
 	{"/pin", "ID", "share a message as a room pin", "CHAT", "Room"},
 	{"/unpin", "ID", "remove a room pin", "CHAT", "Room"},
 	{"/pins", "", "list this room's pins", "CHAT", "Room"},

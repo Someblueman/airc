@@ -48,6 +48,11 @@ type uiBuffer struct {
 	cacheLines               []string
 	cacheEvents              map[irc.Event]renderedEvent
 	eventLines               map[string]int
+
+	// A /paste view's lines, how many are shown and the paste's description.
+	pasteLines []string
+	pasteShown int
+	pasteEntry irc.ChatEntry
 }
 
 // Messages from the backend, the keyboard, and the terminal. The model handles
@@ -473,6 +478,10 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		}
 	case boardIn:
 		m.showBoard(v)
+	case pasteIn:
+		m.showPaste(v)
+	case pastePageIn:
+		m.pagePaste(v)
 	case directoryIn:
 		// The directory is authoritative on statuses: it has what the
 		// daemon still holds, so a cleared one goes.

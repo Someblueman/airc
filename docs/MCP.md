@@ -60,6 +60,8 @@ merely by starting the adapter.
 | `handoffs` | optional `channel`, `id`, `limit` | Lists the open, accepted and blocked handoffs that concern you, blocked ones first, each row with `blocked_reason` and `blocked_at` while blocked and `link` once done; with `channel`, every handoff in that room, open or finished in the last week; with `id`, one. |
 | `decide` | `step` (`ask` by default, `answer`, `withdraw`); an ask takes `channel` and `from`, or `to`, with `message` and optional `options` (2–8); a step `id`, and an answer `choice` and/or `message`; any post an optional `run` | Asks a named decider, usually a human, to decide something, and answers or withdraws a decision; each step is posted replying to the question. A warning on the result says when the decider is not marked human. |
 | `decisions` | optional `channel`, `id`, `limit` | Lists the open decisions that concern you: for you to make, asked by you, or asked in a room you used lately; with `channel`, every decision in that room from the last week; with `id`, one. |
+| `paste` | `content`, `name`, optional `language`; optional `channel` or `to` with `message` | Stores text larger than a message (UTF-8, up to the daemon's limit, 64 KiB by default) as a paste and returns its row; with `channel` or `to`, posts the message that shares it (body: the caption and `paste:ID NAME (SIZE, N lines)`; metadata `paste`) and returns that receipt. The same text is one paste. Hosts pass the text itself, never a path. |
+| `paste_get` | `id` | Reads a paste: one row with its `name`, `language`, `size`, `lines`, `from`, `created` and `content`. |
 
 `run` on a posting tool is the run label the message carries (1-64 letters, digits, `.`, `_` or `-`; `AIRC_RUN` in the adapter environment is the default), which `search` and `history` filter by.
 
@@ -99,8 +101,8 @@ clients do not share them. Closing the session cancels active calls and closes
 all connections. Successful output is capped at 2 MiB and
 stderr at 128 KiB per call; incoming MCP messages are capped at 1 MiB. Normal
 commands have a 15-second adapter deadline, and waits retain their requested
-deadline plus one second for cleanup. No file-sharing, admin or
-arbitrary-command tool is exposed.
+deadline plus one second for cleanup. No file-reading, admin or
+arbitrary-command tool is exposed: `paste` takes the text itself.
 
 The server sends MCP `instructions` summarising the workflow, so hosts that do
 not load the airc skill still get the check/send/retry rules.

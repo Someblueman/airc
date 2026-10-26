@@ -20,13 +20,17 @@ const (
 	stateTopics     = "topics.json"
 	stateProfiles   = "profiles.json"
 	stateModeration = "moderation.json"
+	// statePastes is the paste index; the pastes themselves are files in
+	// the directory named after it (pastes/). There is no --paste-file:
+	// pastes live under --state-dir or beside the history file.
+	statePastes = "pastes.json"
 )
 
 // statePaths are the daemon's state files, one per feature: "" leaves
 // that feature in memory. As flags they are the explicit --*-file
 // overrides, each of which wins over --state-dir and the older derivations.
 type statePaths struct {
-	history, accounts, chat, handoffs, decisions, wakes, topics, profiles, moderation string
+	history, accounts, chat, handoffs, decisions, wakes, topics, profiles, moderation, pastes string
 }
 
 // stateNote is something resolveState found worth logging, once the logger
@@ -112,6 +116,9 @@ func resolveState(dir string, flags statePaths, adminToken string, wake bool) (s
 	if paths.topics, err = choose(flags.topics, beside("", ".topics.json"), stateTopics); err != nil {
 		return paths, nil, err
 	}
+	if paths.pastes, err = choose("", beside(paths.accounts, ".pastes.json"), statePastes); err != nil {
+		return paths, nil, err
+	}
 	if paths.profiles, err = choose(flags.profiles, beside(paths.accounts, ".profiles.json"), stateProfiles); err != nil {
 		return paths, nil, err
 	}
@@ -128,7 +135,7 @@ func resolveState(dir string, flags statePaths, adminToken string, wake bool) (s
 // list is every resolved path, for the distinctness check; "" entries are
 // features left in memory.
 func (p statePaths) list() []string {
-	return []string{p.history, p.accounts, p.chat, p.handoffs, p.decisions, p.wakes, p.topics, p.profiles, p.moderation}
+	return []string{p.history, p.accounts, p.chat, p.handoffs, p.decisions, p.wakes, p.topics, p.profiles, p.moderation, p.pastes}
 }
 
 func fileExists(path string) (bool, error) {

@@ -95,6 +95,9 @@ func (c *Client) ReplyWithID(parent, message, requestID string) error {
 type SendOptions struct {
 	RequestID string
 	Run       string
+	// Paste is the ID of a paste the message shares (PASTE); its body
+	// should end with the paste's reference line (protocol.PasteMessageBody).
+	Paste string
 }
 
 // SendWith publishes a message with options.
@@ -114,7 +117,10 @@ func (c *Client) sendTextWithID(command, target, message, requestID string) erro
 	return c.sendTagged(command, target, message, SendOptions{RequestID: requestID})
 }
 
+// sendTagged sends a message with its optional request ID and run label
+// and, for one that shares a paste, the paste's ID in the PasteTag.
 func (c *Client) sendTagged(command, target, message string, options SendOptions) error {
+	pasteID := options.Paste
 	tags := ""
 	if options.RequestID != "" {
 		if !c.Supports("IDEMPOTENCY") || !protocol.ValidRequestID(options.RequestID) {
@@ -132,6 +138,17 @@ func (c *Client) sendTagged(command, target, message string, options SendOptions
 			tags = strings.TrimSuffix(tags, " ") + ";"
 		}
 		tags += protocol.RunTag + "=" + options.Run + " "
+	}
+	if pasteID != "" {
+		if !c.Supports("PASTE") || !protocol.ValidMessageID(pasteID) {
+			return errors.New("sharing a paste requires PASTE and the paste's ID")
+		}
+		if tags == "" {
+			tags = "@"
+		} else {
+			tags = strings.TrimSuffix(tags, " ") + ";"
+		}
+		tags += protocol.PasteTag + "=" + pasteID + " "
 	}
 	message = NormalizeMessage(message)
 	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {

@@ -63,6 +63,14 @@ type Config struct {
 	// Carriers are the ordered ways clients can reach this service (aircd
 	// itself and a bundled gateway), advertised in 005 CARRIERS and STATUS.
 	Carriers []protocol.Carrier
+	// PasteBytes bounds one paste (default 64 KiB, at most 8 MiB),
+	// PasteTotalBytes every paste together (default 64 MiB; the oldest
+	// unreferenced go first) and PasteRetain how long a paste is kept after
+	// its last reference (default 7 days; zero keeps it until the total is
+	// exceeded), unless a retained message shares it. See pastes.go.
+	PasteBytes      int
+	PasteTotalBytes int64
+	PasteRetain     time.Duration
 }
 
 type Client struct {
@@ -115,6 +123,7 @@ type Server struct {
 	chatStore                               // pins, rooms, polls, operators, slow mode and signals; see chat_state.go
 	handoffState                            // handoffs and their log; see handoffs.go
 	decisionState                           // decisions and their log; see decisions.go
+	pasteStore                              // pastes, their index and files; see pastes.go
 	seq              uint64
 	histFile         *os.File
 	histPath         string
@@ -176,7 +185,8 @@ type session struct {
 	secret         string // issued at registration (767); a new connection presenting it takes this session over
 	resumeNick     string // the nickname and secret a connection asked to take over with RESUME
 	resumeSecret   string
-	reclaimed      bool // taken over by a new connection: closing without QUIT or offline notices
+	reclaimed      bool                    // taken over by a new connection: closing without QUIT or offline notices
+	uploads        map[string]*pasteUpload // paste uploads in flight, by token; see pastes.go
 	// run is the +airc/run label of the command being handled, stamped on
 	// every message it posts; "" between commands and for untagged ones.
 	run string

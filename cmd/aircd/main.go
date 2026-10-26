@@ -33,7 +33,10 @@ func main() {
 	historyMemory := flags.String("history-memory", "1GiB", "approximate memory the retained messages may use; the oldest are dropped first")
 	historyRetain := flags.String("history-retain", retention.DefaultAge, "how long the history file's archive keeps messages, such as 30d or 72h; 0 keeps them until --history-retain-size")
 	historyRetainSize := flags.String("history-retain-size", retention.DefaultSize, "disk the history file and its archive may use; the oldest messages are deleted first; 0 means no limit")
-	stateDir := flags.String("state-dir", "", "keep the history file and every state file in this directory under fixed names (history.jsonl, accounts.json, chat.json, handoffs.jsonl, decisions.jsonl, wakes.json, topics.json, profiles.json, moderation.json); state files still at their older names beside history.jsonl are used as they are")
+	stateDir := flags.String("state-dir", "", "keep the history file and every state file in this directory under fixed names (history.jsonl, accounts.json, chat.json, handoffs.jsonl, decisions.jsonl, wakes.json, topics.json, profiles.json, moderation.json, pastes.json and pastes/); state files still at their older names beside history.jsonl are used as they are")
+	pasteMax := flags.String("paste-max-size", "64KiB", "largest paste a client may upload (1KiB-8MiB)")
+	pasteTotal := flags.String("paste-max-total", "64MiB", "disk every paste together may use; the oldest unreferenced go first")
+	pasteRetain := flags.String("paste-retain", "7d", "how long a paste is kept after it was last shared or read, such as 7d or 72h; a paste a retained message shares is kept while that message is; 0 keeps pastes until --paste-max-total")
 	var files statePaths
 	flags.StringVar(&files.history, "history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window; default with --state-dir: history.jsonl in it)")
 	flags.StringVar(&files.profiles, "profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted (deprecated: use --state-dir)")
@@ -100,6 +103,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "--history-retain-size:", err)
 		os.Exit(2)
 	}
+	pasteBytes, err := bytesize.Parse(*pasteMax)
+	if err != nil || pasteBytes < 1<<10 || pasteBytes > 8<<20 {
+		fmt.Fprintln(os.Stderr, "--paste-max-size must be a size between 1KiB and 8MiB")
+		os.Exit(2)
+	}
+	pasteTotalBytes, err := bytesize.Parse(*pasteTotal)
+	if err != nil || pasteTotalBytes < pasteBytes {
+		fmt.Fprintln(os.Stderr, "--paste-max-total must be a size of at least --paste-max-size")
+		os.Exit(2)
+	}
+	pasteAge, err := retention.ParseAge(*pasteRetain)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--paste-retain:", err)
+		os.Exit(2)
+	}
 	transport, accessToken, err := serverTransport(*tlsCert, *tlsKey, *accessFile, *unixPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -153,7 +171,7 @@ func main() {
 			logger.Info(note.event, "path", note.path, "canonical", note.canonical)
 		}
 	}
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, HistoryRetain: retainAge, HistoryRetainBytes: retainSize, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, HistoryBytes: historyBytes, HistoryRetain: retainAge, HistoryRetainBytes: retainSize, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers, PasteBytes: int(pasteBytes), PasteTotalBytes: pasteTotalBytes, PasteRetain: pasteAge})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)
@@ -200,13 +218,20 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if err := configureAdmin(srv, *adminTokenFile, paths.moderation, paths.history, paths.topics, paths.profiles, paths.accounts, paths.chat, paths.handoffs, paths.decisions, paths.wakes); err != nil {
+	if err := configureAdmin(srv, *adminTokenFile, paths.moderation, paths.history, paths.topics, paths.profiles, paths.accounts, paths.chat, paths.handoffs, paths.decisions, paths.wakes, paths.pastes); err != nil {
 		logger.Error("admin_config_failed", "error", err.Error())
 		os.Exit(1)
 	}
 	if paths.history != "" {
 		if err := srv.RestoreHistory(paths.history); err != nil {
 			logger.Error("history_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if paths.pastes != "" {
+		// After history, so the sweep knows which sharing messages are retained.
+		if err := srv.RestorePastes(paths.pastes); err != nil {
+			logger.Error("paste_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}
