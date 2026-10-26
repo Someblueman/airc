@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -94,8 +95,8 @@ func TestGatewayServeCLIResumesJournalAfterOfflineRestart(t *testing.T) {
 
 func awaitHTTPResult(t *testing.T, client *http.Client, address, token, id string, predicate func(core.Result) bool) core.Result {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
-	for {
+	var result core.Result
+	if !testwait.Poll(8*time.Second, 20*time.Millisecond, func() bool {
 		request, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/requests/"+id, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -105,18 +106,15 @@ func awaitHTTPResult(t *testing.T, client *http.Client, address, token, id strin
 		if err != nil {
 			t.Fatal(err)
 		}
-		var result core.Result
+		result = core.Result{}
 		err = json.NewDecoder(response.Body).Decode(&result)
 		_ = response.Body.Close()
 		if err != nil || response.StatusCode != 200 {
 			t.Fatal("HTTP status failed", response.StatusCode, err)
 		}
-		if predicate(result) {
-			return result
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("HTTP status did not reach required state", result)
-		}
-		time.Sleep(20 * time.Millisecond)
+		return predicate(result)
+	}) {
+		t.Fatal("HTTP status did not reach required state", result)
 	}
+	return result
 }

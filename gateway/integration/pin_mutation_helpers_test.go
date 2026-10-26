@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -65,15 +66,15 @@ func assertPinMutationFacts(t *testing.T, result core.Result, request core.Reque
 
 func waitHTTPPinResult(t *testing.T, f *reactionTransportFixture, id string, state core.State) core.Result {
 	t.Helper()
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, data := headerRead(t, f, "/v1/requests/"+id)
-		var result core.Result
-		if status == http.StatusOK && json.Unmarshal(data, &result) == nil && result.State == state {
-			return result
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("pin %s wanted %s: status=%d body=%s", id, state, status, data)
-		}
-		time.Sleep(20 * time.Millisecond)
+	var status int
+	var data []byte
+	var result core.Result
+	if !testwait.Poll(5*time.Second, 20*time.Millisecond, func() bool {
+		status, data = headerRead(t, f, "/v1/requests/"+id)
+		result = core.Result{}
+		return status == http.StatusOK && json.Unmarshal(data, &result) == nil && result.State == state
+	}) {
+		t.Fatalf("pin %s wanted %s: status=%d body=%s", id, state, status, data)
 	}
+	return result
 }

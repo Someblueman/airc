@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -47,19 +48,11 @@ func TestResourceSoakChild(t *testing.T) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		// Identical drain and idle window at every checkpoint, including calibration.
-		deadline := time.Now().Add(10 * time.Second)
-		for {
+		testwait.Every(t, 10*time.Second, 10*time.Millisecond, "clients to drain", func() bool {
 			s.mu.Lock()
-			n := len(s.clients)
-			s.mu.Unlock()
-			if n == 0 {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Fatal("clients did not drain")
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+			defer s.mu.Unlock()
+			return len(s.clients) == 0
+		})
 		time.Sleep(500 * time.Millisecond)
 		runtime.GC()
 		var mem runtime.MemStats

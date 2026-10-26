@@ -42,22 +42,16 @@ func dtlsDatagramAccepted(t *testing.T, f dtlsFixture, request core.Request, enc
 	if !first.Durable {
 		t.Fatalf("DTLS admission=%+v", first)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	var last core.Result
-	for attempt := 0; time.Now().Before(deadline); attempt++ {
+	attempt := 0
+	return acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, "the DTLS request "+request.RequestID+" to reach accepted", func() *core.Result {
 		receipt := core.Request{Version: 1, RequestID: fmt.Sprintf("%s-receipt-%d", request.RequestID, attempt), Operation: core.ReceiptGet, LookupID: request.RequestID}
+		attempt++
 		response := dtlsDatagramCall(t, f, receipt, encrypted)
 		if response.Result == nil || response.Result.Result == nil || response.Result.Result.RequestID != request.RequestID {
 			t.Fatalf("DTLS receipt=%+v", response)
 		}
-		last = *response.Result.Result
-		if last.State == core.Accepted {
-			return last
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	t.Fatalf("DTLS request did not reach accepted: %+v", last)
-	return core.Result{}
+		return response.Result.Result
+	})
 }
 
 func writeDTLSFrame(t *testing.T, f dtlsFixture, frame frameRequest) {

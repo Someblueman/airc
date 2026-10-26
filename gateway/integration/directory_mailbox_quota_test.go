@@ -42,19 +42,18 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 	input := filepath.Join(f.directory, "inbox", request.RequestID+".json")
 	checkBackpressure := func() {
 		t.Helper()
-		for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
-			if _, err := os.Stat(input); err != nil {
-				t.Fatal("full result quota consumed input", err)
-			}
-			if entries, err := os.ReadDir(filepath.Join(f.directory, "processing")); err != nil || len(entries) != 0 {
-				t.Fatal("full results admitted processing", entries, err)
-			}
-			select {
-			case <-f.process.done:
-				t.Fatal("backpressure stopped service", f.process.err)
-			default:
-			}
-			time.Sleep(10 * time.Millisecond)
+		// A pass over the inbox while results is full refuses intake.
+		f.process.mailboxPassAfter(t, time.Now(), "a mailbox pass with the results directory full")
+		if _, err := os.Stat(input); err != nil {
+			t.Fatal("full result quota consumed input", err)
+		}
+		if entries, err := os.ReadDir(filepath.Join(f.directory, "processing")); err != nil || len(entries) != 0 {
+			t.Fatal("full results admitted processing", entries, err)
+		}
+		select {
+		case <-f.process.done:
+			t.Fatal("backpressure stopped service", f.process.err)
+		default:
 		}
 	}
 	checkBackpressure()

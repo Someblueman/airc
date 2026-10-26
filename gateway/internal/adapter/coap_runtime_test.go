@@ -11,6 +11,8 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestCoAPReadyGateFollowsSuccessfulCarrierWrite(t *testing.T) {
@@ -89,13 +91,7 @@ func TestCoAPWriteDeadlineIncludesContendedAdmission(t *testing.T) {
 	first.SetCode(codes.Content)
 	done := make(chan error, 1)
 	go func() { done <- session.WriteMessage(first) }()
-	deadline := time.Now().Add(time.Second)
-	for len(session.writes) == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if len(session.writes) == 0 {
-		t.Fatal("first writer did not acquire admission")
-	}
+	testwait.Until(t, time.Second, "the first writer to acquire admission", func() bool { return len(session.writes) > 0 })
 	secondCtx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 	second := pool.NewMessage(secondCtx)

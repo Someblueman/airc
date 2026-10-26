@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -59,9 +60,10 @@ func TestHTTP3EndpointDialsByNameAndRedials(t *testing.T) {
 	}
 	first := h.q.conn
 	_ = first.CloseWithError(0, "idle") // as the gateway does after thirty idle seconds
-	deadline := time.Now().Add(2 * time.Second)
-	for first.Context().Err() == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	select {
+	case <-first.Context().Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the closed connection did not end")
 	}
 	if _, err := h.call(t.Context(), request{RequestID: "b", Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
 		t.Fatalf("after the connection closed: %v", err)
@@ -120,9 +122,10 @@ func TestHTTP3RecoversFromRejected0RTT(t *testing.T) {
 	// its cached session.
 	_ = first.Close()
 	_ = udp.Close()
-	deadline := time.Now().Add(2 * time.Second)
-	for h.q.conn.Context().Err() == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	select {
+	case <-h.q.conn.Context().Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the connection did not notice the gateway going away")
 	}
 	udp, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 	if err != nil {
@@ -153,10 +156,10 @@ func TestHTTP3ConcurrentDialsResumeTheSameSession(t *testing.T) {
 	if _, err := k.gateway.call(t.Context(), request{RequestID: "a", Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for _, ok := quicSessions.Get("localhost"); !ok && time.Now().Before(deadline); _, ok = quicSessions.Get("localhost") {
-		time.Sleep(10 * time.Millisecond)
-	}
+	testwait.Every(t, 2*time.Second, 10*time.Millisecond, "the session ticket to be cached", func() bool {
+		_, ok := quicSessions.Get("localhost")
+		return ok
+	})
 	_ = k.Close()
 	var wg sync.WaitGroup
 	for i := range 4 {
@@ -214,9 +217,10 @@ func TestHTTP3DialSkipsAnAddressThatDoesNotAnswer(t *testing.T) {
 	}
 	first := h.q.conn
 	_ = first.CloseWithError(0, "idle")
-	deadline := time.Now().Add(2 * time.Second)
-	for first.Context().Err() == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	select {
+	case <-first.Context().Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the closed connection did not end")
 	}
 	if err := read("b"); err != nil {
 		t.Fatalf("after the connection closed: %v", err)
@@ -274,9 +278,10 @@ func TestHTTP3RecoversFromRejected0RTTAcrossAddresses(t *testing.T) {
 	}
 	_ = first.Close()
 	_ = udp.Close()
-	deadline := time.Now().Add(2 * time.Second)
-	for h.q.conn.Context().Err() == nil && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	select {
+	case <-h.q.conn.Context().Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the connection did not notice the gateway going away")
 	}
 	udp, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
 	if err != nil {
@@ -306,14 +311,12 @@ func TestSessionCacheKeepsASessionAFailedDialWouldEvict(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer k.Close()
-	deadline := time.Now().Add(2 * time.Second)
-	cs, ok := quicSessions.Get("127.0.0.1")
-	for ; !ok && time.Now().Before(deadline); cs, ok = quicSessions.Get("127.0.0.1") {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !ok {
-		t.Fatal("no session was cached")
-	}
+	var cs *tls.ClientSessionState
+	testwait.Every(t, 2*time.Second, 10*time.Millisecond, "a session to be cached", func() bool {
+		var ok bool
+		cs, ok = quicSessions.Get("127.0.0.1")
+		return ok
+	})
 	cache.Put("gateway", cs)
 	cache.Put("gateway", nil) // what a failed resumption does
 	if _, ok := cache.Get("gateway"); !ok {
@@ -341,10 +344,10 @@ func TestHTTP3ConcurrentDialsResumeAcrossAddresses(t *testing.T) {
 	if _, err := k.gateway.call(t.Context(), request{RequestID: "a", Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for _, ok := quicSessions.Get("localhost"); !ok && time.Now().Before(deadline); _, ok = quicSessions.Get("localhost") {
-		time.Sleep(10 * time.Millisecond)
-	}
+	testwait.Every(t, 2*time.Second, 10*time.Millisecond, "the session ticket to be cached", func() bool {
+		_, ok := quicSessions.Get("localhost")
+		return ok
+	})
 	_ = k.Close()
 	var wg sync.WaitGroup
 	for i := range 4 {

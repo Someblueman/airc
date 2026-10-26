@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -76,15 +77,12 @@ func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 	if card.State != "running" || card.Note != "expiring" || card.ExpiresAt.Sub(card.LastSeen) != time.Second {
 		t.Fatalf("presence native timing: %+v", card)
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		observed := nativeCard(t, f.socket, "fixture-author")
-		if observed.State == "unknown" && observed.Note == "" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("presence did not expire natively: %+v", observed)
-		}
-		time.Sleep(100 * time.Millisecond)
+	var observed irc.AgentCard
+	if !testwait.Poll(5*time.Second, 100*time.Millisecond, func() bool {
+		observed = nativeCard(t, f.socket, "fixture-author")
+		return observed.State == "unknown" && observed.Note == ""
+	}) {
+		t.Fatalf("presence did not expire natively: %+v", observed)
 	}
 	status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
 	var saved core.Result
@@ -112,22 +110,19 @@ func TestNativeOversizedCardAcknowledgementRemainsUncertain(t *testing.T) {
 	if status != http.StatusAccepted || !result.Durable {
 		t.Fatalf("legal native patch not admitted: status=%d result=%+v", status, result)
 	}
-	for deadline := time.Now().Add(8 * time.Second); ; {
+	var receipt core.Result
+	if !testwait.Poll(8*time.Second, 50*time.Millisecond, func() bool {
 		status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
-		var result core.Result
-		if status != http.StatusOK || json.Unmarshal(body, &result) != nil {
+		receipt = core.Result{}
+		if status != http.StatusOK || json.Unmarshal(body, &receipt) != nil {
 			t.Fatalf("line-limit receipt unavailable: status=%d body=%s", status, body)
 		}
-		if result.AcceptanceUncertain {
-			if result.Card != nil || result.Accepted != nil || result.Persisted != nil || result.MessageID != "" || result.SendAttempts != 1 || result.LookupAttempts != 0 {
-				t.Fatalf("native missing ACK fabricated acceptance: %+v", result)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("native oversized ACK did not retain uncertainty: %+v", result)
-		}
-		time.Sleep(50 * time.Millisecond)
+		return receipt.AcceptanceUncertain
+	}) {
+		t.Fatalf("native oversized ACK did not retain uncertainty: %+v", receipt)
+	}
+	if receipt.Card != nil || receipt.Accepted != nil || receipt.Persisted != nil || receipt.MessageID != "" || receipt.SendAttempts != 1 || receipt.LookupAttempts != 0 {
+		t.Fatalf("native missing ACK fabricated acceptance: %+v", receipt)
 	}
 	// Clearing just the fourth field restores a representable native card. The
 	// preserved first three fields demonstrate that the server remains usable.

@@ -127,16 +127,13 @@ func unixPacketCall(t *testing.T, f *unixPacketFixture, request core.Request) ad
 
 func unixPacketReceipt(t *testing.T, f *unixPacketFixture, id string) core.Result {
 	t.Helper()
-	for deadline, attempt := time.Now().Add(5*time.Second), 0; time.Now().Before(deadline); attempt++ {
+	attempt := 0
+	return acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, "the record send "+id+" to reach native acceptance", func() *core.Result {
 		response := unixPacketCall(t, f, core.Request{Version: 1, RequestID: fmt.Sprintf("%s-receipt-%d", id, attempt), Operation: core.ReceiptGet, LookupID: id}).Result.Result
+		attempt++
 		if response == nil || response.RequestID != id {
 			t.Fatal("record receipt mismatch", response)
 		}
-		if response.State == core.Accepted {
-			return *response
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	t.Fatal("record send did not reach native acceptance")
-	return core.Result{}
+		return response
+	})
 }

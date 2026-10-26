@@ -45,23 +45,17 @@ func TestWebRTCRelayICE(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
-	deadline := time.Now().Add(8 * time.Second)
-	accepted := false
-	var acceptedResult *core.Result
-	for attempt := 0; time.Now().Before(deadline); attempt++ {
+	attempt := 0
+	acceptedResult := acceptedReceipt(t, 8*time.Second, 50*time.Millisecond, "the relay send to reach accepted", func() *core.Result {
 		receipt := core.Request{Version: 1, RequestID: request.RequestID + "-receipt-" + string(rune('a'+attempt%26)), Operation: core.ReceiptGet, LookupID: request.RequestID}
+		attempt++
 		r := webRTCSessionFrame(t, f, session, receipt, true, false)
-		if r.Result != nil && r.Result.Result != nil && r.Result.Result.State == core.Accepted {
-			accepted = true
-			acceptedResult = r.Result.Result
-			break
+		if r.Result == nil {
+			return nil
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if !accepted {
-		t.Fatal("relay send did not reach accepted")
-	}
-	if acceptedResult == nil || acceptedResult.MessageID == "" || acceptedResult.SendAttempts != 1 {
+		return r.Result.Result
+	})
+	if acceptedResult.MessageID == "" || acceptedResult.SendAttempts != 1 {
 		t.Fatalf("relay accepted result lacks durable native identity: %+v", acceptedResult)
 	}
 	history := core.Request{Version: 1, RequestID: request.RequestID + "-history", Operation: core.HistoryRead, Target: request.Target, Start: "retained", Limit: 8}

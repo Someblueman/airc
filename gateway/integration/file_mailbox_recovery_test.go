@@ -15,6 +15,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -55,22 +56,16 @@ func TestFileMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			output := filepath.Join(f.directory, "response.json")
 			deadline := time.Now().Add(3 * time.Second)
 			var initial adapter.FrameResponse
-			for {
-				data, err = os.ReadFile(output)
-				if err == nil && json.Unmarshal(data, &initial) == nil {
-					break
-				}
-				if !time.Now().Before(deadline) {
-					t.Fatal("pending intake response was not published")
-				}
+			testwait.Every(t, time.Until(deadline), 5*time.Millisecond, "the pending intake response to be published", func() bool {
 				select {
 				case err := <-done:
 					joined = true
 					t.Fatal("CLI exited before interruption", err)
 				default:
 				}
-				time.Sleep(5 * time.Millisecond)
-			}
+				data, err = os.ReadFile(output)
+				return err == nil && json.Unmarshal(data, &initial) == nil
+			})
 			if initial.Error != nil || initial.Result == nil || initial.Result.Result == nil || !initial.Result.Result.Durable || initial.Result.Result.State == core.Accepted {
 				t.Fatal("held delivery not durably pending", initial)
 			}

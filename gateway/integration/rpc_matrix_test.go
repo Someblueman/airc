@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -68,19 +69,16 @@ func TestRPCReadMatrixAndReplyFacts(t *testing.T) {
 	if native.ID == "" || native.Target != room.Name || native.From != "fixture-author" {
 		t.Fatalf("RPC native send=%+v", native)
 	}
-	var stored core.Result
 	// The observer receives the native broadcast before the sender receipt
 	// can be validated and committed to the gateway journal.
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	stored := acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, "the RPC send to be accepted", func() *core.Result {
 		receipt := call("receipt", core.Request{Version: 1, RequestID: "rpc-matrix-receipt", Operation: core.ReceiptGet, LookupID: send.RequestID})
-		if err := json.Unmarshal(receipt.Result, &stored); err != nil {
+		var result core.Result
+		if err := json.Unmarshal(receipt.Result, &result); err != nil {
 			t.Fatalf("RPC receipt=%s err=%v", receipt.Result, err)
 		}
-		if stored.State == core.Accepted {
-			break
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
+		return &result
+	})
 	if stored.State != core.Accepted || stored.MessageID != native.ID || stored.SendAttempts != 1 || stored.LookupAttempts != 0 {
 		t.Fatalf("RPC receipt=%+v native=%s", stored, native.ID)
 	}
@@ -118,20 +116,18 @@ func TestRPCAllMutationOperationsReachAccepted(t *testing.T) {
 		if err := json.Unmarshal(decoded.Result, &result); err != nil || !result.Durable {
 			t.Fatalf("RPC %s admission=%s err=%v", request.Operation, decoded.Result, err)
 		}
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		return acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, fmt.Sprintf("RPC %s to reach accepted", request.Operation), func() *core.Result {
 			receipt := core.Request{Version: 1, RequestID: request.RequestID + "-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}
 			receiptResponse, receiptBody := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, receipt.RequestID, "airc.request", rpcRequestParams(receipt)), false)
 			if receiptResponse.StatusCode != http.StatusOK {
 				t.Fatalf("RPC %s receipt status=%d body=%s", request.Operation, receiptResponse.StatusCode, receiptBody)
 			}
 			var accepted core.Result
-			if receiptRPC := decodeRPC(t, receiptBody); len(receiptRPC.Error) == 0 && json.Unmarshal(receiptRPC.Result, &accepted) == nil && accepted.State == core.Accepted {
-				return accepted
+			if receiptRPC := decodeRPC(t, receiptBody); len(receiptRPC.Error) != 0 || json.Unmarshal(receiptRPC.Result, &accepted) != nil {
+				return nil
 			}
-			time.Sleep(40 * time.Millisecond)
-		}
-		t.Fatalf("RPC %s did not reach accepted", request.Operation)
-		return core.Result{}
+			return &accepted
+		})
 	}
 	capResponse, capBody := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, "rpc-all-cap", "airc.capabilities", map[string]any{}), false)
 	if capResponse.StatusCode != http.StatusOK {

@@ -75,7 +75,9 @@ func TestMQTT5Wills(t *testing.T) {
 	// A normal DISCONNECT drops the will; DISCONNECT 0x04 asks for it.
 	client, _ := connect("m6-a", true, 0, gone)
 	client.send(0xe0, []byte{0, 0})
-	time.Sleep(300 * time.Millisecond)
+	// A will runs as soon as the gateway ends a connection that asked for it;
+	// once this one has ended, the drop is proven.
+	testwait.Until(t, 5*time.Second, "the gateway to end the disconnected MQTT connection", func() bool { return mqtt5Connections() == idle })
 	nothing("after a normal disconnect")
 	client, _ = connect("m6-a", true, 0, gone)
 	client.send(0xe0, []byte{0x04, 0})

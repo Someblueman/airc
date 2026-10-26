@@ -50,15 +50,10 @@ func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	if admitted == nil || !admitted.Durable {
 		t.Fatal("send was not durable", admitted)
 	}
-	var receipt *core.Result
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		receipt = call("receipt", core.Request{Version: 1, RequestID: "pair-initial-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}, false).Result
-		if receipt != nil && receipt.State == core.Accepted {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if receipt == nil || receipt.State != core.Accepted || receipt.SendAttempts != 1 {
+	receipt := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the send to be accepted", func() *core.Result {
+		return call("receipt", core.Request{Version: 1, RequestID: "pair-initial-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}, false).Result
+	})
+	if receipt.SendAttempts != 1 {
 		t.Fatal("send not accepted once", receipt)
 	}
 	event := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == receipt.MessageID })

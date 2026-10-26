@@ -41,6 +41,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
@@ -78,13 +79,14 @@ func (l *chaosLog) add(kind, format string, args ...any) {
 // chaosSeen records what one client received, by room: each message ID
 // once, with how many times it came again, and gaps it was told of.
 type chaosSeen struct {
-	mu    sync.Mutex
-	name  string
-	ids   map[string]map[string]int // room -> message ID -> deliveries
-	last  map[string]string         // room -> the newest message ID seen
-	seeds map[string]string         // room -> the message reading starts after
-	gaps  int
-	dupes int
+	mu        sync.Mutex
+	name      string
+	ids       map[string]map[string]int // room -> message ID -> deliveries
+	last      map[string]string         // room -> the newest message ID seen
+	seeds     map[string]string         // room -> the message reading starts after
+	gaps      int
+	dupes     int
+	following atomic.Bool // the reader's first follow, subscription or observation is up
 }
 
 func newChaosSeen(name string, seeds map[string]string) *chaosSeen {
@@ -380,7 +382,14 @@ func TestChaosSoak(t *testing.T) {
 			chaosMQTT(ctx, log, seen, dial)
 		}()
 	}
-	time.Sleep(2 * time.Second) // let the readers start following
+	testwait.Every(t, 30*time.Second, 200*time.Millisecond, "every reader to start following", func() bool {
+		for _, r := range readers {
+			if !r.following.Load() {
+				return false
+			}
+		}
+		return true
+	})
 
 	// Posters: one prefers native IRC, one the gateway; each request keeps
 	// its ID across every retry and carrier.
@@ -523,23 +532,24 @@ func TestChaosSoak(t *testing.T) {
 		}
 	}
 	posts.Unlock()
+	// The verdict reports a reader that never caught up, and a final direct
+	// message that woke nobody, so these waits only bound it.
 	caughtUp := time.Now().Add(3 * time.Minute)
 	for _, r := range readers {
 		for room, id := range newest {
 			if r.ids[room] == nil {
 				continue
 			}
-			for !r.has(room, id) && time.Now().Before(caughtUp) {
-				time.Sleep(200 * time.Millisecond)
+			if !testwait.Poll(time.Until(caughtUp), 200*time.Millisecond, func() bool { return r.has(room, id) }) {
+				log.add("catch-up-timeout", "%s did not see %s in %s", r.name, id, room)
 			}
 		}
 	}
-	woke := false
-	for wait := time.Now().Add(30 * time.Second); time.Now().Before(wait) && !woke; time.Sleep(200 * time.Millisecond) {
+	woke := testwait.Poll(30*time.Second, 200*time.Millisecond, func() bool {
 		notices.Lock()
-		woke = slices.Contains(notices.latest, finalDM)
-		notices.Unlock()
-	}
+		defer notices.Unlock()
+		return slices.Contains(notices.latest, finalDM)
+	})
 	cancel()
 	clients.Wait()
 	if err := gateway.stop(syscall.SIGTERM); err != nil {
@@ -739,8 +749,10 @@ func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fa
 		for ctx.Err() == nil {
 			set := chaosCheckSet(seen, inbox)
 			if !reader.Follows() {
-				// A carrier without streams waits on the gateway instead.
+				// A carrier without streams waits on the gateway instead: the
+				// reader follows from the moment its long check is in flight.
 				set.Wait = 20 * time.Second
+				seen.following.Store(true)
 				checked, err := reader.CheckAll(ctx, set)
 				if err != nil {
 					if ctx.Err() == nil {
@@ -752,6 +764,7 @@ func chaosFollow(ctx context.Context, log *chaosLog, seen *chaosSeen, client *fa
 				continue
 			}
 			err = reader.Follow(ctx, set, 45*time.Second, func(checked fallback.Checked) error {
+				seen.following.Store(true) // the snapshot comes first
 				if page := checked.Inbox; inbox && page != nil {
 					if page.Gap {
 						seen.mu.Lock()
@@ -857,6 +870,7 @@ func chaosNativeSession(ctx context.Context, seen *chaosSeen, client *fallback.C
 	if err := c.Observe(chaosRooms...); err != nil {
 		return err
 	}
+	seen.following.Store(true)
 	pending := slices.Clone(chaosRooms)
 	if err := c.HistoryAfter(pending[0], positions[pending[0]], 200); err != nil {
 		return err
@@ -984,6 +998,8 @@ func chaosMQTTSession(ctx context.Context, seen *chaosSeen, dial func(context.Co
 				return err
 			}
 		}
+	} else {
+		seen.following.Store(true) // the session kept its subscriptions
 	}
 	pings := time.NewTicker(10 * time.Second)
 	defer pings.Stop()
@@ -1035,6 +1051,7 @@ func chaosMQTTSession(ctx context.Context, seen *chaosSeen, dial func(context.Co
 			if len(packet) < 4 || packet[len(packet)-1] >= 0x80 {
 				return fmt.Errorf("SUBACK %x", packet)
 			}
+			seen.following.Store(true)
 		case 14: // DISCONNECT
 			return fmt.Errorf("DISCONNECT %x", packet)
 		}

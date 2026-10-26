@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	piondtls "github.com/pion/dtls/v3"
 	coapdtls "github.com/plgd-dev/go-coap/v3/dtls"
@@ -198,12 +199,8 @@ func joinCoAPResetMonitor(t *testing.T, conn *coapClient.Conn, done <-chan struc
 
 func waitNativeObserverCountBefore(t *testing.T, statusClient *irc.Client, want int, timeout time.Duration) error {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, statusClient) <= want {
-			return nil
-		}
-		time.Sleep(50 * time.Millisecond)
+	if testwait.Poll(timeout, 50*time.Millisecond, func() bool { return nativeObserverCount(t, statusClient) <= want }) {
+		return nil
 	}
 	return fmt.Errorf("native observer count remained above %d", want)
 }

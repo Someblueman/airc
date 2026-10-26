@@ -70,15 +70,9 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	if admitted.Result.Result == nil || !admitted.Result.Result.Durable {
 		t.Fatal("not durable", admitted)
 	}
-	var messageID string
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-		r := call("receipt", core.Request{Version: 1, RequestID: "receipt", Operation: core.ReceiptGet, LookupID: send.RequestID})
-		if r.Result.Result.State == core.Accepted {
-			messageID = r.Result.Result.MessageID
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	messageID := acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the send's native acceptance", func() *core.Result {
+		return call("receipt", core.Request{Version: 1, RequestID: "receipt", Operation: core.ReceiptGet, LookupID: send.RequestID}).Result.Result
+	}).MessageID
 	if messageID == "" {
 		t.Fatal("no actual native acceptance")
 	}
@@ -92,16 +86,9 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	reply.ParentID = messageID
 	reply.Message = "framed reply"
 	_ = call("reply", reply)
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		r := call("reply-status", core.Request{Version: 1, RequestID: "reply-status", Operation: core.ReceiptGet, LookupID: reply.RequestID})
-		if r.Result.Result.State == core.Accepted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("reply not accepted", r)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	acceptedReceipt(t, 5*time.Second, 20*time.Millisecond, "the reply to be accepted", func() *core.Result {
+		return call("reply-status", core.Request{Version: 1, RequestID: "reply-status", Operation: core.ReceiptGet, LookupID: reply.RequestID}).Result.Result
+	})
 	history := call("history", core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: target, Limit: 10, Start: "retained"})
 	if history.Result.Page == nil || len(history.Result.Page.Messages) < 1 || history.Result.Page.Messages[0].Message != send.Message || history.Result.Page.Messages[0].From != "fixture-author" {
 		t.Fatal("native history lost identity/body", history)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func authenticatedAgent(t *testing.T, rtt time.Duration) (*mcpAdapter, *agentProxy, options) {
@@ -76,11 +77,11 @@ func TestMCPReusesTLSAccountAndRecoversAfterCredentialRejection(t *testing.T) {
 	}()
 	// A silently expired deadline would cancel before the wait started and make
 	// the leak checks below vacuous, so a missing wait is a failure.
-	eventually(t, 5*time.Second, "the wait to take its capacity slot", func() bool { return len(a.waits) != 0 })
+	testwait.Until(t, 5*time.Second, "the wait to take its capacity slot", func() bool { return len(a.waits) != 0 })
 	// The capacity slot is taken before the connection subscribes; cancel only
 	// once the daemon reports the observation, so the cancelled stream is real.
 	probe := options{addr: opt.addr, tlsCA: opt.tlsCA, nick: "probe"}
-	eventuallyEvery(t, 5*time.Second, 10*time.Millisecond, "the wait to subscribe", func() bool {
+	testwait.Every(t, 5*time.Second, 10*time.Millisecond, "the wait to subscribe", func() bool {
 		ctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
 		defer stop()
 		client, err := dialOneShot(ctx, probe)

@@ -147,8 +147,7 @@ func headerReactionHTTP(t *testing.T, f *reactionTransportFixture, method, path 
 
 func pollHeaderReaction(t *testing.T, f *reactionTransportFixture, requestID string) core.Result {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) {
+	return acceptedReceipt(t, 8*time.Second, 20*time.Millisecond, "the authorSpec reaction receipt "+requestID+" to become accepted", func() *core.Result {
 		request, err := http.NewRequest(http.MethodGet, f.httpURL+"/v1/requests/"+requestID, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -164,13 +163,8 @@ func pollHeaderReaction(t *testing.T, f *reactionTransportFixture, requestID str
 		if decodeErr != nil || response.StatusCode != http.StatusOK {
 			t.Fatalf("authorSpec reaction receipt lookup failed: status=%d err=%v", response.StatusCode, decodeErr)
 		}
-		if result.State == core.Accepted {
-			return result
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("authorSpec reaction receipt did not become accepted", requestID)
-	return core.Result{}
+		return &result
+	})
 }
 
 const fixtureAccount = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -383,17 +377,14 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 
 func pollReactionReceipt(t *testing.T, f *reactionTransportFixture, r core.Request) core.Result {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) {
+	return acceptedReceipt(t, 8*time.Second, 20*time.Millisecond, "the reaction receipt "+r.RequestID+" to become accepted", func() *core.Result {
 		statusRequest := core.Request{Version: 1, RequestID: "receipt-" + r.RequestID, Operation: core.ReceiptGet, LookupID: r.RequestID}
 		status, result := reactionHTTPCall(t, f, f.cred.token(t, statusRequest, true))
-		if status == http.StatusOK && result.Result != nil && result.Result.State == core.Accepted {
-			return *result.Result
+		if status != http.StatusOK {
+			return nil
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("reaction receipt did not become accepted", r.RequestID)
-	return core.Result{}
+		return result.Result
+	})
 }
 
 // reactionHistory reads the request target's recent history over HTTP and

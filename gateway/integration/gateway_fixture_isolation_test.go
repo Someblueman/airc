@@ -15,6 +15,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 type isolatedGateway struct {
@@ -102,14 +103,12 @@ func TestCurrentGatewayBinaryKeepsFixturesIsolated(t *testing.T) {
 		t.Fatal("second admission", status)
 	}
 	var r1, r2 core.Result
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	if !testwait.Poll(5*time.Second, 25*time.Millisecond, func() bool {
 		_, r1 = isolatedCall(t, first, http.MethodGet, one.RequestID, first.token, nil)
 		_, r2 = isolatedCall(t, second, http.MethodGet, two.RequestID, second.token, nil)
-		if r1.State == core.Accepted && r2.State == core.Accepted {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
+		return r1.State == core.Accepted && r2.State == core.Accepted
+	}) {
+		t.Fatalf("isolated sends not both accepted: %#v %#v", r1, r2)
 	}
 	if r1.State != core.Accepted || r2.State != core.Accepted || r1.MessageID == "" || r1.MessageID == r2.MessageID {
 		t.Fatalf("isolated results: %#v %#v", r1, r2)
@@ -139,15 +138,10 @@ func TestCurrentGatewayBinaryKeepsFixturesIsolated(t *testing.T) {
 	if status, _ := isolatedCall(t, second, http.MethodPut, three.RequestID, second.token, &three); status != http.StatusAccepted {
 		t.Fatal("second after first stop", status)
 	}
-	deadline = time.Now().Add(5 * time.Second)
-	var r3 core.Result
-	for time.Now().Before(deadline) {
-		_, r3 = isolatedCall(t, second, http.MethodGet, three.RequestID, second.token, nil)
-		if r3.State == core.Accepted {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
+	r3 := acceptedReceipt(t, 5*time.Second, 25*time.Millisecond, "the second gateway's send after the first stopped", func() *core.Result {
+		_, r := isolatedCall(t, second, http.MethodGet, three.RequestID, second.token, nil)
+		return &r
+	})
 	if r3.State != core.Accepted || r3.MessageID == "" {
 		t.Fatalf("second did not finish after first stop: %#v", r3)
 	}

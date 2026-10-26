@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // A gateway read starts after a native message ID and returns the room's
@@ -84,7 +86,7 @@ func TestCheckContinuesRoomsOverAnotherCarrier(t *testing.T) {
 		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")
 		done <- outcome{out, stderr, err}
 	}()
-	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
+	testwait.Until(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
 	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "waited for")
 	waited := <-done
 	if waited.err != nil {
@@ -135,7 +137,7 @@ func TestCheckContinuesInboxOverAnotherCarrier(t *testing.T) {
 		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")
 		done <- outcome{out, stderr, err}
 	}()
-	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "@bob") > observed })
+	testwait.Until(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "@bob") > observed })
 	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "waited for")
 	waited := <-done
 	if waited.err != nil {
@@ -205,9 +207,9 @@ func TestCheckWaitSurvivesNativeIRCDying(t *testing.T) {
 		out, _, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "15s", "--json")
 		done <- outcome{out, err}
 	}()
-	eventually(t, 10*time.Second, "the check to wait natively", func() bool { return f.observed("bob", "#ops") > observed })
+	testwait.Until(t, 10*time.Second, "the check to wait natively", func() bool { return f.observed("bob", "#ops") > observed })
 	f.proxy.close()
-	eventually(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed+1 })
+	testwait.Until(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed+1 })
 	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "while down")
 	select {
 	case got := <-done:
@@ -371,7 +373,7 @@ func TestManyRoomsContinueOverAnotherCarrier(t *testing.T) {
 		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", strings.Join(rooms, ","), "--wait", "8s", "--json")
 		done <- outcome{out, stderr, err}
 	}()
-	eventually(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#r4") > observed })
+	testwait.Until(t, 8*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#r4") > observed })
 	mustCLI(t, addr, "send", "--nick", "writer", "--channel", "#r4", "--message", "late in #r4")
 	waited := <-done
 	if waited.err != nil {
@@ -408,9 +410,9 @@ func TestCheckWaitReturnsToNativeIRC(t *testing.T) {
 		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "15s", "--json")
 		done <- outcome{out, stderr, err}
 	}()
-	eventually(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
+	testwait.Until(t, 10*time.Second, "the check to wait over the gateway", func() bool { return f.observed("bob", "#ops") > observed })
 	native := startNativeProxy(t, addr, f.daemon)
-	eventually(t, 10*time.Second, "the check to redial and wait natively", func() bool { return native.observes.Load() > 0 })
+	testwait.Until(t, 10*time.Second, "the check to redial and wait natively", func() bool { return native.observes.Load() > 0 })
 	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "a direct message")
 	select {
 	case got := <-done:

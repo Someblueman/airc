@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/atomicfile"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // gatedSync holds every history sync until release is closed, then fails
@@ -91,11 +92,11 @@ func TestGroupCommitBroadcastsAfterSharedSyncInOrder(t *testing.T) {
 	// The first post's sync is held; the rest are written meanwhile and
 	// wait for the next sync, which they share.
 	io.WriteString(senders[0], "PRIVMSG #room :first\r\n")
-	eventually(t, "the first sync", func() bool { return gate.calls.Load() == 1 })
+	testwait.Until(t, 5*time.Second, "the first sync", func() bool { return gate.calls.Load() == 1 })
 	for i, conn := range senders[1:] {
 		io.WriteString(conn, fmt.Sprintf("PRIVMSG #room :later %d\r\n", i))
 	}
-	eventually(t, "every post written", func() bool { return srv.appendedRecords() == len(senders) })
+	testwait.Until(t, 5*time.Second, "every post written", func() bool { return srv.appendedRecords() == len(senders) })
 	expectSilence(t, watch, watcher, 150*time.Millisecond)
 	gate.open()
 
@@ -143,11 +144,11 @@ func TestGroupCommitFailedSyncReportsEveryPostInIt(t *testing.T) {
 		senders = append(senders, sender{conn, reader})
 	}
 	io.WriteString(senders[0].conn, "PRIVMSG absent :first\r\n")
-	eventually(t, "the first sync", func() bool { return gate.calls.Load() == 1 })
+	testwait.Until(t, 5*time.Second, "the first sync", func() bool { return gate.calls.Load() == 1 })
 	for _, s := range senders[1:] {
 		io.WriteString(s.conn, "PRIVMSG absent :later\r\n")
 	}
-	eventually(t, "every post written", func() bool { return srv.appendedRecords() == len(senders) })
+	testwait.Until(t, 5*time.Second, "every post written", func() bool { return srv.appendedRecords() == len(senders) })
 	expectSilence(t, senders[0].reader, senders[0].conn, 100*time.Millisecond)
 	gate.open()
 	for i, s := range senders {
