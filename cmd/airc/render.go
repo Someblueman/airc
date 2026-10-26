@@ -49,6 +49,10 @@ type renderer struct {
 	// kinds, when set, says who is a human, drawn in humanColor rather than
 	// the hashed palette. Nil, as in watch and the CLI, draws everyone alike.
 	kinds *nickKinds
+
+	// pasteHint is how a message sharing a paste says to open it: the UI's
+	// "/paste ", else "airc paste get " (see ui_paste.go).
+	pasteHint string
 }
 
 // humanColor is the one colour humans are drawn in, outside the palette the
@@ -215,7 +219,7 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		}
 	}
 
-	lines := r.bodyLines(cleanBody(chatBody(m.ChatMetadata, m.ID, m.ReplyTo, m.From, m.Message)), max(r.width-prefixWidth, 1))
+	lines := r.bodyLines(cleanBody(r.collapsePaste(m, chatBody(m.ChatMetadata, m.ID, m.ReplyTo, m.From, m.Message))), max(r.width-prefixWidth, 1))
 	var out strings.Builder
 	rule := r.dayRule(m.Timestamp)
 	out.WriteString(rule)
