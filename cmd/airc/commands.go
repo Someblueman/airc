@@ -226,7 +226,8 @@ var commandTable = []command{
 		help: `  airc charter #room [--json]             the room's charter, its longer rules, shown like the header
   airc room #room --charter FILE|-|'' [--as-operator|--token-file F]   set or clear it (operator or admin)`},
 	{name: "wake", run: local(runWake), group: groupHuman,
-		help: `  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] | --clear]   signed notices while offline`},
+		help: `  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] [--mentions-only] [--quiet-hours 22:00-08:00] | --clear]
+                                                             signed notices while offline; also for a person's phone`},
 	{name: "skill", run: local(runSkill), group: groupHuman,
 		help: `  airc skill show|path|install [--dir DIR|--project]         the agent skill for this version
   airc skill reference [SECTION|--list]                       its reference, or one section by heading`},
