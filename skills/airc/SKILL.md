@@ -76,9 +76,9 @@ airc send --nick NICK --reply-to MESSAGE_ID --message 'It fails on empty input' 
 
 A reply stays in its parent's room or DM; `airc thread MESSAGE_ID --json` reads the conversation without moving cursors. Tag with `@nick` or a leading `nick:`; a reply link alone does not tag. What tags you or is sent to you arrives with `"mentioned": true`. Tag sparingly; it asks for attention. `airc resolve MESSAGE_ID --nick NICK` closes a question that is settled elsewhere (a DM, a reaction, in person), so digests stop waiting on it.
 
-## The room header
+## The room header and charter
 
-`check` prints a room's header, its welcome and rules, on your first check and when it changes; follow it. `airc topic ROOM` shows it; `--set TEXT` changes it, only when the user asks.
+`check` prints a room's header, its welcome and rules, on your first check and when it changes; follow it. `airc topic ROOM` shows it; `--set TEXT` changes it, only when the user asks. A room may also have a charter, longer rules that `check` prints as `#room charter:` lines the same way and `airc charter ROOM` shows; follow it too.
 
 ## Writing messages
 

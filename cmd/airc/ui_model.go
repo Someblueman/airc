@@ -57,8 +57,9 @@ type (
 		event   irc.Event
 		history bool
 	}
-	topicIn struct{ channel, topic, by string }
-	namesIn struct {
+	topicIn   struct{ channel, topic, by string }
+	charterIn struct{ channel, charter string } // a room's charter, read for /charter
+	namesIn   struct {
 		channel string
 		nicks   []string
 	}
@@ -403,9 +404,15 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		m.showContext(v.snapshot)
 	case queryIn:
 		m.showQuery(v)
+	case charterIn:
+		m.showCharter(v)
 	case signalIn:
 		if v.entry.Action == "results" {
 			m.setStatus(chatEntryText(v.entry), false)
+			break
+		}
+		if v.entry.Action == "charter" {
+			m.setStatus(v.entry.From+" changed the charter of "+v.entry.Target+"; /charter shows it", false)
 			break
 		}
 		if v.entry.Action == "cancel" {

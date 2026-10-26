@@ -13,6 +13,9 @@ import (
 type roomSettings struct {
 	SlowSeconds  int64 `json:"slow_seconds,omitempty"`
 	HistoryLimit int   `json:"history_limit,omitempty"`
+	// Charter is the room's longer rules, beside the 400-byte header: up to
+	// protocol.MaxCharterBytes, set by an operator or an admin.
+	Charter string `json:"charter,omitempty"`
 }
 
 type chatState struct {
@@ -96,7 +99,7 @@ func (st *chatStore) load(path string) error {
 		return errors.New("too many pinned messages")
 	}
 	for channel, r := range loaded.Rooms {
-		if !validChannel(channel) || r.SlowSeconds < 0 || r.SlowSeconds > 3600 || r.HistoryLimit < 0 || r.HistoryLimit > st.historyLimit {
+		if !validChannel(channel) || r.SlowSeconds < 0 || r.SlowSeconds > 3600 || r.HistoryLimit < 0 || r.HistoryLimit > st.historyLimit || !protocol.ValidCharter(r.Charter) {
 			return errors.New("invalid room settings")
 		}
 	}

@@ -49,7 +49,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	id := strings.Repeat("a", 32)
 	leading := map[string][]string{
 		"user": {"create"}, "service": {"install"}, "admin": {"list"}, "skill": {"install"},
-		"history": {"#room"}, "names": {"#room"}, "topic": {"#room"},
+		"history": {"#room"}, "names": {"#room"}, "topic": {"#room"}, "charter": {"#room"},
 		"thread": {id}, "context": {id}, "search": {"query"}, "react": {id, "seen"},
 	}
 	usage := map[string]string{}

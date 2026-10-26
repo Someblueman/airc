@@ -122,8 +122,12 @@ narration out of it.
 
 `check` returns at most 100 messages and 32768 bytes per call; messages are
 never truncated, and `"more": true` in the closing status means another page
-waits. With `--json`, each line has a `type`: `message`, `topic`, `pin` or
-`status`. `--compact` drops the bookkeeping fields `seq`, `request_id` and
+waits. With `--json`, each line has a `type`: `message`, `topic`, `charter`,
+`pin` or `status`. A `charter` row carries a room's charter, its longer rules,
+shown like the header: on your first check of the room and again when it
+changes (`airc charter ROOM` prints it any time; an operator or admin sets it
+with `airc room ROOM --charter FILE`).
+`--compact` drops the bookkeeping fields `seq`, `request_id` and
 `account_id`. Every successful JSON check ends with a status whose `code` is
 `messages`, `no_messages`, `wait_expired` (nothing arrived before `--wait` ran
 out) or `history_incomplete` (more remains, or a retention gap: inspect `more`,

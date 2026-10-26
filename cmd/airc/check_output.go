@@ -32,8 +32,15 @@ func checkLine(value any, machine bool) ([]byte, error) {
 		}
 		return []byte(fmt.Sprintf("%s %s %s%s [%s]: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, v.ID, indentContinuation(chatBody(v.ChatMetadata, v.ID, v.ReplyTo, v.From, v.Message)))), nil
 	case checkTopic:
-		if v.Type == "pin" {
+		switch v.Type {
+		case "pin":
 			return []byte(fmt.Sprintf("%s pinned %s by %s (preview): %s\n", v.Target, v.ID, v.From, v.Topic)), nil
+		case "charter":
+			var lines strings.Builder
+			for line := range strings.SplitSeq(v.Charter, "\n") {
+				fmt.Fprintf(&lines, "%s charter: %s\n", v.Target, line)
+			}
+			return []byte(lines.String()), nil
 		}
 		return []byte(fmt.Sprintf("%s topic: %s\n", v.Target, v.Topic)), nil
 	case checkStatus:
@@ -65,7 +72,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	var out bytes.Buffer
 	var shownHeaders []checkTopic
 	for _, header := range headers {
-		if header.Topic == "" {
+		if header.empty() {
 			shownHeaders = append(shownHeaders, header)
 			continue
 		}
@@ -193,6 +200,14 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 				clear(store.Pins)
 			}
 			store.Pins[header.PinKey] = header.Fingerprint
+			continue
+		}
+		if header.Type == "charter" {
+			if header.Charter == "" {
+				delete(store.Charters, header.Target)
+			} else {
+				store.Charters[header.Target] = header.Fingerprint
+			}
 			continue
 		}
 		if header.Topic == "" {

@@ -68,6 +68,13 @@ func named(run func(context.Context, *agentConnection, string, []string, io.Writ
 	}
 }
 
+// namedReading adapts a session runner that serves several commands and reads stdin.
+func namedReading(run func(context.Context, *agentConnection, string, []string, io.Reader, io.Writer, io.Writer) error) runner {
+	return func(ctx context.Context, session *agentConnection, name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+		return run(ctx, session, name, args, stdin, stdout, stderr)
+	}
+}
+
 // reading adapts a session runner that reads stdin.
 func reading(run func(context.Context, *agentConnection, []string, io.Reader, io.Writer, io.Writer) error) runner {
 	return func(ctx context.Context, session *agentConnection, _ string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -182,21 +189,21 @@ var commandTable = []command{
 	{name: "follow", run: named(runFollowSession), session: true, mcp: true, group: groupChat},
 	{name: "unfollow", run: named(runFollowSession), session: true, mcp: true, group: groupChat},
 	{name: "following", run: named(runFollowSession), session: true, group: groupChat},
-	{name: "correct", run: named(runChatCommandSession), session: true, mcp: true, group: groupChat},
-	{name: "retract", run: named(runChatCommandSession), session: true, mcp: true, group: groupChat},
-	{name: "prepare", run: named(runChatCommandSession), session: true, mcp: true, group: groupChat},
-	{name: "waiting", run: named(runChatCommandSession), session: true, mcp: true, group: groupChat},
-	{name: "pin", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "unpin", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "pins", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "room", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "me", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "typing", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "thinking", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "poll", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "vote", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "poll-results", run: named(runChatCommandSession), session: true, group: groupChat},
-	{name: "poll-close", run: named(runChatCommandSession), session: true, group: groupChat},
+	{name: "correct", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
+	{name: "retract", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
+	{name: "prepare", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
+	{name: "waiting", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
+	{name: "pin", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "unpin", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "pins", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "room", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "me", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "typing", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "thinking", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "poll", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "vote", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "poll-results", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "poll-close", run: namedReading(runChatCommandSession), session: true, group: groupChat},
 
 	{name: "admin", run: local(runAdmin), group: groupAdmin,
 		help: `  airc admin init [--token-file PATH]          create an owner-only admin credential
@@ -215,6 +222,9 @@ var commandTable = []command{
 		help: `  airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight`},
 	{name: "topic", run: local(runTopic), group: groupHuman,
 		help: `  airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check`},
+	{name: "charter", run: plain(runCharterSession), session: true, group: groupHuman,
+		help: `  airc charter #room [--json]             the room's charter, its longer rules, shown like the header
+  airc room #room --charter FILE|-|'' [--as-operator|--token-file F]   set or clear it (operator or admin)`},
 	{name: "wake", run: local(runWake), group: groupHuman,
 		help: `  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] | --clear]   signed notices while offline`},
 	{name: "skill", run: local(runSkill), group: groupHuman,

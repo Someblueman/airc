@@ -31,6 +31,10 @@ type cursorStore struct {
 	// Topics holds the last channel header shown to this agent, so a header is
 	// shown once and again only when it changes.
 	Topics map[string]string `json:"topics,omitempty"`
+	// Charters holds a fingerprint of the last room charter shown to this
+	// agent (never the text), so a charter is shown once and again only when
+	// it changes, as a header is.
+	Charters map[string]string `json:"charters,omitempty"`
 	// Shown holds the IDs of inbox messages a check showed over another
 	// carrier without moving the inbox cursor, because that carrier's inbox
 	// had mentions only. The next native check skips them while it moves
@@ -103,7 +107,7 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := &cursorStore{path: path, Cursors: map[string]string{}, Topics: map[string]string{}, Server: server, Nick: nick}
+	store := &cursorStore{path: path, Cursors: map[string]string{}, Topics: map[string]string{}, Charters: map[string]string{}, Server: server, Nick: nick}
 	lock, err := os.OpenFile(store.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open cursor lock: %w", err)
@@ -152,6 +156,9 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		if store.Topics == nil {
 			store.Topics = map[string]string{}
 		}
+		if store.Charters == nil {
+			store.Charters = map[string]string{}
+		}
 		store.saved = data
 	}
 	store.noteUser()
@@ -165,7 +172,7 @@ func (s *cursorStore) save(cursors map[string]string) error {
 		return err
 	}
 	data = append(data, '\n')
-	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0 && len(s.Follows) == 0 && len(s.Pins) == 0) {
+	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0 && len(s.Charters) == 0 && len(s.Follows) == 0 && len(s.Pins) == 0) {
 		return nil
 	}
 	if err := atomicfile.Write(s.path, data, 0o600, atomicfile.SyncFlush); err != nil {

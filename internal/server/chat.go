@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -135,27 +137,41 @@ func typed[T any](decode func(cfg Config, r protocol.ChatRequest) (T, error), ha
 	}
 }
 
-// roomRequest reads or sets a room's slow mode and retention: -1 leaves a
-// setting as it is.
+// roomRequest reads or sets a room's slow mode, retention and charter: -1
+// leaves a setting as it is, and a nil Charter leaves the charter.
 type roomRequest struct {
 	Target  string
 	Seconds int64
 	Limit   int
+	Charter *string
 }
 
 func decodeRoomRequest(cfg Config, r protocol.ChatRequest) (roomRequest, error) {
 	if !validChannel(r.Target) || r.Seconds < -1 || r.Seconds > 3600 || r.Limit < -1 || r.Limit > cfg.HistoryLimit {
 		return roomRequest{}, errors.New("room requires a channel; slow mode 0-3600s; retention 0 through global limit; -1 reads")
 	}
-	return roomRequest{Target: r.Target, Seconds: r.Seconds, Limit: r.Limit}, nil
+	request := roomRequest{Target: r.Target, Seconds: r.Seconds, Limit: r.Limit}
+	if r.Charter != nil {
+		charter := strings.TrimSpace(protocol.NormalizeNewlines(*r.Charter))
+		if !protocol.ValidCharter(charter) {
+			return roomRequest{}, fmt.Errorf("a charter is UTF-8 text of at most %d bytes", protocol.MaxCharterBytes)
+		}
+		request.Charter = &charter
+	}
+	return request, nil
 }
 
 func (s *Server) roomLocked(client *session, r roomRequest) error {
-	if r.Seconds >= 0 || r.Limit >= 0 {
-		if !client.admin && !s.channelOperator(client, r.Target) {
+	changing := r.Seconds >= 0 || r.Limit >= 0 || r.Charter != nil
+	if changing && !client.admin && !s.channelOperator(client, r.Target) {
+		if r.Charter != nil {
+			s.numericLocked(client, "481", nil, "only a room operator or an admin may set the charter")
+		} else {
 			s.numericLocked(client, "481", nil, "Room configuration requires admin or channel operator authentication")
-			return errChatDenied
 		}
+		return errChatDenied
+	}
+	if changing {
 		next := s.copyChat()
 		if _, exists := next.Rooms[r.Target]; !exists && len(next.Rooms) >= 128 {
 			return errors.New("room settings limit reached")
@@ -167,13 +183,27 @@ func (s *Server) roomLocked(client *session, r roomRequest) error {
 		if r.Limit >= 0 {
 			room.HistoryLimit = r.Limit
 		}
-		next.Rooms[r.Target] = room
+		charterChanged := r.Charter != nil && *r.Charter != room.Charter
+		if r.Charter != nil {
+			room.Charter = *r.Charter
+		}
+		if room == (roomSettings{}) {
+			delete(next.Rooms, r.Target)
+		} else {
+			next.Rooms[r.Target] = room
+		}
 		if err := s.saveChatLocked(next); err != nil {
 			return err
 		}
 		s.history.trimQuotas()
+		if charterChanged {
+			// A live signal, so an open UI can say the rules changed; a
+			// one-shot check compares the charter itself.
+			s.broadcastSignalLocked(client, protocol.ChatEntry{Action: "charter", Target: r.Target, From: client.client.Nick, ExpiresAt: s.now().UTC().Add(time.Minute)}, Message{})
+		}
+		s.logger.Info("room_configured", "nick", client.client.Nick, "channel", r.Target, "charter_changed", charterChanged)
 	}
 	room := s.chat.Rooms[r.Target]
-	s.chatEntryLocked(client, protocol.ChatEntry{Action: "room", Target: r.Target, SlowSeconds: room.SlowSeconds, HistoryLimit: room.HistoryLimit})
+	s.chatEntryLocked(client, protocol.ChatEntry{Action: "room", Target: r.Target, SlowSeconds: room.SlowSeconds, HistoryLimit: room.HistoryLimit, Charter: room.Charter})
 	return nil
 }

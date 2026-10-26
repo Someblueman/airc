@@ -8,7 +8,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-// CHECK streams at most 1000 messages, 64 page markers, 64 topics and 128 pins.
+// CHECK streams at most 1000 messages, 64 page markers, 64 topics, 64 charters and 128 pins.
 // It holds mu for a consistent snapshot, without disk I/O or retained caches.
 func (s *Server) checkLocked(client *session, command protocol.Command) {
 	var r protocol.CheckRequest
@@ -46,6 +46,7 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 	}
 	for _, room := range rooms {
 		s.checkEntryLocked(client, protocol.CheckEntry{Kind: "topic", Target: room, Topic: s.topics[room].Text})
+		s.checkEntryLocked(client, protocol.CheckEntry{Kind: "charter", Target: room, Charter: s.chat.Rooms[room].Charter})
 		for _, pin := range s.chat.Pins[room] {
 			m := messageMetadata(s.annotated(pin))
 			s.checkEntryLocked(client, protocol.CheckEntry{Kind: "pin", Target: room, Message: &m})
