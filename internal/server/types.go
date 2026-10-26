@@ -177,6 +177,9 @@ type session struct {
 	resumeNick     string // the nickname and secret a connection asked to take over with RESUME
 	resumeSecret   string
 	reclaimed      bool // taken over by a new connection: closing without QUIT or offline notices
+	// run is the +airc/run label of the command being handled, stamped on
+	// every message it posts; "" between commands and for untagged ones.
+	run string
 }
 
 // hidden sessions never appear in WHO, NAMES or AGENTS, and leave without

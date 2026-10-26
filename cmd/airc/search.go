@@ -17,7 +17,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-const searchUsage = "usage: airc search QUERY [--target '#room'|@nick|thread:ID|*] [--from NICK] [--since 2h|2026-10-17] [--until TIME] [--newest] [--exact] [--after CURSOR] [--limit 50] [--json]"
+const searchUsage = "usage: airc search QUERY [--target '#room'|@nick|thread:ID|*] [--from NICK] [--run ID] [--since 2h|2026-10-17] [--until TIME] [--newest] [--exact] [--after CURSOR] [--limit 50] [--json]"
 
 func runSearchSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -36,11 +36,15 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	until := fs.String("until", "", "only messages before this time, in the same forms as --since")
 	newest := fs.Bool("newest", false, "newest matches first (reads the memory window; older matches may remain in the archive)")
 	exact := fs.Bool("exact", false, "match the query as one literal substring, not as terms")
+	run := fs.String("run", "", "only messages posted under this run label (needs a daemon with RUN)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || strings.TrimSpace(query) == "" || !protocol.BriefText(query, 256) || *limit < 1 || *limit > 1000 || *after != "*" && !protocol.ValidMessageID(*after) {
 		return errors.New("invalid search query, limit, or cursor")
+	}
+	if _, err := runLabel(*run); err != nil {
+		return err
 	}
 	now := time.Now()
 	var options irc.SearchOptions
@@ -54,7 +58,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	if !options.Since.IsZero() && !options.Until.IsZero() && !options.Since.Before(options.Until) {
 		return errors.New("--since must be before --until")
 	}
-	options.Newest = *newest
+	options.Newest, options.Run = *newest, *run
 	if *target == "" {
 		*target = "*"
 	} else if *target != "*" && !strings.HasPrefix(*target, "thread:") {
@@ -110,7 +114,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 		}
 		return write(page)
 	}
-	refined := options.Newest || !options.Since.IsZero() || !options.Until.IsZero() || !*exact && !plainSearchWord(query)
+	refined := options.Newest || options.Run != "" || !options.Since.IsZero() || !options.Until.IsZero() || !*exact && !plainSearchWord(query)
 	if *after != "*" || !protocol.IsChannel(*target) || refined {
 		return chatRequestWithContext(ctx, *opt, "SEARCH", native)
 	}

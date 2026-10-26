@@ -17,6 +17,7 @@ type mcpSendInput struct {
 	To        string `json:"to,omitempty" jsonschema:"Nickname for a direct message; queued if the recipient is offline"`
 	ReplyTo   string `json:"reply_to,omitempty" jsonschema:"Message ID to reply to; the reply goes to that message's room or DM"`
 	RequestID string `json:"request_id,omitempty" jsonschema:"Optional stable send key for receipt recovery"`
+	Run       string `json:"run,omitempty" jsonschema:"Run label kept on the message (1-64 letters, digits, ., _ or -), which search and history can filter by; defaults to AIRC_RUN"`
 	Pending   bool   `json:"pending,omitempty" jsonschema:"List saved sends with uncertain outcomes; omit other fields"`
 	Retry     string `json:"retry,omitempty" jsonschema:"Recover this saved request receipt without posting; omit message and targets"`
 }
@@ -52,7 +53,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSendInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"send"}
 		if in.Retry != "" || in.Pending {
-			if in.Pending && in.Retry != "" || in.Retry != "" && !protocol.ValidRequestID(in.Retry) || in.Message != "" || in.Channel != "" || in.To != "" || in.ReplyTo != "" || in.RequestID != "" {
+			if in.Pending && in.Retry != "" || in.Retry != "" && !protocol.ValidRequestID(in.Retry) || in.Message != "" || in.Channel != "" || in.To != "" || in.ReplyTo != "" || in.RequestID != "" || in.Run != "" {
 				return nil, mcpOutput{}, errors.New("choose only pending or a valid saved retry ID")
 			}
 			if in.Pending {
@@ -71,7 +72,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 				return nil, mcpOutput{}, errors.New("provide text up to 4096 bytes and exactly one target")
 			}
 			args = append(args, "--message=-")
-			for _, f := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}, {"--reply-to", in.ReplyTo}, {"--request-id", in.RequestID}} {
+			for _, f := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}, {"--reply-to", in.ReplyTo}, {"--request-id", in.RequestID}, {"--run", in.Run}} {
 				if f[1] != "" {
 					args = append(args, f[0], f[1])
 				}

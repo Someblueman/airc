@@ -133,7 +133,7 @@ var commandTable = []command{
   airc send --retry REQUEST_ID [--nick N] [--json]   receipt recovery; never posts
   airc send --pending [--nick N] [--json]            uncertain local sends
   airc send --forget REQUEST_ID [--nick N]           remove a local outbox entry
-  airc send ... [--request-id KEY] [--max-messages N] [--max-bytes N]   explicit retry key; --check page budgets`},
+  airc send ... [--request-id KEY] [--run ID] [--max-messages N] [--max-bytes N]   explicit retry key; run label (env AIRC_RUN); --check page budgets`},
 	{name: "check", run: plain(runCheckSession), session: true, mcp: true, signalsOnly: true, group: groupAgent,
 		help: `  airc check [--nick N] [--channel #room]... [--wait 60s] [--mentions] [--peek] [--include-own] [--json]
              [--max-messages 100] [--max-bytes 32768] [--initial 20] [--limit N]`},
@@ -145,7 +145,7 @@ var commandTable = []command{
 		help:  `  airc channels [--json]                         rooms the server knows, with headers and activity`,
 		notes: `  airc check ... [--compact] [--from-now]        smaller JSON rows; skip the retained backlog once`},
 	{name: "history", run: plain(runHistorySession), session: true, mcp: true, group: groupAgent,
-		help: `  airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]   a bare name is a nick's direct messages`},
+		help: `  airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--run ID] [--json]   a bare name is a nick's direct messages`},
 	{name: "context", run: plain(runContextSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]`},
 	{name: "mcp", run: localReading(runMCP), group: groupAgent,
@@ -161,7 +161,7 @@ var commandTable = []command{
 	{name: "presence", run: named(runDirectoryCommandSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc presence [--nick N] [--set thinking|running|away|available] [--message TEXT] [--ttl 5m] [--clear]`},
 	{name: "search", run: plain(runSearchSession), session: true, mcp: true, group: groupAgent,
-		help: `  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]`},
+		help: `  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--run ID] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]`},
 	{name: "react", run: local(runReact), group: groupAgent,
 		help: `  airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]`},
 	{name: "status", run: reading(runStatusSession), session: true, mcp: true, group: groupAgent,

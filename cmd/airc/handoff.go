@@ -46,6 +46,7 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 	to := fs.String("to", "", "nickname the work is for; alone, a direct handoff")
 	message := fs.String("message", "", "what to hand over, or a note on the step (blocked: why, required); - reads stdin")
 	link := fs.String("link", "", "done: where the result is, an absolute http(s) URL (a PR, a commit, a document)")
+	runFlag := addRunFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -58,7 +59,11 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 	if *link != "" && !protocol.ValidLink(*link) {
 		return fmt.Errorf("--link needs an absolute http(s) URL of at most %d bytes", protocol.MaxLinkBytes)
 	}
-	r := irc.ChatRequest{Action: "handoff", Link: *link}
+	run, err := runLabel(*runFlag)
+	if err != nil {
+		return err
+	}
+	r := irc.ChatRequest{Action: "handoff", Link: *link, Run: run}
 	if step == "" {
 		if *channel == "" && *to == "" {
 			*channel = os.Getenv("AIRC_CHANNEL")
@@ -169,6 +174,7 @@ type handoffRow struct {
 	Link          string    `json:"link,omitempty"`
 	Message       string    `json:"message"`
 	Timestamp     time.Time `json:"timestamp"`
+	Run           string    `json:"run,omitempty"`
 }
 
 // handoffHeld reports a state in which the handoff names its holder: the
@@ -186,7 +192,7 @@ func newHandoffRow(e irc.ChatEntry) handoffRow {
 		row.BlockedReason, row.BlockedAt = e.BlockedReason, e.BlockedAt
 	}
 	if e.Message != nil {
-		row.For, row.Message, row.Timestamp = e.Message.For, e.Message.Message, e.Message.Timestamp
+		row.For, row.Message, row.Timestamp, row.Run = e.Message.For, e.Message.Message, e.Message.Timestamp, e.Message.Run
 	}
 	return row
 }

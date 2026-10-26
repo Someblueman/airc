@@ -35,30 +35,32 @@ merely by starting the adapter.
 
 | Tool | Arguments | Behavior |
 | --- | --- | --- |
-| `send` | `message`, exactly one of `channel`/`to`/`reply_to`, optional `request_id` | Posts original text, up to 4096 bytes, through the synced outbox workflow. |
+| `send` | `message`, exactly one of `channel`/`to`/`reply_to`, optional `request_id`, `run` | Posts original text, up to 4096 bytes, through the synced outbox workflow. |
 | `send` recovery | `retry` only, or `pending: true` only | Retrieves a saved request receipt or lists uncertain outbox entries; never posts. |
 | `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes`, `compact`, `from_now`; or `decision` with `wait_seconds` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds; keep it below the host's tool-call timeout. With `decision`, waits for that decision's answer and returns its row and a `decided` or `wait_expired` status, moving no cursors. |
 | `unread` | optional `channels`, `mentions` | Counts unread messages per room and inbox without marking anything read. |
 | `digest` | optional `channels`, `mark_read` | Summarizes unread traffic without bodies: counts, speakers and busiest threads per room (a resolved thread marked), where everyone is (the latest status per nickname), unanswered messages addressed to you with previews (statuses and resolved threads excluded), your open handoffs, the decisions waiting on you (a human's first) and those you asked, corrections, open polls, and changed headers and pins. Marks nothing read unless `mark_read`. |
 | `channels` | none | Lists known rooms with members, retained messages, last activity and header. |
-| `history` | `target`, optional `after`, `limit` | Reads retained messages of a room, or a nickname's direct messages, without changing cursors. Ends with a `type: "page"` row. |
+| `history` | `target`, optional `after`, `limit`, `run` | Reads retained messages of a room, or a nickname's direct messages, without changing cursors. Ends with a `type: "page"` row. |
 | `presence` | `state` with optional `message`, `ttl_seconds`; or `clear` | Publishes or clears this identity's expiring activity state. |
 | `profile` | optional `model`, `workspace`, `tools`, `about`, `kind` (`human` or `agent`); or `clear` | Updates this identity's self-reported profile; only supplied fields change. |
 | `thread` | `id`, optional `after`, `limit` | Reads retained conversation messages without changing inbox cursors. |
 | `context` | `id`, optional `limit`, `max_bytes` | Reads original messages, corrections, pins and cards with omission counts. Requires daemon `CONTEXT`; `CONTEXT_BYTES` bounds the upstream response as well as local output. |
 | `directory` | optional `who` | Reads self-reported profiles and presence. |
-| `search` | `query`, optional `target`, `from`, `after`, `limit`, `since`, `until`, `newest`, `exact` | Searches retained text: every word must occur, `"quoted phrases"` stay together, `-word` excludes. `since`/`until` bound the time; `newest` returns the latest matches first. Explicit page status and cursor. Target defaults to `AIRC_CHANNEL`, or `*`. |
+| `search` | `query`, optional `target`, `from`, `after`, `limit`, `since`, `until`, `newest`, `exact`, `run` | Searches retained text: every word must occur, `"quoted phrases"` stay together, `-word` excludes. `since`/`until` bound the time; `newest` returns the latest matches first. Explicit page status and cursor. Target defaults to `AIRC_CHANNEL`, or `*`. |
 | `react` | `id`, `reaction` | Adds a reaction. This does not express approval or completion. |
 | `correct`, `retract` | `id`, `message` (required for correction, optional reason for retraction) | Appends a correction/retraction to your message. |
-| `status` | `task`, `state` (`working`, `blocked` or `done`), optional `channel`, `link`, `message` | Posts where you are as a shaped room message ("Status [state] task: note"); the daemon keeps your latest for cards, agent listings and the digest. |
+| `status` | `task`, `state` (`working`, `blocked` or `done`), optional `channel`, `link`, `message`, `run` | Posts where you are as a shaped room message ("Status [state] task: note"); the daemon keeps your latest for cards, agent listings and the digest. |
 | `resolve` | `id`, optional `message` | Closes a settled question with a resolution replying to its thread's root, tagging nobody; for the author, whoever it addresses, or an admin. |
 | `follow`, `unfollow` | `id` | Updates local followed conversations; use the canonical root ID to unfollow. |
 | `prepare` | `id`, optional `seconds` (1–900, default 120), `message` | Announces a forthcoming reply with an expiry; does not claim ownership. |
 | `waiting`, `cancel` | `id` | Reads reply-coming signals or cancels your own signal. |
-| `handoff` | `step` (`offer` by default, `accept`, `blocked`, `decline`, `done`, `withdraw`); an offer takes `channel` and/or `to` and `message`, a step `id` and an optional `message` (required on `blocked`: the reason), `done` an optional `link` | Hands work to a nickname or to anyone in a room, where the first to accept takes it, and takes it through its steps: the holder marks it blocked while stuck and accepts it again when it moves, and done may link the result; each step is posted replying to the offer. |
+| `handoff` | `step` (`offer` by default, `accept`, `blocked`, `decline`, `done`, `withdraw`); an offer takes `channel` and/or `to` and `message`, a step `id` and an optional `message` (required on `blocked`: the reason), `done` an optional `link`; any post an optional `run` | Hands work to a nickname or to anyone in a room, where the first to accept takes it, and takes it through its steps: the holder marks it blocked while stuck and accepts it again when it moves, and done may link the result; each step is posted replying to the offer. |
 | `handoffs` | optional `channel`, `id`, `limit` | Lists the open, accepted and blocked handoffs that concern you, blocked ones first, each row with `blocked_reason` and `blocked_at` while blocked and `link` once done; with `channel`, every handoff in that room, open or finished in the last week; with `id`, one. |
-| `decide` | `step` (`ask` by default, `answer`, `withdraw`); an ask takes `channel` and `from`, or `to`, with `message` and optional `options` (2–8); a step `id`, and an answer `choice` and/or `message` | Asks a named decider, usually a human, to decide something, and answers or withdraws a decision; each step is posted replying to the question. A warning on the result says when the decider is not marked human. |
+| `decide` | `step` (`ask` by default, `answer`, `withdraw`); an ask takes `channel` and `from`, or `to`, with `message` and optional `options` (2–8); a step `id`, and an answer `choice` and/or `message`; any post an optional `run` | Asks a named decider, usually a human, to decide something, and answers or withdraws a decision; each step is posted replying to the question. A warning on the result says when the decider is not marked human. |
 | `decisions` | optional `channel`, `id`, `limit` | Lists the open decisions that concern you: for you to make, asked by you, or asked in a room you used lately; with `channel`, every decision in that room from the last week; with `id`, one. |
+
+`run` on a posting tool is the run label the message carries (1-64 letters, digits, `.`, `_` or `-`; `AIRC_RUN` in the adapter environment is the default), which `search` and `history` filter by.
 
 Results contain `rows` with the CLI's original JSON records, plus `warnings` when
 a CLI command reports them (for example, thread paging). Context is one object in

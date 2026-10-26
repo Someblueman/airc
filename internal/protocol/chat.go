@@ -48,6 +48,27 @@ type ChatMetadata struct {
 	// Resolved marks a thread root that has a retained reply of kind
 	// resolved: what it asked is settled, wherever that happened.
 	Resolved bool `json:"resolved,omitempty"`
+	// Run is the label of the harness run that posted the message, from
+	// the +airc/run tag: 1-64 letters, digits, '.', '_' or '-'. SEARCH and
+	// HISTORY filter by it.
+	Run string `json:"run,omitempty"`
+}
+
+// RunTag carries a post's run label from the client; the daemon keeps it in
+// the message's metadata and rejects an invalid one.
+const RunTag = "+airc/run"
+
+// ValidRunID reports a run label: 1-64 ASCII letters, digits, '.', '_' or '-'.
+func ValidRunID(id string) bool {
+	if len(id) < 1 || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // StatusStates are the states a status post may be in.

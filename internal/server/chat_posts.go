@@ -91,7 +91,7 @@ func (s *Server) chatPostLocked(client *session, r postRequest) error {
 	if !s.slowAllowedLocked(client, r.Target) {
 		return errChatDenied
 	}
-	m := s.newMessage(client.client.Nick, r.Target, body, parent)
+	m := s.postMessage(client, r.Target, body, parent)
 	m.Kind, m.AccountID = r.Action, client.accountID
 	if parent != nil {
 		m.Supersedes = parent.ID

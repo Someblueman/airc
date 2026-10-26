@@ -22,6 +22,7 @@ type mcpSearchInput struct {
 	Until  string `json:"until,omitempty" jsonschema:"Only messages before, in the same forms as since"`
 	Newest bool   `json:"newest,omitempty" jsonschema:"Newest matches first; status archived means older matches may remain on disk"`
 	Exact  bool   `json:"exact,omitempty" jsonschema:"Match the whole query as one literal substring"`
+	Run    string `json:"run,omitempty" jsonschema:"Only messages posted under this run label"`
 }
 type mcpReactionInput struct {
 	ID       string `json:"id" jsonschema:"ID of the message to react to"`
@@ -47,6 +48,7 @@ type mcpHandoffInput struct {
 	To      string `json:"to,omitempty" jsonschema:"Offer: the nickname the work is for; without channel, a direct handoff"`
 	Message string `json:"message,omitempty" jsonschema:"Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered; blocked: why it is stuck, required"`
 	Link    string `json:"link,omitempty" jsonschema:"Done: where the result is, an absolute http(s) URL of a PR, a commit or a document, up to 400 bytes"`
+	Run     string `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
 }
 type mcpHandoffsInput struct {
 	Channel string `json:"channel,omitempty" jsonschema:"Every handoff in this room, finished ones from the last week included"`
@@ -63,6 +65,7 @@ type mcpDecideInput struct {
 	Message string   `json:"message,omitempty" jsonschema:"Ask: what to decide and why it matters. Answer: a note; withdraw: an optional reason"`
 	Options []string `json:"options,omitempty" jsonschema:"Ask: 2-8 choices, each up to 80 bytes; omit for a free-text decision"`
 	Choice  int      `json:"choice,omitempty" jsonschema:"Answer: the chosen option, numbered from 1"`
+	Run     string   `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
 }
 type mcpStatusInput struct {
 	Task    string `json:"task" jsonschema:"What you are on, one line of at most 200 bytes"`
@@ -70,6 +73,7 @@ type mcpStatusInput struct {
 	Channel string `json:"channel,omitempty" jsonschema:"The room the status is for; defaults to AIRC_CHANNEL"`
 	Link    string `json:"link,omitempty" jsonschema:"Where the work is: an absolute http(s) URL of a PR, a branch or a document, up to 400 bytes"`
 	Message string `json:"message,omitempty" jsonschema:"A note on the status, such as what is blocking you"`
+	Run     string `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
 }
 type mcpResolveInput struct {
 	ID      string `json:"id" jsonschema:"ID of the question, or of any message in its thread"`
@@ -93,6 +97,7 @@ type mcpHistoryInput struct {
 	Target string `json:"target" jsonschema:"#room, or a nickname for its direct messages"`
 	After  string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1-1000; default 50"`
+	Run    string `json:"run,omitempty" jsonschema:"Only messages posted under this run label"`
 }
 type mcpPresenceInput struct {
 	State      string `json:"state,omitempty" jsonschema:"available, thinking, running or away; omit with clear"`
@@ -147,6 +152,9 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		if in.Limit != 0 {
 			args = append(args, "--limit", strconv.Itoa(in.Limit))
 		}
+		if in.Run != "" {
+			args = append(args, "--run", in.Run)
+		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "presence", Description: "Publish or clear an expiring activity state for this identity. Self-reported; expiry means unknown, not available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPresenceInput) (*mcpserver.Result, mcpOutput, error) {
@@ -198,7 +206,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search original retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes. Narrow with since/until; newest returns the latest matches first. Results end with a page row whose cursor continues the search; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"search", in.Query}
-		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}, {"--since", in.Since}, {"--until", in.Until}} {
+		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}, {"--since", in.Since}, {"--until", in.Until}, {"--run", in.Run}} {
 			if pair[1] != "" {
 				args = append(args, pair[0]+"="+pair[1])
 			}
@@ -282,6 +290,9 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if in.Message != "" {
 			args = append(args, "--message="+in.Message)
 		}
+		if in.Run != "" {
+			args = append(args, "--run="+in.Run)
+		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
@@ -328,6 +339,9 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if in.Message != "" {
 			args = append(args, "--message="+in.Message)
 		}
+		if in.Run != "" {
+			args = append(args, "--run="+in.Run)
+		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decisions", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecisionsInput) (*mcpserver.Result, mcpOutput, error) {
@@ -347,7 +361,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 			return nil, mcpOutput{}, errors.New("task and a state of working, blocked or done required")
 		}
 		args := []string{"status", "--task=" + in.Task, "--state=" + in.State}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--link", in.Link}, {"--message", in.Message}} {
+		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--link", in.Link}, {"--message", in.Message}, {"--run", in.Run}} {
 			if pair[1] != "" {
 				args = append(args, pair[0]+"="+pair[1])
 			}

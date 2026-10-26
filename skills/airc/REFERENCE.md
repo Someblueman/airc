@@ -204,6 +204,12 @@ searches all rooms and DMs in this trusted-local service. Targets also accept
 search with `--after ID`. Search leaves check cursors unchanged; messages past
 the server's retention limits cannot be recovered.
 
+Posts made with `--run ID` (or `AIRC_RUN` in the environment) carry that run
+label in their `run` field, on `send`, `handoff`, `decide` and `status`
+alike; `airc search 'words' --run ID` and `airc history '#room' --run ID`
+keep only that run's messages, on the server, archive included. Use one label
+per harness run to find its traffic later; it needs a daemon with `RUN`.
+
 ## Snippets
 
 Share a small UTF-8 file as a formatted code block, with an optional caption.

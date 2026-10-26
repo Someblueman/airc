@@ -49,8 +49,13 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
 	file := fs.String("file", "", "share a UTF-8 file as a code block; - reads stdin; --message adds a caption")
 	language := fs.String("language", "", "code-block language (inferred for --file); formats --message as code when used alone")
+	runFlag := addRunFlag(fs)
 	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
 	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
+		return err
+	}
+	run, err := runLabel(*runFlag)
+	if err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -109,7 +114,6 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		*message = *reaction
 	}
-	var err error
 	if *message, err = sendBody(*file, *language, *message, stdin); err != nil {
 		return err
 	}
@@ -152,6 +156,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			if *reaction != "" {
 				return reactViaFallback(ctx, *opt, r, conversation, *replyTo, *reaction, *check, settings, *maxBytes, stdout, stderr)
 			}
+			if run != "" {
+				fmt.Fprintln(stderr, "airc: warning: the other carriers carry no run label; the post goes without it")
+			}
 			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
 		}
 		client = r.native
@@ -159,6 +166,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return failure(err, "login")
 	}
+	warnRunUnsupported(client, run, stderr)
 	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
 	checkClient := client
@@ -193,9 +201,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		} else if *reaction != "" {
 			err = client.React(*replyTo, *reaction)
 		} else if *replyTo != "" {
-			err = client.ReplyWithID(*replyTo, *message, *requestID)
+			err = client.ReplyWith(*replyTo, *message, irc.SendOptions{RequestID: *requestID, Run: run})
 		} else {
-			err = client.SendWithID(target, *message, *requestID)
+			err = client.SendWith(target, *message, irc.SendOptions{RequestID: *requestID, Run: run})
 		}
 		if err == nil {
 			awaited = true

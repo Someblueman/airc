@@ -65,7 +65,7 @@ func (s *Server) postStatusLocked(client *session, r statusRequest) error {
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
 	}
-	m := s.newMessage(client.client.Nick, target, body, nil)
+	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.Task, m.State, m.Link = "status", client.accountID, r.Task, r.State, r.Link
 	mentions := s.recordLocked(&m)
 	s.broadcastMessageLocked(m, client.client.Username, mentions)

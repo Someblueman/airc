@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 // historyArchived ends a newest-first search that reached the start of the
@@ -24,6 +26,13 @@ type searchOptions struct {
 	terms        bool
 	newest       bool
 	since, until time.Time // zero when unbounded; since inclusive, until exclusive
+	run          string    // only messages posted under this run label
+}
+
+// matchesRun reports whether e carries the run the options ask for, or the
+// options ask for none.
+func (o searchOptions) matchesRun(e *entry) bool {
+	return o.run == "" || e.Run == o.run
 }
 
 func parseSearchOptions(raw string) (searchOptions, error) {
@@ -43,6 +52,11 @@ func parseSearchOptions(raw string) (searchOptions, error) {
 			o.terms = true
 		case name == "newest" && !hasValue:
 			o.newest = true
+		case name == "run" && hasValue:
+			if !protocol.ValidRunID(value) {
+				return o, errors.New("run must be 1-64 letters, digits, '.', '_' or '-'")
+			}
+			o.run = value
 		case (name == "since" || name == "until") && hasValue:
 			seconds, err := strconv.ParseInt(value, 10, 64)
 			if err != nil || seconds < 0 || seconds > 1<<40 {
@@ -61,6 +75,18 @@ func parseSearchOptions(raw string) (searchOptions, error) {
 		return o, errors.New("since must be before until")
 	}
 	return o, nil
+}
+
+// parseHistoryOptions reads the fourth HISTORY parameter: "*", or run=ID.
+func parseHistoryOptions(raw string) (searchOptions, error) {
+	if raw == "" || raw == "*" {
+		return searchOptions{}, nil
+	}
+	name, value, hasValue := strings.Cut(raw, "=")
+	if name != "run" || !hasValue || !protocol.ValidRunID(value) {
+		return searchOptions{}, errors.New("want run=ID, 1-64 letters, digits, '.', '_' or '-'")
+	}
+	return searchOptions{run: value}, nil
 }
 
 // inTime reports whether t falls in the options' time window.

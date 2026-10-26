@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -36,15 +37,27 @@ func (c *Client) Chat(request ChatRequest) error {
 	if !c.Supports("CHAT") {
 		return errors.New("chat additions require CHAT on the daemon")
 	}
-	text := request.Text
+	text, run := request.Text, request.Run
 	request.Text = ""
 	data, err := json.Marshal(request)
 	if err != nil {
 		return err
 	}
 	line := "CHAT :" + string(data)
+	// The body and the run label travel as tags, which a daemon that does
+	// not know one ignores.
+	var tags []string
 	if text != "" {
-		line = "@" + protocol.BodyTag + "=" + protocol.EncodeBody(NormalizeMessage(text)) + " " + line
+		tags = append(tags, protocol.BodyTag+"="+protocol.EncodeBody(NormalizeMessage(text)))
+	}
+	if run != "" {
+		if !protocol.ValidRunID(run) {
+			return errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")
+		}
+		tags = append(tags, protocol.RunTag+"="+run)
+	}
+	if len(tags) > 0 {
+		line = "@" + strings.Join(tags, ";") + " " + line
 	}
 	if len(line) > protocol.MaxLineLength {
 		return errors.New("chat request exceeds wire limit")

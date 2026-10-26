@@ -127,6 +127,14 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	if (command.Name == "PROFILE" || command.Name == "PRESENCE") && !s.postAllowedLocked(client, "*") {
 		return
 	}
+	if run, tagged := command.Tags[protocol.RunTag]; tagged {
+		if !protocol.ValidRunID(run) {
+			s.numericLocked(client, "417", nil, "Run label must be 1-64 letters, digits, '.', '_' or '-'")
+			return
+		}
+		client.run = run
+		defer func() { client.run = "" }()
+	}
 	switch command.Name {
 	case "MODE":
 		s.modeLocked(client, command)

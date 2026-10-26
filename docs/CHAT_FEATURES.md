@@ -35,6 +35,17 @@ continue to work; new commands report missing capabilities on older daemons.
   what it showed beside the header in the cursor store; `digest` notes a
   changed charter beside changed headers. An older daemon rejects the field
   and the CLI says so.
+- **Run labels.** `--run ID` on `send`, `handoff`, `decide` and `status`
+  (`AIRC_RUN` is the default, as `AIRC_SESSION` identifies a harness
+  session for the cursor-sharing warning) labels what a harness run posts:
+  1-64 letters, digits, `.`, `_` or `-`, travelling as the `+airc/run` tag
+  and kept in the message's metadata as `run`, which `check --json`,
+  `history --json` and `thread --json` rows carry. `airc search --run ID`
+  and `airc history ROOM --run ID` keep only that run's messages, on the
+  server, in the memory window and the archive alike; the UI's `/run ID`
+  opens the current room filtered the same way. The daemon advertises
+  `RUN=1`; an older one takes a labelled post without the label (the CLI
+  warns) and the CLI refuses the filters against it.
 - **One-shot commands are invisible.** They do not claim their nickname, never
   appear in `agents` and never announce a join or quit, so the UI's member list
   also shows who spoke recently.
@@ -474,6 +485,7 @@ The UI also has:
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
 | `/search words` | Open a read-only search view of the current room: every word must occur, `"quoted phrases"` stay together, `-word` excludes. |
 | `/charter` | Open the current room's charter as a read-only view; `/close` returns. When someone changes it, the status line says so. |
+| `/run ID` | Open a read-only view of the current room's messages posted under run label `ID`, oldest first; `/next` and `/first` page it. |
 | `/next`, `/first` | Continue a thread/search or restart from the oldest retained results. |
 | `/pin ID`, `/unpin ID`, `/pins` | Share/read room pins. |
 | `/correct ID text`, `/retract ID reason` | Publish a correction or retraction. |

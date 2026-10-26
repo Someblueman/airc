@@ -85,19 +85,53 @@ func (c *Client) RetryRequest(requestID string) error {
 	return c.Raw("RETRY " + requestID)
 }
 func (c *Client) ReplyWithID(parent, message, requestID string) error {
+	return c.ReplyWith(parent, message, SendOptions{RequestID: requestID})
+}
+
+// SendOptions are the tags a send or reply may carry: a RequestID for safe
+// retries (IDEMPOTENCY) and a Run label (RUN), 1-64 letters, digits, '.',
+// '_' or '-', kept in the message's metadata and searchable. A daemon
+// without RUN ignores the label.
+type SendOptions struct {
+	RequestID string
+	Run       string
+}
+
+// SendWith publishes a message with options.
+func (c *Client) SendWith(target, message string, options SendOptions) error {
+	return c.sendTagged("PRIVMSG", target, message, options)
+}
+
+// ReplyWith is Reply with options.
+func (c *Client) ReplyWith(parent, message string, options SendOptions) error {
 	if !c.Supports("REPLIES") || !protocol.ValidMessageID(parent) {
 		return errors.New("reply needs REPLIES and a valid message ID")
 	}
-	return c.sendTextWithID("REPLY", parent, message, requestID)
+	return c.sendTagged("REPLY", parent, message, options)
 }
 
 func (c *Client) sendTextWithID(command, target, message, requestID string) error {
+	return c.sendTagged(command, target, message, SendOptions{RequestID: requestID})
+}
+
+func (c *Client) sendTagged(command, target, message string, options SendOptions) error {
 	tags := ""
-	if requestID != "" {
-		if !c.Supports("IDEMPOTENCY") || !protocol.ValidRequestID(requestID) {
+	if options.RequestID != "" {
+		if !c.Supports("IDEMPOTENCY") || !protocol.ValidRequestID(options.RequestID) {
 			return errors.New("safe retries require IDEMPOTENCY and a request ID of 1-64 letters/digits/-/_")
 		}
-		tags = "@" + protocol.RequestIDTag + "=" + requestID + " "
+		tags = "@" + protocol.RequestIDTag + "=" + options.RequestID + " "
+	}
+	if options.Run != "" {
+		if !protocol.ValidRunID(options.Run) {
+			return errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")
+		}
+		if tags == "" {
+			tags = "@"
+		} else {
+			tags = strings.TrimSuffix(tags, " ") + ";"
+		}
+		tags += protocol.RunTag + "=" + options.Run + " "
 	}
 	message = NormalizeMessage(message)
 	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {
@@ -161,13 +195,40 @@ func (c *Client) History(channel string, limit int) error {
 // the cursor has expired. target may be a nickname to read direct messages
 // addressed to it. Older servers ignore the cursor, so check the status.
 func (c *Client) HistoryAfter(target, after string, limit int) error {
-	if after == "" {
-		return c.History(target, limit)
+	return c.HistoryWith(target, after, limit, HistoryOptions{})
+}
+
+// HistoryOptions narrow a history read on a daemon with RUN: Run keeps only
+// the messages posted under that run label.
+type HistoryOptions struct {
+	Run string
+}
+
+// HistoryWith is HistoryAfter with options. Options other than the zero
+// value need a daemon with RUN.
+func (c *Client) HistoryWith(target, after string, limit int, options HistoryOptions) error {
+	if options.Run == "" {
+		if after == "" {
+			return c.History(target, limit)
+		}
+		if limit <= 0 {
+			limit = 50
+		}
+		return c.command("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
+	}
+	if !c.Supports("RUN") {
+		return errors.New("run filters need a daemon with RUN; upgrade/restart when active work is finished")
+	}
+	if !protocol.ValidRunID(options.Run) {
+		return errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")
 	}
 	if limit <= 0 {
 		limit = 50
 	}
-	return c.command("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
+	if after == "" {
+		after = "-"
+	}
+	return c.command("HISTORY", []string{target, fmt.Sprint(limit), after, "run=" + options.Run}, "")
 }
 
 // Observe subscribes to live messages without joining. Targets are channel

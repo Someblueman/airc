@@ -1,0 +1,36 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/irc"
+)
+
+// A run label names the harness run a post belongs to, so a later search or
+// history read can pick out one run's traffic. It travels as the +airc/run
+// tag, which the daemon keeps in the message's metadata as run; AIRC_RUN is
+// the default, as AIRC_SESSION identifies a session for cursor warnings.
+
+// addRunFlag adds --run, defaulting to AIRC_RUN.
+func addRunFlag(fs *flag.FlagSet) *string {
+	return fs.String("run", os.Getenv("AIRC_RUN"), "run label kept on the post (1-64 letters, digits, '.', '_' or '-'; env AIRC_RUN)")
+}
+
+// runLabel checks --run: empty means none.
+func runLabel(value string) (string, error) {
+	if value != "" && !protocol.ValidRunID(value) {
+		return "", fmt.Errorf("--run must be 1-64 letters, digits, '.', '_' or '-', not %q", value)
+	}
+	return value, nil
+}
+
+// warnRunUnsupported says when a daemon ignores the run label a post carries.
+func warnRunUnsupported(client *irc.Client, run string, stderr io.Writer) {
+	if run != "" && client != nil && !client.Supports("RUN") {
+		fmt.Fprintln(stderr, "airc: warning: this aircd predates run labels, so the post carries none; upgrade when safe")
+	}
+}

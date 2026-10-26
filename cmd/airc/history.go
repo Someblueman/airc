@@ -16,7 +16,7 @@ import (
 
 func runHistorySession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: airc history CHANNEL|NICK [--after MESSAGE_ID] [--limit 50] [--json]")
+		return errors.New("usage: airc history CHANNEL|NICK [--after MESSAGE_ID] [--limit 50] [--run ID] [--json]")
 	}
 	target := args[0]
 	fs := flag.NewFlagSet("airc history", flag.ContinueOnError)
@@ -25,6 +25,7 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	opt.session = session
 	limit := fs.Int("limit", 50, "maximum messages to return")
 	after := fs.String("after", "", "exclusive message ID cursor")
+	run := fs.String("run", "", "only messages posted under this run label (needs a daemon with RUN)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -34,12 +35,15 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	if *limit < 1 || *limit > 1000 {
 		return errors.New("--limit must be between 1 and 1000")
 	}
+	if _, err := runLabel(*run); err != nil {
+		return err
+	}
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
 	var client *irc.Client
 	var err error
-	if *after == "" && protocol.IsChannel(target) {
+	if *after == "" && *run == "" && protocol.IsChannel(target) {
 		// The latest page of a room reads the same over any carrier (their
 		// cursors are not message IDs, so --after stays native): race native
 		// IRC against the others and read over whichever connects first.
@@ -76,7 +80,7 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	if target == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
 		return errors.New("all-DM history needs a daemon with DM_AUDIT; upgrade/restart when active work is finished")
 	}
-	page, err := fetchHistory(ctx, client, target, *after, *limit, nil)
+	page, err := fetchHistoryWith(ctx, client, target, *after, *limit, irc.HistoryOptions{Run: *run}, nil)
 	if err != nil {
 		return err
 	}
@@ -176,12 +180,17 @@ type historyPage struct {
 
 // fetchHistory reads one reply, preserving unrelated live events for observers.
 func fetchHistory(ctx context.Context, client *irc.Client, target, after string, limit int, other func(irc.Event)) (historyPage, error) {
+	return fetchHistoryWith(ctx, client, target, after, limit, irc.HistoryOptions{}, other)
+}
+
+// fetchHistoryWith is fetchHistory with a run filter.
+func fetchHistoryWith(ctx context.Context, client *irc.Client, target, after string, limit int, options irc.HistoryOptions, other func(irc.Event)) (historyPage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return historyPage{}, err
 	}
-	if err := client.HistoryAfter(target, after, limit); err != nil {
+	if err := client.HistoryWith(target, after, limit, options); err != nil {
 		if ctx.Err() != nil {
 			return historyPage{}, ctx.Err()
 		}

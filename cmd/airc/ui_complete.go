@@ -27,6 +27,7 @@ var uiCommands = []uiCommand{
 	{"/msg", "nick text", "send a direct message", "", "General"},
 	{"/topic", "[text|-]", "show, set or clear the channel header", "TOPIC", "General"},
 	{"/charter", "", "open this room's charter, its longer rules, in a view; /close returns", "CHAT", "General"},
+	{"/run", "ID", "a read-only view of this room's messages posted under run ID, oldest first", "RUN", "General"},
 	{"/search", "words", "search this room: every word must occur, \"phrases\" stay together, -word excludes", "SEARCH", "General"},
 	{"/close", "", "close this room, thread, search or help view", "", "General"},
 	{"/quit", "", "leave the UI (also Ctrl-C)", "", "General"},

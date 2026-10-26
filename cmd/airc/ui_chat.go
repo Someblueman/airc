@@ -59,6 +59,16 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return nil, true
 		}
 		return []uiCmd{{kind: "search", target: queryRoom(b), text: rest}}, true
+	case "/run":
+		room := queryRoom(b)
+		if !need(1) {
+			return nil, true
+		}
+		if !protocol.IsChannel(room) || !protocol.ValidRunID(fields[0]) {
+			m.setStatus("/run ID works in a channel; an ID is 1-64 letters, digits, '.', '_' or '-'", true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "run", target: room, text: fields[0]}}, true
 	case "/charter":
 		room := queryRoom(b)
 		if !protocol.IsChannel(room) {
@@ -319,7 +329,7 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			}
 		}
 		return true, err
-	case "thread", "search", "query-next", "query-first":
+	case "thread", "search", "run", "query-next", "query-first":
 		return true, b.pageQuery(ctx, c, cmd, translate)
 	case "follow", "unfollow":
 		args := []string{cmd.target, "--nick", b.nick, "--addr", b.opt.addr}
