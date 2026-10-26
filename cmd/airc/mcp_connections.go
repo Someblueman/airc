@@ -76,11 +76,11 @@ func (a *mcpAdapter) runCommand(ctx context.Context, args []string, input string
 		}
 		return runHistorySession(ctx, conn, append([]string{"thread:" + args[1]}, args[2:]...), stdout, stderr)
 	}
-	command, ok := sessionCommands[args[0]]
+	command, ok := commandsByName[args[0]]
 	if !ok || !command.mcp {
 		return errors.New("unsupported agent command")
 	}
-	return command.run(ctx, conn, args[0], args[1:], strings.NewReader(input), stdout, stderr)
+	return command.run(ctx, conn, command.name, args[1:], strings.NewReader(input), stdout, stderr)
 }
 
 func (a *mcpAdapter) closeConnections() {
