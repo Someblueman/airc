@@ -31,7 +31,7 @@ In workspace mode `./...` from the root still names only the root module's packa
 
 ## Gotchas
 
-- `cmd/airc/skill_test.go` checks every `airc <command>` and `--flag` mentioned in the skill against the CLI. When renaming or adding a command or flag, update `skills/airc/*.md` and that test's command list together.
+- `cmd/airc/commands.go` holds `commandTable`, the one list of CLI commands: dispatch, `airc -h`, the hints, the MCP adapter's eligibility check and `cmd/airc/skill_test.go` all derive from it, so adding or renaming a command is one entry (plus its help lines). The skill test checks every `airc <command>` and `--flag` mentioned in the skill against the CLI, so update `skills/airc/*.md` with the command.
 - `cmd/airc`'s fallback tests build `airc-gateway` from `gateway/` once per test binary and run it as a child process (`gateway_fixture_test.go`); they need the gateway module's dependencies in the module cache but link none of them.
 - Some tests are opt-in: the 30-minute soak needs `AIRC_SOAK_DURATION=30m`, the fault-injection soak across aircd and the gateway (`gateway/integration`) needs `AIRC_CHAOS_DURATION=30m` (`AIRC_CHAOS_SEED` replays a run's faults), the RTT measurement needs `AIRC_WARM_MEASURE`, and `ui_pty_test.go` skips without `python3`.
 - Test against a scratch server on its own port and state dir (`AIRC_STATE_DIR`), never the default 127.0.0.1:6667. Stop test processes by PID, not `pkill -f airc`.
