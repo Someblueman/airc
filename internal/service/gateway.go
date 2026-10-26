@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -34,44 +33,69 @@ type Carrier struct {
 	Address string `json:"address"` // HOST:PORT, or a Unix socket path
 }
 
+// carrierSpec is what install knows about a carrier: its default port, the
+// socket family it listens on and its TLS form. The gateway's registry
+// (gateway/internal/config, transports.go) is the source of these facts, and
+// the gateway module's tests check this table against it, so install does
+// not link the gateway's configuration package, and the carriers it pulls
+// in, into airc.
 type carrierSpec struct {
-	name string
-	port int // default port; zero for a Unix socket
+	name    string
+	port    int    // default port; zero for a Unix socket
+	network string // "tcp" or "udp"
+	tls     string // tlsForbidden, tlsOptional or tlsRequired
 }
 
+// A carrier's TLS form, as CarrierTLS reports it.
+const (
+	tlsForbidden = "forbidden" // no TLS form: cleartext, as IRC allows
+	tlsOptional  = "optional"  // a plaintext form, and aircd's certificate when it has one
+	tlsRequired  = "required"  // encrypted by definition, so it needs aircd's certificate
+)
+
 // carrierSpecs are the carriers install can configure with no settings beyond
-// an address. A carrier is offered only while the gateway accepts plain author
-// requests on it (gwconfig.AuthorCarrier) or tunnels aircd's own protocol
-// (gwconfig.NativeCarrier). MQTT takes requests on its default topic
-// (airc/requests).
+// an address: every one takes plain author requests or tunnels aircd's own
+// protocol. MQTT takes requests on its default topic (airc/requests).
 var carrierSpecs = []carrierSpec{
-	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
-	{"irc_websocket", 6689}, {"irc_connect", 6690},
-	{"grpc", 6684}, {"mqtt", 1883}, {"mqtt_websocket", 8083},
-	{"coap_udp", 5683}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
-	{"http3", 6680}, // UDP, so it shares http's port number
+	{"http", 6680, "tcp", tlsOptional}, {"websocket", 6681, "tcp", tlsOptional}, {"mcp_http", 6682, "tcp", tlsOptional}, {"framed", 6683, "tcp", tlsOptional}, {"unix", 0, "tcp", tlsForbidden},
+	{"irc_websocket", 6689, "tcp", tlsOptional}, {"irc_connect", 6690, "tcp", tlsOptional},
+	{"grpc", 6684, "tcp", tlsOptional}, {"mqtt", 1883, "tcp", tlsOptional}, {"mqtt_websocket", 8083, "tcp", tlsOptional},
+	{"coap_udp", 5683, "udp", tlsForbidden}, {"zeromq", 6686, "tcp", tlsForbidden}, {"nng", 6687, "tcp", tlsForbidden}, {"udp", 6688, "udp", tlsForbidden},
+	{"http3", 6680, "udp", tlsRequired}, // UDP, so it shares http's port number
+}
+
+func lookupCarrier(name string) (carrierSpec, bool) {
+	i := slices.IndexFunc(carrierSpecs, func(s carrierSpec) bool { return s.name == name })
+	if i < 0 {
+		return carrierSpec{}, false
+	}
+	return carrierSpecs[i], true
+}
+
+// CarrierTLS is a carrier's TLS form: "optional" (a plaintext form exists,
+// and aircd's certificate is used when it has one), "required" (encrypted
+// by definition, HTTP/3) or "forbidden" (the Unix socket, datagrams, ZeroMQ
+// and NNG stay cleartext, as IRC allows). An unknown carrier has none.
+func CarrierTLS(name string) string {
+	s, _ := lookupCarrier(name)
+	return s.tls
 }
 
 // carrierTLS reports whether a carrier uses aircd's certificate when aircd
-// has TLS: a carrier whose TLS is optional or required. Those with no TLS
-// form (the Unix socket, datagrams, ZeroMQ, NNG) stay cleartext, as IRC
-// allows.
+// has TLS: a carrier whose TLS is optional or required.
 func carrierTLS(name string) bool {
-	t, _ := gwconfig.Lookup(name)
-	return t.TLS == gwconfig.TLSOptional || t.TLS == gwconfig.TLSRequired
+	tls := CarrierTLS(name)
+	return tls == tlsOptional || tls == tlsRequired
 }
 
 // carrierNeedsTLS reports a carrier that only runs with a certificate
 // (HTTP/3), which install takes from aircd.
-func carrierNeedsTLS(name string) bool {
-	t, _ := gwconfig.Lookup(name)
-	return t.TLS == gwconfig.TLSRequired
-}
+func carrierNeedsTLS(name string) bool { return CarrierTLS(name) == tlsRequired }
 
 // CarrierNetwork is the socket family a carrier listens on ("udp" or
 // "tcp"), so a UDP carrier may share a TCP carrier's port number.
 func CarrierNetwork(name string) string {
-	if t, _ := gwconfig.Lookup(name); t.Network == "udp" {
+	if s, ok := lookupCarrier(name); ok && s.network == "udp" {
 		return "udp"
 	}
 	return "tcp"
@@ -79,11 +103,9 @@ func CarrierNetwork(name string) string {
 
 // SupportedCarriers lists the carrier names install accepts.
 func SupportedCarriers() []string {
-	var names []string
+	names := make([]string, 0, len(carrierSpecs))
 	for _, spec := range carrierSpecs {
-		if gwconfig.AuthorCarrier(spec.name) || gwconfig.NativeCarrier(spec.name) {
-			names = append(names, spec.name)
-		}
+		names = append(names, spec.name)
 	}
 	return names
 }
@@ -115,18 +137,14 @@ func ParseCarriers(spec, host, dir string) ([]Carrier, error) {
 	names, addresses := map[string]bool{}, map[string]bool{}
 	for item := range strings.SplitSeq(spec, ",") {
 		name, value, explicit := strings.Cut(strings.TrimSpace(item), "=")
-		index := slices.IndexFunc(carrierSpecs, func(s carrierSpec) bool { return s.name == name })
-		if index < 0 || !gwconfig.AuthorCarrier(name) && !gwconfig.NativeCarrier(name) {
-			if index >= 0 {
-				return nil, fmt.Errorf("gateway carrier %q does not take plain author requests in this build; supported: %s", name, strings.Join(SupportedCarriers(), ", "))
-			}
+		s, ok := lookupCarrier(name)
+		if !ok {
 			return nil, fmt.Errorf("unknown gateway carrier %q; supported: %s", name, strings.Join(SupportedCarriers(), ", "))
 		}
 		if names[name] {
 			return nil, fmt.Errorf("gateway carrier %q listed twice", name)
 		}
 		names[name] = true
-		s := carrierSpecs[index]
 		address := ""
 		if s.port == 0 {
 			address = filepath.Join(dir, "gateway.sock")
@@ -214,10 +232,21 @@ func (c Config) Discovery() ([]protocol.Carrier, error) {
 	return list, nil
 }
 
+// gatewayUpstream is the generated configuration's upstream block, with the
+// fields and names the gateway's configuration (config.Upstream) reads.
+type gatewayUpstream struct {
+	Network          string `json:"network"`
+	Address          string `json:"address"`
+	AccessTokenFile  string `json:"access_token_file,omitempty"`
+	GatewayTokenFile string `json:"gateway_token_file,omitempty"`
+	TLSServerName    string `json:"tls_server_name,omitempty"`
+	TLSCAFile        string `json:"tls_ca_file,omitempty"`
+}
+
 // upstream is the gateway's hop to aircd: its Unix socket, or its TCP port on
 // loopback (with TLS and the access token when aircd requires them).
-func (c Config) upstream() (gwconfig.Upstream, error) {
-	u := gwconfig.Upstream{GatewayTokenFile: c.GatewayTokenPath(), AccessTokenFile: c.daemonFlag("--access-token-file")}
+func (c Config) upstream() (gatewayUpstream, error) {
+	u := gatewayUpstream{GatewayTokenFile: c.GatewayTokenPath(), AccessTokenFile: c.daemonFlag("--access-token-file")}
 	if unix := c.daemonFlag("--unix"); unix != "" {
 		u.Network, u.Address = "unix", unix
 		return u, nil
@@ -250,7 +279,7 @@ type gatewayFile struct {
 	Realm         string            `json:"realm"`
 	StateDir      string            `json:"state_dir"`
 	CursorKeyFile string            `json:"cursor_key_file"`
-	Upstream      gwconfig.Upstream `json:"upstream"`
+	Upstream      gatewayUpstream   `json:"upstream"`
 	Carriers      []string          `json:"carriers"`
 	Listeners     []gatewayListener `json:"listeners"`
 }
@@ -300,8 +329,9 @@ func (c Config) GatewayConfig() ([]byte, error) {
 		return nil, err
 	}
 	// install has the installed airc-gateway validate this (validateGateway),
-	// and the tests parse what every carrier generates; parsing it here too
-	// would link the gateway's wire-format validators into airc.
+	// and the gateway module's tests parse what every carrier generates;
+	// parsing it here too would link the gateway's configuration package,
+	// and its carriers' dependencies, into airc.
 	return append(data, '\n'), nil
 }
 
