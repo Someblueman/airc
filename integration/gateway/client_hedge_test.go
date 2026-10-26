@@ -1,4 +1,6 @@
-package fallback
+//go:build darwin || linux
+
+package gateway_test
 
 import (
 	"context"
@@ -16,8 +18,12 @@ import (
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/internal/testwait"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
+
+// The client library's hedged follow (pkg/fallback, FollowHedged) through
+// this gateway, run in process by followGateway.
 
 // stallProxy forwards TCP to target until stall, after which it forwards
 // nothing in either direction and closes nothing, as a dead NAT path does.
@@ -135,9 +141,9 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	addr := testserver.Start(t, server.Config{HistoryLimit: 1000}, nil)
 	endpoints := followGateway(t, addr, 2, 1)
 	proxy := newStallProxy(t, "127.0.0.1:"+strconv.Itoa(endpoints["framed"].Port))
-	stalling := Endpoint{Carrier: protocol.Carrier{Name: "framed", Port: proxy.listener.Addr().(*net.TCPAddr).Port}}
+	stalling := fallback.Endpoint{Carrier: protocol.Carrier{Name: "framed", Port: proxy.listener.Addr().(*net.TCPAddr).Port}}
 	other := newStallProxy(t, "127.0.0.1:"+strconv.Itoa(endpoints["websocket"].Port)) // never stalled
-	healthy := Endpoint{Carrier: protocol.Carrier{Name: "websocket", Port: other.listener.Addr().(*net.TCPAddr).Port}}
+	healthy := fallback.Endpoint{Carrier: protocol.Carrier{Name: "websocket", Port: other.listener.Addr().(*net.TCPAddr).Port}}
 	followers := observers(t, addr)
 	poster, err := irc.Dial(irc.Config{Nick: "hedge-poster", Addr: addr, Ephemeral: true})
 	if err != nil {
@@ -145,7 +151,7 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	}
 	defer poster.Close()
 
-	c := &Client{Host: "127.0.0.1", Nick: "hedger", Endpoints: []Endpoint{stalling, healthy}}
+	c := &fallback.Client{Host: "127.0.0.1", Nick: "hedger", Endpoints: []fallback.Endpoint{stalling, healthy}}
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	var mu sync.Mutex
@@ -153,7 +159,7 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 	arrived := map[string]time.Time{}
 	done := make(chan error, 1)
 	go func() {
-		done <- c.FollowHedged(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#hedge"}}, Limit: 50}, 20*time.Second, func(checked Checked) error {
+		done <- c.FollowHedged(ctx, fallback.CheckSet{Rooms: []fallback.RoomAfter{{Room: "#hedge"}}, Limit: 50}, 20*time.Second, func(checked fallback.Checked) error {
 			mu.Lock()
 			defer mu.Unlock()
 			for _, m := range checked.Rooms[0].Messages {
@@ -219,7 +225,7 @@ func TestFollowHedgedEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer poster.Close()
-	c := &Client{Host: "127.0.0.1", Nick: "hedge-reader", Endpoints: []Endpoint{endpoints["framed"], endpoints["websocket"]}, Hedge: true}
+	c := &fallback.Client{Host: "127.0.0.1", Nick: "hedge-reader", Endpoints: []fallback.Endpoint{endpoints["framed"], endpoints["websocket"]}, Hedge: true}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	reader, err := c.ReadRooms(ctx)
@@ -232,7 +238,7 @@ func TestFollowHedgedEnds(t *testing.T) {
 	emitted := 0
 	followed := make(chan error, 1)
 	go func() {
-		followed <- reader.Follow(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(checked Checked) error {
+		followed <- reader.Follow(ctx, fallback.CheckSet{Rooms: []fallback.RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(checked fallback.Checked) error {
 			emitted += len(checked.Rooms[0].Messages)
 			return stop
 		})
@@ -253,9 +259,9 @@ func TestFollowHedgedEnds(t *testing.T) {
 	}
 	port := gone.Addr().(*net.TCPAddr).Port
 	_ = gone.Close()
-	dead := &Client{Host: "127.0.0.1", Nick: "hedge-dead", Endpoints: []Endpoint{{Carrier: protocol.Carrier{Name: "framed", Port: port}}, {Carrier: protocol.Carrier{Name: "websocket", Port: port}}}}
+	dead := &fallback.Client{Host: "127.0.0.1", Nick: "hedge-dead", Endpoints: []fallback.Endpoint{{Carrier: protocol.Carrier{Name: "framed", Port: port}}, {Carrier: protocol.Carrier{Name: "websocket", Port: port}}}}
 	start := time.Now()
-	if err := dead.FollowHedged(ctx, CheckSet{Rooms: []RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(Checked) error { return nil }); err == nil || time.Since(start) > 10*time.Second {
+	if err := dead.FollowHedged(ctx, fallback.CheckSet{Rooms: []fallback.RoomAfter{{Room: "#ends"}}, Limit: 10}, 5*time.Second, func(fallback.Checked) error { return nil }); err == nil || time.Since(start) > 10*time.Second {
 		t.Fatalf("unreachable gateway: %v after %v", err, time.Since(start))
 	}
 }
