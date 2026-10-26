@@ -92,12 +92,29 @@ func (c *Client) ReplyWithID(parent, message, requestID string) error {
 }
 
 func (c *Client) sendTextWithID(command, target, message, requestID string) error {
+	return c.sendTagged(command, target, message, requestID, "")
+}
+
+// sendTagged sends a message with its optional request ID and, for one that
+// shares a paste, the paste's ID in the PasteTag.
+func (c *Client) sendTagged(command, target, message, requestID, pasteID string) error {
 	tags := ""
 	if requestID != "" {
 		if !c.Supports("IDEMPOTENCY") || !protocol.ValidRequestID(requestID) {
 			return errors.New("safe retries require IDEMPOTENCY and a request ID of 1-64 letters/digits/-/_")
 		}
 		tags = "@" + protocol.RequestIDTag + "=" + requestID + " "
+	}
+	if pasteID != "" {
+		if !c.Supports("PASTE") || !protocol.ValidMessageID(pasteID) {
+			return errors.New("sharing a paste requires PASTE and the paste's ID")
+		}
+		if tags == "" {
+			tags = "@"
+		} else {
+			tags = strings.TrimSuffix(tags, " ") + ";"
+		}
+		tags += protocol.PasteTag + "=" + pasteID + " "
 	}
 	message = NormalizeMessage(message)
 	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {
