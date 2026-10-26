@@ -307,7 +307,7 @@ func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 	if live := liveRecords(s.handoffs); live >= maxLiveHandoffs {
 		return fmt.Errorf("%d handoffs are open; finish or withdraw some first", live)
 	}
-	m := s.newMessage(client.client.Nick, target, body, nil)
+	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.For = "handoff", client.accountID, forNick
 	h := handoff{Offer: m, State: handoffOpen, Updated: m.Timestamp}
 	if err := s.saveHandoffLocked(h); err != nil {
@@ -419,7 +419,7 @@ func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 		notify = ""
 	}
 	h.Updated = s.now().UTC()
-	m := s.newMessage(client.client.Nick, target, body, &h.Offer)
+	m := s.postMessage(client, target, body, &h.Offer)
 	m.Kind, m.AccountID, m.For, m.Link = r.Action, client.accountID, notify, r.Link
 	if err := s.saveHandoffLocked(h); err != nil {
 		return err

@@ -109,7 +109,7 @@ type digestRoom struct {
 }
 
 type digestHeader struct {
-	Type    string `json:"type"` // topic or pin
+	Type    string `json:"type"` // topic, charter or pin
 	Target  string `json:"target"`
 	ID      string `json:"id,omitempty"`
 	From    string `json:"from,omitempty"`
@@ -350,7 +350,7 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 		if len(d.Headers) == digestNotes {
 			break
 		}
-		d.Headers = append(d.Headers, digestHeader{Type: h.Type, Target: h.Target, ID: h.ID, From: h.From, Preview: preview(h.Topic)})
+		d.Headers = append(d.Headers, digestHeader{Type: h.Type, Target: h.Target, ID: h.ID, From: h.From, Preview: preview(cmp.Or(h.Topic, h.Charter))})
 	}
 	return d
 }
@@ -564,9 +564,12 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	writeHandoffs(&b, d)
 	writeDecisions(&b, d)
 	for _, h := range d.Headers {
-		if h.Type == "pin" {
+		switch h.Type {
+		case "pin":
 			fmt.Fprintf(&b, "Pinned in %s [%s] by %s: %q\n", h.Target, h.ID, h.From, h.Preview)
-		} else {
+		case "charter":
+			fmt.Fprintf(&b, "Charter of %s changed: %q\n", h.Target, h.Preview)
+		default:
 			fmt.Fprintf(&b, "Header of %s: %q\n", h.Target, h.Preview)
 		}
 	}

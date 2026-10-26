@@ -75,6 +75,9 @@ type SearchOptions struct {
 	// Since and Until bound message times: Since inclusive, Until exclusive.
 	// The daemon compares whole seconds.
 	Since, Until time.Time
+	// Run keeps only the messages posted under this run label; it needs a
+	// daemon with RUN.
+	Run string
 }
 
 func (o SearchOptions) encode() string {
@@ -90,6 +93,9 @@ func (o SearchOptions) encode() string {
 	}
 	if !o.Until.IsZero() {
 		parts = append(parts, fmt.Sprintf("until=%d", o.Until.Unix()))
+	}
+	if o.Run != "" {
+		parts = append(parts, "run="+o.Run)
 	}
 	return strings.Join(parts, ",")
 }
@@ -110,6 +116,9 @@ func (c *Client) SearchWith(target, query, from, after string, limit int, option
 		from = "*"
 	}
 	params := []string{target, fmt.Sprint(limit), after, from}
+	if options.Run != "" && (!c.Supports("RUN") || !protocol.ValidRunID(options.Run)) {
+		return errors.New("run filters need a daemon with RUN and a label of 1-64 letters, digits, '.', '_' or '-'")
+	}
 	if encoded := options.encode(); encoded != "" {
 		if !c.Supports("SEARCH_TERMS") {
 			return errors.New("search terms, time windows and newest-first need a daemon with SEARCH_TERMS")

@@ -124,7 +124,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 
 // commandMessage builds the stored message for a PRIVMSG, NOTICE, REPLY or REACT.
 func (s *Server) commandMessage(client *session, command protocol.Command, notice bool, target, body string, parent *Message) Message {
-	message := s.newMessage(client.client.Nick, target, body, parent)
+	message := s.postMessage(client, target, body, parent)
 	switch {
 	case notice:
 		message.Kind = "notice"
@@ -167,6 +167,14 @@ func messageMetadata(message Message) protocol.MessageMetadata {
 	return protocol.MessageMetadata{ChatMetadata: message.ChatMetadata, ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp}
 }
 
+// postMessage is newMessage for a message client posts, carrying the run
+// label of the command being handled.
+func (s *Server) postMessage(client *session, target, body string, parent *Message) Message {
+	message := s.newMessage(client.client.Nick, target, body, parent)
+	message.Run = client.run
+	return message
+}
+
 func (s *Server) newMessage(from, target, body string, parent *Message) Message {
 	s.seq++
 	message := Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: s.now().UTC()}
@@ -184,7 +192,7 @@ func (s *Server) newMessage(from, target, body string, parent *Message) Message 
 
 func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
-	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" || message.Paste != nil {
+	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" || message.Run != "" || message.Paste != nil {
 		tags += ";" + protocol.ChatTag + "=" + protocol.EncodeChat(message.ChatMetadata)
 	}
 	if message.ReplyTo != "" {

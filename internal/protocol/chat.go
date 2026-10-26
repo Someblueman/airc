@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const ChatTag = "+airc/chat"
@@ -50,6 +51,27 @@ type ChatMetadata struct {
 	// Resolved marks a thread root that has a retained reply of kind
 	// resolved: what it asked is settled, wherever that happened.
 	Resolved bool `json:"resolved,omitempty"`
+	// Run is the label of the harness run that posted the message, from
+	// the +airc/run tag: 1-64 letters, digits, '.', '_' or '-'. SEARCH and
+	// HISTORY filter by it.
+	Run string `json:"run,omitempty"`
+}
+
+// RunTag carries a post's run label from the client; the daemon keeps it in
+// the message's metadata and rejects an invalid one.
+const RunTag = "+airc/run"
+
+// ValidRunID reports a run label: 1-64 ASCII letters, digits, '.', '_' or '-'.
+func ValidRunID(id string) bool {
+	if len(id) < 1 || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // StatusStates are the states a status post may be in.
@@ -231,6 +253,22 @@ type ChatRequest struct {
 	// Task and State are a status post's.
 	Task  string `json:"task,omitempty"`
 	State string `json:"state,omitempty"`
+	// Charter sets a room's charter on the room action: text up to
+	// MaxCharterBytes, or "" to clear it; nil leaves it as it is.
+	Charter *string `json:"charter,omitempty"`
+	// Run is the +airc/run label a post carries; it travels in the tag, not
+	// the JSON, so an older daemon ignores it.
+	Run string `json:"-"`
+}
+
+// MaxCharterBytes bounds a room's charter: the longer rules beside the
+// 400-byte header.
+const MaxCharterBytes = 4096
+
+// ValidCharter reports text a room may keep as its charter: UTF-8 of at most
+// MaxCharterBytes without NUL. Empty clears.
+func ValidCharter(text string) bool {
+	return len(text) <= MaxCharterBytes && utf8.ValidString(text) && !strings.ContainsRune(text, 0)
 }
 
 type ChatEntry struct {
@@ -245,11 +283,13 @@ type ChatEntry struct {
 	ExpiresAt    time.Time       `json:"expires_at,omitzero"`
 	SlowSeconds  int64           `json:"slow_seconds,omitempty"`
 	HistoryLimit int             `json:"history_limit,omitempty"`
-	Options      []string        `json:"options,omitempty"`
-	Votes        []int           `json:"votes,omitempty"`
-	Closed       bool            `json:"closed,omitempty"`
-	State        string          `json:"state,omitempty"`
-	Holder       string          `json:"holder,omitempty"`
+	// Charter is a room's charter on a room entry.
+	Charter string   `json:"charter,omitempty"`
+	Options []string `json:"options,omitempty"`
+	Votes   []int    `json:"votes,omitempty"`
+	Closed  bool     `json:"closed,omitempty"`
+	State   string   `json:"state,omitempty"`
+	Holder  string   `json:"holder,omitempty"`
 	// Link is where a done handoff's result is; BlockedReason and BlockedAt
 	// are why and since when a blocked handoff is stuck.
 	Link          string           `json:"link,omitempty"`

@@ -34,7 +34,7 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 	name := cmd.target
 	q, continuing := b.queries[name]
 	appendPage := cmd.kind == "query-next"
-	if cmd.kind == "thread" || cmd.kind == "search" {
+	if cmd.kind == "thread" || cmd.kind == "search" || cmd.kind == "run" {
 		q = uiQuery{Kind: cmd.kind, Target: cmd.target, Text: cmd.text, Cursor: "*"}
 		name = cmd.kind + ":" + cmd.target
 		continuing = false
@@ -69,6 +69,10 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 	fetch := func(after string) (historyPage, error) {
 		if q.Kind == "thread" {
 			return fetchHistory(ctx, c, "thread:"+q.Target, after, 100, forward)
+		}
+		if q.Kind == "run" {
+			// The room's messages under one run label, oldest first.
+			return fetchHistoryWith(ctx, c, q.Target, after, 50, irc.HistoryOptions{Run: q.Text}, forward)
 		}
 		if err := c.SearchWith(q.Target, q.Text, "", after, 50, irc.SearchOptions{Terms: c.Supports("SEARCH_TERMS")}); err != nil {
 			return historyPage{}, err
@@ -110,11 +114,11 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 }
 
 func queryRoom(b *uiBuffer) string {
-	if b != nil && b.query != nil && (b.query.Kind == "search" || b.query.Kind == "board") {
+	if b != nil && b.query != nil && (b.query.Kind == "search" || b.query.Kind == "run" || b.query.Kind == "board") {
 		return b.query.Target
 	}
 	if b != nil {
-		return strings.TrimPrefix(b.name, "search:")
+		return strings.TrimPrefix(strings.TrimPrefix(b.name, "search:"), "run:")
 	}
 	return ""
 }

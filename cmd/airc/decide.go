@@ -46,13 +46,18 @@ func runDecideSession(ctx context.Context, session *agentConnection, args []stri
 	var options pollChoices
 	fs.Var(&options, "option", "a choice to decide between, numbered from 1; repeat for 2-8 options")
 	choice := fs.Int("choice", 0, "answer: the chosen option's number")
+	runFlag := addRunFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	r := irc.ChatRequest{Action: "decision"}
+	run, err := runLabel(*runFlag)
+	if err != nil {
+		return err
+	}
+	r := irc.ChatRequest{Action: "decision", Run: run}
 	if step == "" {
 		if *choice != 0 {
 			return errors.New("--choice applies to answer")
@@ -221,12 +226,13 @@ type decisionRow struct {
 	AnsweredBy      string    `json:"answered_by,omitempty"`
 	AnsweredAccount string    `json:"answered_account,omitempty"`
 	AnsweredAt      time.Time `json:"answered_at,omitzero"`
+	Run             string    `json:"run,omitempty"`
 }
 
 func newDecisionRow(e irc.ChatEntry) decisionRow {
 	row := decisionRow{Type: "decision", ID: e.ID, Target: e.Target, From: e.From, State: e.State}
 	if e.Message != nil {
-		row.Decider, row.Message, row.Options, row.Timestamp = e.Message.For, e.Message.Message, e.Message.Choices, e.Message.Timestamp
+		row.Decider, row.Message, row.Options, row.Timestamp, row.Run = e.Message.For, e.Message.Message, e.Message.Choices, e.Message.Timestamp, e.Message.Run
 	}
 	if a := e.Answer; a != nil {
 		row.Choice, row.Answer, row.AnsweredBy, row.AnsweredAccount, row.AnsweredAt = a.Choice, a.Message, a.From, a.AccountID, a.Timestamp

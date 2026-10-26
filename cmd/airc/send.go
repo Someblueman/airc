@@ -51,8 +51,13 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	paste := fs.String("paste", "", "share a UTF-8 text file larger than a message as a paste (64 KiB by default); - reads stdin; --message adds a caption")
 	name := fs.String("name", "", "the paste's name, for --paste - or to rename a file")
 	language := fs.String("language", "", "code-block or paste language (inferred for --file and --paste); formats --message as code when used alone")
+	runFlag := addRunFlag(fs)
 	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
 	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
+		return err
+	}
+	run, err := runLabel(*runFlag)
+	if err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -111,7 +116,6 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		*message = *reaction
 	}
-	var err error
 	var pasteSrc *pasteSource // text to upload as a paste before posting
 	if *message, pasteSrc, err = resolveShare(*file, *paste, *name, *language, *message, stdin, stderr); err != nil {
 		return err
@@ -155,6 +159,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			if *reaction != "" {
 				return reactViaFallback(ctx, *opt, r, conversation, *replyTo, *reaction, *check, settings, *maxBytes, stdout, stderr)
 			}
+			if run != "" {
+				fmt.Fprintln(stderr, "airc: warning: the other carriers carry no run label; the post goes without it")
+			}
 			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
 		}
 		client = r.native
@@ -162,6 +169,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return failure(err, "login")
 	}
+	warnRunUnsupported(client, run, stderr)
 	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
 	checkClient := client
@@ -210,14 +218,10 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			err = client.RetryRequest(*requestID)
 		} else if *reaction != "" {
 			err = client.React(*replyTo, *reaction)
-		} else if *replyTo != "" && pasteID != "" {
-			err = client.ReplyPaste(*replyTo, *message, *requestID, pasteID)
 		} else if *replyTo != "" {
-			err = client.ReplyWithID(*replyTo, *message, *requestID)
-		} else if pasteID != "" {
-			err = client.SendPaste(target, *message, *requestID, pasteID)
+			err = client.ReplyWith(*replyTo, *message, irc.SendOptions{RequestID: *requestID, Run: run, Paste: pasteID})
 		} else {
-			err = client.SendWithID(target, *message, *requestID)
+			err = client.SendWith(target, *message, irc.SendOptions{RequestID: *requestID, Run: run, Paste: pasteID})
 		}
 		if err == nil {
 			awaited = true

@@ -91,7 +91,7 @@ func (s *Server) pollLocked(client *session, r pollRequest) error {
 		if len(next.Polls) >= 128 {
 			return errors.New("poll limit reached; closed polls are retained for seven days after expiry")
 		}
-		m := s.newMessage(client.client.Nick, r.Target, r.Question, nil)
+		m := s.postMessage(client, r.Target, r.Question, nil)
 		m.Kind, m.AccountID, m.PollOptions, m.PollClosesAt = "poll", client.accountID, r.Options, s.now().UTC().Add(time.Duration(r.Seconds)*time.Second)
 		p := poll{Message: m, Votes: map[string]int{}}
 		next.Polls[m.ID] = p

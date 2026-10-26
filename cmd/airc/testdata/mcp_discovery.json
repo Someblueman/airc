@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID; ask posts a question and waits for its first textual reply in one call.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -15,6 +15,59 @@
  },
  "tools/list": {
   "tools": [
+   {
+    "description": "Post a question to a room or a nickname through the normal send path and wait, in this one call, for the first textual reply from someone else (reactions and signals do not count). Returns the question's receipt, then the reply row, or a wait_expired status; the reply is marked read as a reply check marks it. For hosts that cannot run a check in the background; keep wait_seconds below the host's tool-call timeout, since a killed call reports nothing and the question stays posted.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "Room to ask in; give exactly one of channel or to",
+       "type": "string"
+      },
+      "message": {
+       "description": "The question, at most 4096 bytes",
+       "type": "string"
+      },
+      "run": {
+       "description": "Run label kept on the question; defaults to AIRC_RUN",
+       "type": "string"
+      },
+      "to": {
+       "description": "Nickname to ask directly",
+       "type": "string"
+      },
+      "wait_seconds": {
+       "description": "How long to wait for the first reply, 1 through 3600 seconds; default 60. Keep it below the host's tool-call timeout",
+       "type": "integer"
+      }
+     },
+     "required": [
+      "message"
+     ],
+     "type": "object"
+    },
+    "name": "ask",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
    {
     "description": "Cancel your reply-coming signal for this message; does not cancel anyone's work.",
     "inputSchema": {
@@ -287,6 +340,10 @@
         "array"
        ]
       },
+      "run": {
+       "description": "Run label kept on the post; defaults to AIRC_RUN",
+       "type": "string"
+      },
       "step": {
        "description": "ask (the default), answer or withdraw",
        "type": "string"
@@ -504,6 +561,10 @@
        "description": "Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered; blocked: why it is stuck, required",
        "type": "string"
       },
+      "run": {
+       "description": "Run label kept on the post; defaults to AIRC_RUN",
+       "type": "string"
+      },
       "step": {
        "description": "offer (the default), accept, blocked, decline, done or withdraw",
        "type": "string"
@@ -597,6 +658,10 @@
       "limit": {
        "description": "Maximum messages, 1-1000; default 50",
        "type": "integer"
+      },
+      "run": {
+       "description": "Only messages posted under this run label",
+       "type": "string"
       },
       "target": {
        "description": "#room, or a nickname for its direct messages",
@@ -1044,6 +1109,10 @@
        "description": "Words that must all occur (case-insensitive substrings), \"quoted phrases\", and -word to exclude; at most 256 bytes",
        "type": "string"
       },
+      "run": {
+       "description": "Only messages posted under this run label",
+       "type": "string"
+      },
       "since": {
        "description": "Only messages at or after: a duration ago (90m, 2h, 3d, 1w), a date (2026-10-17) or RFC 3339",
        "type": "string"
@@ -1113,6 +1182,10 @@
        "description": "Recover this saved request receipt without posting; omit message and targets",
        "type": "string"
       },
+      "run": {
+       "description": "Run label kept on the message (1-64 letters, digits, ., _ or -), which search and history can filter by; defaults to AIRC_RUN",
+       "type": "string"
+      },
       "to": {
        "description": "Nickname for a direct message; queued if the recipient is offline",
        "type": "string"
@@ -1157,6 +1230,10 @@
       },
       "message": {
        "description": "A note on the status, such as what is blocking you",
+       "type": "string"
+      },
+      "run": {
+       "description": "Run label kept on the post; defaults to AIRC_RUN",
        "type": "string"
       },
       "state": {

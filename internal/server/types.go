@@ -187,6 +187,9 @@ type session struct {
 	resumeSecret   string
 	reclaimed      bool                    // taken over by a new connection: closing without QUIT or offline notices
 	uploads        map[string]*pasteUpload // paste uploads in flight, by token; see pastes.go
+	// run is the +airc/run label of the command being handled, stamped on
+	// every message it posts; "" between commands and for untagged ones.
+	run string
 }
 
 // hidden sessions never appear in WHO, NAMES or AGENTS, and leave without

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -42,7 +43,8 @@ const (
 	wakeSenders = 16
 )
 
-// wakeRegistration is what the wakes file keeps for an account.
+// wakeRegistration is what the wakes file keeps for an account. Records
+// written before the options existed load with them unset.
 type wakeRegistration struct {
 	Account      string    `json:"account_id"`
 	Nick         string    `json:"nick"`
@@ -50,6 +52,54 @@ type wakeRegistration struct {
 	Secret       string    `json:"secret"`
 	QuietSeconds int       `json:"quiet_seconds"`
 	ExpiresAt    time.Time `json:"expires_at"`
+	// MentionsOnly sends a notice for a direct message, a room message whose
+	// text tags the account, or a handoff or decision offered to it, and not
+	// for a room message that reaches the inbox only through its for field
+	// while replying to another: the steps of a handoff or decision the
+	// account offered, which report progress rather than ask for attention.
+	MentionsOnly bool `json:"mentions_only,omitempty"`
+	// QuietHours is a daily window, in the daemon's local time, during which
+	// no notice goes; the news gathered meanwhile goes as one notice when
+	// the window ends. "22:00-08:00" runs over midnight.
+	QuietHours string `json:"quiet_hours,omitempty"`
+}
+
+// quietHours is the registration's window, or nothing.
+func (reg wakeRegistration) quietHours() (protocol.QuietHours, bool) {
+	if reg.QuietHours == "" {
+		return protocol.QuietHours{}, false
+	}
+	q, err := protocol.ParseQuietHours(reg.QuietHours)
+	return q, err == nil
+}
+
+// parseWakeOptions reads the options of WAKE SET: "*" or a comma-separated
+// list of mentions-only and quiet-hours=HH:MM-HH:MM, each at most once.
+func parseWakeOptions(raw string) (mentionsOnly bool, quietHours string, err error) {
+	if raw == "" || raw == "*" {
+		return false, "", nil
+	}
+	seen := map[string]bool{}
+	for option := range strings.SplitSeq(raw, ",") {
+		name, value, hasValue := strings.Cut(option, "=")
+		if seen[name] {
+			return false, "", errors.New("repeated wake option " + name)
+		}
+		seen[name] = true
+		switch {
+		case name == "mentions-only" && !hasValue:
+			mentionsOnly = true
+		case name == "quiet-hours" && hasValue:
+			q, err := protocol.ParseQuietHours(value)
+			if err != nil {
+				return false, "", err
+			}
+			quietHours = q.String()
+		default:
+			return false, "", errors.New("unknown wake option " + option)
+		}
+	}
+	return mentionsOnly, quietHours, nil
 }
 
 // savedWake is a registration as the wakes file keeps it, with the news
@@ -184,7 +234,8 @@ func (w *wakes) close() error {
 // allowlist.
 func (s *Server) wakeValidLocked(w *wakes, reg wakeRegistration) bool {
 	a, ok := s.accounts[reg.Nick]
-	return ok && a.ID == reg.Account && w.allowed(reg.URL) && validWakeSecret(reg.Secret) && reg.QuietSeconds >= int(wakeMinQuiet/time.Second) && reg.QuietSeconds <= int(wakeMaxQuiet/time.Second)
+	_, quietOK := reg.quietHours()
+	return ok && a.ID == reg.Account && w.allowed(reg.URL) && validWakeSecret(reg.Secret) && reg.QuietSeconds >= int(wakeMinQuiet/time.Second) && reg.QuietSeconds <= int(wakeMaxQuiet/time.Second) && (reg.QuietHours == "" || quietOK)
 }
 
 // allowed reports a URL under an allowlist prefix. Its path must be plain
@@ -239,8 +290,8 @@ func (w *wakes) flushWakesLocked() {
 	}
 }
 
-// wakeLocked serves WAKE [STATUS], WAKE SET url secret [quiet-seconds] and
-// WAKE CLEAR for the connection's account.
+// wakeLocked serves WAKE [STATUS], WAKE SET url secret [quiet-seconds
+// [options]] and WAKE CLEAR for the connection's account.
 func (s *Server) wakeLocked(client *session, command protocol.Command) {
 	w := s.wake
 	if w == nil {
@@ -280,6 +331,12 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 			}
 			quiet = time.Duration(seconds) * time.Second
 		}
+		rawOptions, _ := command.Param(4)
+		mentionsOnly, quietHours, err := parseWakeOptions(rawOptions)
+		if err != nil {
+			s.numericLocked(client, "417", nil, "Wake options: "+err.Error())
+			return
+		}
 		if target == "" || secret == "" {
 			s.numericLocked(client, "461", []string{"WAKE"}, "WAKE SET needs a URL and a secret")
 			return
@@ -297,7 +354,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 			s.numericLocked(client, "437", nil, "Wake registration limit reached")
 			return
 		}
-		state := &wakeState{reg: wakeRegistration{Account: client.accountID, Nick: client.authNick, URL: target, Secret: secret, QuietSeconds: int(quiet / time.Second), ExpiresAt: s.now().Add(wakeTTL)}}
+		state := &wakeState{reg: wakeRegistration{Account: client.accountID, Nick: client.authNick, URL: target, Secret: secret, QuietSeconds: int(quiet / time.Second), ExpiresAt: s.now().Add(wakeTTL), MentionsOnly: mentionsOnly, QuietHours: quietHours}}
 		next := make(map[string]*wakeState, len(w.byAccount)+1)
 		for id, existing := range w.byAccount {
 			next[id] = existing
@@ -322,17 +379,25 @@ type wakeStatus struct {
 	URL          string     `json:"url,omitempty"`
 	QuietSeconds int        `json:"quiet_seconds,omitempty"`
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	Pending      int        `json:"pending,omitempty"`
-	LastNotice   *time.Time `json:"last_notice,omitempty"`
-	LastError    string     `json:"last_error,omitempty"`
+	MentionsOnly bool       `json:"mentions_only,omitempty"`
+	QuietHours   string     `json:"quiet_hours,omitempty"`
+	// QuietUntil is when the quiet hours holding news end, while they do.
+	QuietUntil *time.Time `json:"quiet_until,omitempty"`
+	Pending    int        `json:"pending,omitempty"`
+	LastNotice *time.Time `json:"last_notice,omitempty"`
+	LastError  string     `json:"last_error,omitempty"`
 }
 
 func (s *Server) wakeStatusLocked(client *session, w *wakes) {
 	status := wakeStatus{}
 	if state := w.byAccount[client.accountID]; state != nil {
-		status = wakeStatus{Registered: true, URL: state.reg.URL, QuietSeconds: state.reg.QuietSeconds, ExpiresAt: &state.reg.ExpiresAt, Pending: state.pending, LastError: state.lastError}
+		status = wakeStatus{Registered: true, URL: state.reg.URL, QuietSeconds: state.reg.QuietSeconds, ExpiresAt: &state.reg.ExpiresAt, MentionsOnly: state.reg.MentionsOnly, QuietHours: state.reg.QuietHours, Pending: state.pending, LastError: state.lastError}
 		if !state.lastNotice.IsZero() {
 			status.LastNotice = &state.lastNotice
+		}
+		if q, ok := state.reg.quietHours(); ok && state.pending > 0 && q.Contains(s.now()) {
+			until := q.Until(s.now())
+			status.QuietUntil = &until
 		}
 	}
 	data, _ := json.Marshal(status)
@@ -362,6 +427,12 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 	} else if !strings.EqualFold(message.Target, message.From) {
 		nicks = append(nicks, nickKey(message.Target))
 	}
+	// tagged are the nicks the message's text names: what a mentions-only
+	// registration counts, besides a direct message and an offer with for.
+	var tagged []string
+	if protocol.IsChannel(message.Target) {
+		tagged = protocol.Mentions(message.Body)
+	}
 	woke := false
 	for _, key := range nicks {
 		a, ok := s.accounts[key]
@@ -371,6 +442,9 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 		state := w.byAccount[a.ID]
 		if state == nil || state.reg.Nick != key || s.liveNickLocked(key) != nil {
 			continue
+		}
+		if state.reg.MentionsOnly && protocol.IsChannel(message.Target) && !slices.Contains(tagged, key) && message.ReplyTo != "" {
+			continue // a step of a handoff or decision, addressed by for alone
 		}
 		state.pending++
 		state.latest = message.ID
@@ -473,6 +547,11 @@ func (s *Server) dueWakesLocked(w *wakes, now time.Time, room int) ([]dueWake, t
 		}
 		if until := state.nextAt.Sub(now); until > 0 {
 			wait = min(wait, until)
+			continue
+		}
+		if q, ok := state.reg.quietHours(); ok && q.Contains(s.now()) {
+			// The news waits for the window to end and goes as one notice.
+			wait = min(wait, q.Until(s.now()).Sub(s.now()))
 			continue
 		}
 		if len(due) >= room {

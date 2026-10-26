@@ -28,11 +28,16 @@ func runStatusSession(ctx context.Context, session *agentConnection, args []stri
 	state := fs.String("state", "", "working, blocked or done")
 	link := fs.String("link", "", "where the work is, an absolute http(s) URL (a PR, a branch, a document)")
 	message := fs.String("message", "", "a note on the status; - reads stdin")
+	runFlag := addRunFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	run, err := runLabel(*runFlag)
+	if err != nil {
+		return err
 	}
 	if *channel == "" {
 		*channel = os.Getenv("AIRC_CHANNEL")
@@ -67,7 +72,7 @@ func runStatusSession(ctx context.Context, session *agentConnection, args []stri
 		}
 		note = body
 	}
-	r = irc.ChatRequest{Action: "status", Target: room, Task: *task, State: *state, Link: *link, Text: note}
+	r = irc.ChatRequest{Action: "status", Target: room, Task: *task, State: *state, Link: *link, Text: note, Run: run}
 	if err := identity(opt); err != nil {
 		return err
 	}
@@ -111,12 +116,13 @@ type statusRow struct {
 	At      time.Time `json:"at"`
 	ID      string    `json:"id,omitempty"`
 	Message string    `json:"message,omitempty"`
+	Run     string    `json:"run,omitempty"`
 }
 
 func newStatusRow(e irc.ChatEntry) statusRow {
 	row := statusRow{Type: "status", Nick: e.From, Target: e.Target, Task: e.Text, State: e.State, Link: e.Link, At: e.At}
 	if e.Message != nil {
-		row.ID, row.Message = e.Message.ID, e.Message.Message
+		row.ID, row.Message, row.Run = e.Message.ID, e.Message.Message, e.Message.Run
 	}
 	return row
 }

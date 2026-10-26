@@ -115,15 +115,24 @@ type checkMessage struct {
 	Timestamp time.Time `json:"timestamp"`
 	Mentioned bool      `json:"mentioned,omitempty"`
 }
+
+// checkTopic is a header row: a room's topic, its charter or a pin preview.
+// A topic or pin row carries Topic; a charter row carries Charter.
 type checkTopic struct {
 	Type        string `json:"type"`
 	Target      string `json:"target"`
-	Topic       string `json:"topic"`
+	Topic       string `json:"topic,omitempty"`
+	Charter     string `json:"charter,omitempty"`
 	ID          string `json:"id,omitempty"`
 	From        string `json:"from,omitempty"`
 	PinKey      string `json:"-"`
 	Fingerprint string `json:"-"`
 }
+
+// empty reports a header with nothing to show: a cleared topic or charter,
+// which is only remembered as gone.
+func (h checkTopic) empty() bool { return h.Topic == "" && h.Charter == "" }
+
 type checkStatus struct {
 	Type      string   `json:"type"`
 	Code      string   `json:"code"`
@@ -398,6 +407,13 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 				headers = append(headers, checkTopic{Type: "topic", Target: target.name, Topic: text})
 			}
 		}
+	}
+	if !combined && client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
+		charters, err := checkCharters(ctx, client, followed, store, c.noteLive)
+		if err != nil {
+			return err
+		}
+		headers = append(headers, charters...)
 	}
 	if settings.wait > 0 {
 		for start := 0; start < len(targets); start += 16 {

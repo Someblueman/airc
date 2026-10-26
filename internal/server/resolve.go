@@ -84,7 +84,7 @@ func (s *Server) resolveLocked(client *session, r resolveRequest) error {
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
 	}
-	reply := s.newMessage(client.client.Nick, target, body, &root)
+	reply := s.postMessage(client, target, body, &root)
 	reply.Kind, reply.AccountID = "resolved", client.accountID
 	mentions := s.recordLocked(&reply)
 	s.broadcastMessageLocked(reply, client.client.Username, mentions)

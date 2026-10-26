@@ -21,6 +21,7 @@ type CheckEntry struct {
 	Target  string           `json:"target"`
 	Message *MessageMetadata `json:"message,omitempty"`
 	Topic   string           `json:"topic,omitempty"`
+	Charter string           `json:"charter,omitempty"`
 	Status  string           `json:"status,omitempty"`
 	Cursor  string           `json:"cursor,omitempty"`
 	Gap     bool             `json:"gap,omitempty"`

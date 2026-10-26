@@ -20,7 +20,7 @@ const (
 // entryOverhead approximates the heap a retained message costs beyond the
 // bytes of its strings: the entry and Message structs, its cursor, request
 // and index entries. TestHistoryBytesTrackHeap checks it against the heap.
-const entryOverhead = 440
+const entryOverhead = 520
 
 // entry is a retained message with what is derived from it on insertion.
 type entry struct {
@@ -459,11 +459,19 @@ func (h *historyRing) backwardBefore(s selection, bound uint64, visit func(uint6
 }
 
 func (h *historyRing) recent(target string, limit int) []Message {
+	return h.recentWhere(target, limit, nil)
+}
+
+// recentWhere is recent among the messages accept keeps; nil keeps all.
+func (h *historyRing) recentWhere(target string, limit int, accept func(*entry) bool) []Message {
 	if limit <= 0 || limit > h.size {
 		limit = h.size
 	}
 	var out []Message
 	h.backward(h.selectTarget(target), func(_ uint64, e *entry) bool {
+		if accept != nil && !accept(e) {
+			return true
+		}
 		if out == nil {
 			out = make([]Message, 0, min(limit, 64))
 		}

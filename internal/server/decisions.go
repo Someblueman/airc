@@ -254,7 +254,7 @@ func (s *Server) openDecisionLocked(client *session, r decisionRequest) error {
 	if live := liveRecords(s.decisions); live >= maxLiveDecisions {
 		return fmt.Errorf("%d decisions are open; answer or withdraw some first", live)
 	}
-	m := s.newMessage(client.client.Nick, target, body, nil)
+	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.For, m.Choices = "decision", client.accountID, decider, options
 	d := decision{Offer: m, State: decisionOpen, Updated: m.Timestamp}
 	if err := s.saveDecisionLocked(d); err != nil {
@@ -331,7 +331,7 @@ func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
 		notify = ""
 	}
 	d.Updated = s.now().UTC()
-	m := s.newMessage(client.client.Nick, target, body, &d.Offer)
+	m := s.postMessage(client, target, body, &d.Offer)
 	m.Kind, m.AccountID, m.For = r.Action, client.accountID, notify
 	if r.Action == "decision-answer" {
 		m.Choice = r.Choice

@@ -13,10 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-const wakeUsage = "usage: airc wake --nick N [--url URL [--secret-file FILE] [--quiet 1m] | --clear] [--json]"
+const wakeUsage = "usage: airc wake --nick N [--url URL [--secret-file FILE] [--quiet 1m] [--mentions-only] [--quiet-hours HH:MM-HH:MM] | --clear] [--json]"
 
 // wakeResult is the daemon's 787 status, plus a secret the CLI generated
 // for the receiver (shown once, never kept).
@@ -26,6 +27,9 @@ type wakeResult struct {
 	URL          string     `json:"url,omitempty"`
 	QuietSeconds int        `json:"quiet_seconds,omitempty"`
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	MentionsOnly bool       `json:"mentions_only,omitempty"`
+	QuietHours   string     `json:"quiet_hours,omitempty"`
+	QuietUntil   *time.Time `json:"quiet_until,omitempty"`
 	Pending      int        `json:"pending,omitempty"`
 	LastNotice   *time.Time `json:"last_notice,omitempty"`
 	LastError    string     `json:"last_error,omitempty"`
@@ -42,12 +46,25 @@ func runWake(args []string, stdout, stderr io.Writer) error {
 	target := fs.String("url", "", "register this URL (it must be on the daemon's --wake-allow list)")
 	secretFile := fs.String("secret-file", "", "file holding the notice signing secret, 32-128 hex characters (default: generate one and print it)")
 	quiet := fs.Duration("quiet", time.Minute, "at most one notice per this period (10s-1h)")
+	mentionsOnly := fs.Bool("mentions-only", false, "notify for a direct message, a message that tags you or a handoff or decision offered to you, not for the steps of one you offered")
+	quietHours := fs.String("quiet-hours", "", "hold notices during this daily window in the daemon's local time (HH:MM-HH:MM, overnight allowed); the news goes as one notice when it ends")
 	clear := fs.Bool("clear", false, "remove the registration")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || *clear && *target != "" || *target == "" && *secretFile != "" || *quiet < 10*time.Second || *quiet > time.Hour {
+	if fs.NArg() != 0 || *clear && *target != "" || *target == "" && (*secretFile != "" || *mentionsOnly || *quietHours != "") || *quiet < 10*time.Second || *quiet > time.Hour {
 		return errors.New(wakeUsage)
+	}
+	var options []string
+	if *mentionsOnly {
+		options = append(options, "mentions-only")
+	}
+	if *quietHours != "" {
+		window, err := protocol.ParseQuietHours(*quietHours)
+		if err != nil {
+			return fmt.Errorf("--quiet-hours: %w", err)
+		}
+		options = append(options, "quiet-hours="+window.String())
 	}
 	if err := identity(opt); err != nil {
 		return err
@@ -69,6 +86,9 @@ func runWake(args []string, stdout, stderr io.Writer) error {
 			return errors.New("a wake URL cannot contain spaces or line breaks")
 		}
 		command = "WAKE SET " + *target + " " + secret + " " + strconv.Itoa(int(*quiet/time.Second))
+		if len(options) > 0 {
+			command += " " + strings.Join(options, ",")
+		}
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
@@ -103,6 +123,15 @@ func runWake(args []string, stdout, stderr io.Writer) error {
 		_, err = fmt.Fprintln(stdout, "no wake URL registered")
 	default:
 		_, err = fmt.Fprintf(stdout, "wake notices go to %s, at most one every %ds, until %s\n", result.URL, result.QuietSeconds, result.ExpiresAt.Format(time.RFC3339))
+		if err == nil && result.MentionsOnly {
+			_, err = fmt.Fprintln(stdout, "only for direct messages, messages that tag you and handoffs or decisions offered to you")
+		}
+		if err == nil && result.QuietHours != "" {
+			_, err = fmt.Fprintf(stdout, "held during quiet hours %s (the daemon's local time)\n", result.QuietHours)
+		}
+		if err == nil && result.QuietUntil != nil {
+			_, err = fmt.Fprintf(stdout, "%d messages wait for the quiet hours to end at %s\n", result.Pending, result.QuietUntil.Local().Format(time.RFC3339))
+		}
 		if err == nil && result.LastError != "" {
 			_, err = fmt.Fprintf(stdout, "last notice failed: %s (%d messages waiting)\n", result.LastError, result.Pending)
 		}

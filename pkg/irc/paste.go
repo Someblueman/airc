@@ -32,15 +32,12 @@ func (c *Client) PasteLimit() int {
 // SendPaste publishes message, whose body should end with the paste's
 // reference line (protocol.PasteMessageBody), sharing the paste pasteID.
 func (c *Client) SendPaste(target, message, requestID, pasteID string) error {
-	return c.sendTagged("PRIVMSG", target, message, requestID, pasteID)
+	return c.SendWith(target, message, SendOptions{RequestID: requestID, Paste: pasteID})
 }
 
 // ReplyPaste replies to parent sharing the paste pasteID.
 func (c *Client) ReplyPaste(parent, message, requestID, pasteID string) error {
-	if !c.Supports("REPLIES") || !protocol.ValidMessageID(parent) {
-		return errors.New("reply needs REPLIES and a valid message ID")
-	}
-	return c.sendTagged("REPLY", parent, message, requestID, pasteID)
+	return c.ReplyWith(parent, message, SendOptions{RequestID: requestID, Paste: pasteID})
 }
 
 // UploadPaste uploads content as a paste named name in language and returns

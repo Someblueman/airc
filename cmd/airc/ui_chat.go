@@ -59,6 +59,23 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return nil, true
 		}
 		return []uiCmd{{kind: "search", target: queryRoom(b), text: rest}}, true
+	case "/run":
+		room := queryRoom(b)
+		if !need(1) {
+			return nil, true
+		}
+		if !protocol.IsChannel(room) || !protocol.ValidRunID(fields[0]) {
+			m.setStatus("/run ID works in a channel; an ID is 1-64 letters, digits, '.', '_' or '-'", true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "run", target: room, text: fields[0]}}, true
+	case "/charter":
+		room := queryRoom(b)
+		if !protocol.IsChannel(room) {
+			m.setStatus("/charter works in a channel", true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "charter", target: room}}, true
 	case "/pin", "/unpin", "/correct", "/retract", "/prepare", "/waiting", "/cancel", "/vote", "/results", "/close-poll":
 		if !need(1) {
 			return nil, true
@@ -272,6 +289,17 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		return true, c.Raw("UNOBSERVE " + cmd.target)
 	case "context":
 		return true, b.openContext(ctx, c, cmd.target, translate)
+	case "charter":
+		entries, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "room", Target: cmd.target, Seconds: -1, Limit: -1}, translate)
+		if err != nil {
+			return true, err
+		}
+		charter := ""
+		for _, e := range entries {
+			charter = e.Charter
+		}
+		b.emit(ctx, charterIn{channel: cmd.target, charter: charter})
+		return true, nil
 	case "react":
 		return true, c.React(cmd.target, cmd.text)
 	case "chat":
@@ -313,7 +341,7 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			}
 		}
 		return true, err
-	case "thread", "search", "query-next", "query-first":
+	case "thread", "search", "run", "query-next", "query-first":
 		return true, b.pageQuery(ctx, c, cmd, translate)
 	case "follow", "unfollow":
 		args := []string{cmd.target, "--nick", b.nick, "--addr", b.opt.addr}
@@ -387,6 +415,29 @@ func (b *uiBackend) refreshBoard(ctx context.Context, c *irc.Client, room string
 	b.queries[boardName(room)] = uiQuery{Kind: "board", Target: room}
 	b.emit(ctx, boardIn{room: room, entries: entries, refresh: refresh})
 	return nil
+}
+
+// showCharter opens a room's charter as a read-only view, line by line, or
+// says in the status line that the room has none. /close returns.
+func (m *uiModel) showCharter(c charterIn) {
+	if c.charter == "" {
+		m.setStatus(c.channel+" has no charter", false)
+		return
+	}
+	name := "charter:" + c.channel
+	b := m.find(name)
+	if b == nil {
+		b = newBuffer(name, bufHelp)
+		b.returnTo = m.current
+		m.buffers = append(m.buffers, b)
+	}
+	b.help = []helpLine{{head: "Charter of " + c.channel}}
+	for line := range strings.SplitSeq(c.charter, "\n") {
+		b.help = append(b.help, helpLine{body: line})
+	}
+	b.topic = "Charter of " + c.channel + " · /close returns to " + b.returnTo
+	b.version++
+	m.switchTo(name)
 }
 
 func (m *uiModel) showQuery(q queryIn) {

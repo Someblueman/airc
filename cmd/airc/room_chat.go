@@ -7,14 +7,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func runChatCommandSession(ctx context.Context, session *agentConnection, kind string, args []string, stdout, stderr io.Writer) error {
+func runChatCommandSession(ctx context.Context, session *agentConnection, kind string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	positional := []string{}
 	for len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		positional = append(positional, args[0])
@@ -33,6 +35,7 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	wait := fs.Duration("wait", 0, "wait for a textual answer to this question, at most 5m")
 	slow := fs.Duration("slow", -time.Second, "admin: room posting delay, 0 disables")
 	retention := fs.Int("retention", -1, "admin: room history quota, 0 disables")
+	charter := fs.String("charter", "", fmt.Sprintf("room: set the charter, the room's longer rules, from FILE or - for stdin (up to %d bytes); '' clears it", protocol.MaxCharterBytes))
 	asOperator := fs.Bool("as-operator", false, "room: use your account operator grant instead of the admin credential")
 	tokenFile := fs.String("token-file", "", "admin credential for room configuration")
 	var choices pollChoices
@@ -49,12 +52,18 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	if kind == "room" && (*slow < 0 && *slow != -time.Second || *slow%time.Second != 0) {
 		return errors.New("--slow must be whole seconds (0-3600s), or -1s to read")
 	}
-	durationSet := false
+	durationSet, charterSet := false, false
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "for" {
+		switch f.Name {
+		case "for":
 			durationSet = true
+		case "charter":
+			charterSet = true
 		}
 	})
+	if charterSet && kind != "room" {
+		return errors.New("--charter is for room configuration")
+	}
 	positional = append(positional, fs.Args()...)
 	r := irc.ChatRequest{Action: kind, Text: *text, Target: channelName(*channel), Seconds: int64((*duration + time.Second - 1) / time.Second)}
 	switch kind {
@@ -106,9 +115,16 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 			r.Seconds = 10
 		}
 	}
-	changingRoom := kind == "room" && (*slow >= 0 || *retention >= 0)
+	changingRoom := kind == "room" && (*slow >= 0 || *retention >= 0 || charterSet)
 	if kind == "room" {
 		r.Seconds, r.Limit = int64(*slow/time.Second), *retention
+		if charterSet {
+			text, err := charterText(*charter, stdin)
+			if err != nil {
+				return err
+			}
+			r.Charter = &text
+		}
 	}
 	if *wait < 0 || *wait > 5*time.Minute || *wait > 0 && kind != "waiting" {
 		return errors.New("--wait applies to waiting and must be 0-5m")
@@ -142,6 +158,10 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 		}
 		entries, err := irc.RequestChat(ctx, client, r, nil)
 		if err != nil {
+			if r.Charter != nil && strings.Contains(err.Error(), "CHAT needs one bounded JSON request") {
+				// An older daemon's strict decode refuses the field it does not know.
+				return errors.New("this aircd predates room charters; restart it from a current build")
+			}
 			return err
 		}
 		for _, e := range entries {
@@ -155,6 +175,73 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 			}
 		}
 		return nil
+	})
+}
+
+// charterText reads the charter --charter names: a file, - for stdin, or ""
+// to clear.
+func charterText(source string, stdin io.Reader) (string, error) {
+	if source == "" {
+		return "", nil
+	}
+	var data []byte
+	var err error
+	if source == "-" {
+		data, err = io.ReadAll(io.LimitReader(stdin, protocol.MaxCharterBytes+1))
+	} else {
+		data, err = os.ReadFile(source)
+	}
+	if err != nil {
+		return "", fmt.Errorf("read charter: %w", err)
+	}
+	text := strings.TrimSpace(irc.NormalizeMessage(string(data)))
+	if text == "" {
+		return "", errors.New("the charter file is empty; pass --charter '' to clear the charter")
+	}
+	if !protocol.ValidCharter(text) {
+		return "", fmt.Errorf("a charter is UTF-8 text of at most %d bytes", protocol.MaxCharterBytes)
+	}
+	return text, nil
+}
+
+// runCharterSession prints a room's charter: its longer rules, which check
+// shows once and again when they change.
+func runCharterSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return errors.New("usage: airc charter #room [--json]")
+	}
+	room := channelName(args[0])
+	fs := flag.NewFlagSet("airc charter", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	opt := addOptions(fs)
+	opt.session = session
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || !protocol.IsChannel(room) {
+		return errors.New("usage: airc charter #room [--json]")
+	}
+	if err := queryIdentity(opt); err != nil {
+		return err
+	}
+	return chatRequestWithContext(ctx, *opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+		entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}, nil)
+		if err != nil {
+			return err
+		}
+		text := ""
+		for _, e := range entries {
+			text = e.Charter
+		}
+		if opt.json {
+			return json.NewEncoder(stdout).Encode(checkTopic{Type: "charter", Target: room, Charter: text})
+		}
+		if text == "" {
+			_, err = fmt.Fprintf(stdout, "%s has no charter\n", room)
+			return err
+		}
+		_, err = fmt.Fprintln(stdout, text)
+		return err
 	})
 }
 
@@ -178,6 +265,9 @@ func chatEntryText(e irc.ChatEntry) string {
 	}
 	if e.Action == "room" {
 		fmt.Fprintf(&text, "; slow=%ds retention=%d", e.SlowSeconds, e.HistoryLimit)
+		if e.Charter != "" {
+			text.WriteString("\ncharter:\n  " + indentContinuation(e.Charter))
+		}
 	}
 	for i, option := range e.Options {
 		count := 0

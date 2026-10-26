@@ -48,7 +48,7 @@ func readCheck(ctx context.Context, opt options, settings *checkOptions) (checkR
 			var message checkMessage
 			err = json.Unmarshal(lines.Bytes(), &message)
 			rows.messages = append(rows.messages, message)
-		case "topic", "pin":
+		case "topic", "charter", "pin":
 			var header checkTopic
 			err = json.Unmarshal(lines.Bytes(), &header)
 			rows.headers = append(rows.headers, header)

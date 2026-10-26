@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 28 {
+	if len(tools.Tools) != 29 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {

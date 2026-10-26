@@ -54,7 +54,7 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 		}
 	}
 	accept := func(e *entry) bool {
-		return (from == "*" || strings.EqualFold(e.From, from)) && options.inTime(e.Timestamp) && body(e.Body)
+		return (from == "*" || strings.EqualFold(e.From, from)) && options.inTime(e.Timestamp) && options.matchesRun(e) && body(e.Body)
 	}
 	var messages []Message
 	var status, next string

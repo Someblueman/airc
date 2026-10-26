@@ -194,15 +194,26 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 	if after == "-" {
 		after = ""
 	}
+	// The fourth parameter is the options of RUN daemons: "*", or run=ID.
+	rawOptions, _ := command.Param(3)
+	options, err := parseHistoryOptions(rawOptions)
+	if err != nil {
+		s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY options: "+err.Error())
+		return
+	}
+	var accept func(*entry) bool
+	if options.run != "" {
+		accept = options.matchesRun
+	}
 	var messages []Message
 	status, next := historyOK, ""
 	if after == "" {
-		messages = s.history.recent(selected, limit)
+		messages = s.history.recentWhere(selected, limit, accept)
 	} else {
 		var found bool
-		messages, status, next, found = s.readAfterLocked(selected, after, limit, nil)
+		messages, status, next, found = s.readAfterLocked(selected, after, limit, accept)
 		if !found {
-			messages, status = s.history.recent(selected, limit), historyExpired
+			messages, status = s.history.recentWhere(selected, limit, accept), historyExpired
 		}
 	}
 	for _, message := range messages {

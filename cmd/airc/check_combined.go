@@ -78,6 +78,10 @@ func (c *checker) fetchCombined(ctx context.Context, store *cursorStore, rooms [
 			if e.Topic != store.Topics[e.Target] {
 				headers = append(headers, checkTopic{Type: "topic", Target: e.Target, Topic: e.Topic})
 			}
+		case "charter":
+			if header, changed := charterHeader(e.Target, e.Charter, store); changed {
+				headers = append(headers, header)
+			}
 		case "pin":
 			if e.Message != nil {
 				pins[e.Target] = append(pins[e.Target], irc.ChatEntry{ID: e.Message.ID, From: e.Message.From, Message: e.Message})
