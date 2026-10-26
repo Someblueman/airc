@@ -1,6 +1,9 @@
-# Fast tier: runs on every pull request and every push to main. The gateway packages
-# (internal/gateway, integration/, cmd/airc-gateway) dominate the ~25 minute
-# full suite, so they are left to nightly.yml; everything else runs here.
+# Fast tier: runs on every pull request and every push to main. The gateway
+# module (gateway/) dominates the ~25 minute full suite, so its tests are
+# left to nightly.yml; it is still built, vetted and staticchecked here, in
+# workspace mode from the root (`./...` names only the root module's
+# packages, so the gateway is named too). The product's tests run with the
+# workspace off, as a consumer of the root module builds it.
 name: CI
 
 on:
@@ -26,6 +29,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            gateway/go.sum
 
       - name: gofmt
         run: |
@@ -36,19 +42,19 @@ jobs:
             exit 1
           fi
 
-      - name: go vet
-        run: go vet ./...
+      - name: go vet (both modules)
+        run: go vet ./... ./gateway/...
 
-      - name: staticcheck
-        run: go tool staticcheck ./...
+      - name: staticcheck (both modules)
+        run: go tool staticcheck ./... ./gateway/...
 
-      - name: go build
-        run: go build ./...
+      - name: go build (both modules)
+        run: go build ./... ./gateway/...
 
-      - name: unit tests (non-gateway packages)
-        run: |
-          pkgs=$(go list ./... | grep -v -e '/internal/gateway' -e '/integration/' -e '/cmd/airc-gateway')
-          go test -count=1 -timeout 15m $pkgs
+      # cmd/airc's fallback tests build airc-gateway from gateway/ and run it
+      # as a child process; the product links none of the gateway's packages.
+      - name: unit tests (product, workspace off)
+        run: GOWORK=off go test -count=1 -timeout 15m ./...
 
       - name: fuzz smoke (protocol parser, 20s)
         run: go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/

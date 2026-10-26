@@ -62,5 +62,8 @@ func TestMain(m *testing.M) {
 	if nativeCLI.root != "" {
 		_ = os.RemoveAll(nativeCLI.root)
 	}
+	if gatewayFixture.root != "" {
+		_ = os.RemoveAll(gatewayFixture.root)
+	}
 	os.Exit(code)
 }

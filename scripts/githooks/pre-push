@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runs the repository's fast checks before anything leaves this machine: gofmt
-# over every file, go vet, staticcheck, and the skill/CLI consistency test. The
-# full test suite takes about 25 minutes, so it is not run here; CI runs the
-# fast tier on every push and the full suite nightly (see CLAUDE.md).
+# over every file, go vet and staticcheck over both modules (the root and
+# gateway/, in workspace mode), and the skill/CLI consistency test. The full
+# test suite takes about 25 minutes, so it is not run here; CI runs the fast
+# tier on every push and the full suite nightly (see CLAUDE.md).
 # AIRC_HOOKS_FAST=1 skips staticcheck; `git push --no-verify` skips the hook.
 set -euo pipefail
 cd -- "$(git rev-parse --show-toplevel)"
@@ -18,12 +19,12 @@ if [[ -n "$unformatted" ]]; then
 	exit 1
 fi
 
-step 'go vet ./...'
-go vet ./...
+step 'go vet ./... ./gateway/...'
+go vet ./... ./gateway/...
 
 if [[ "${AIRC_HOOKS_FAST:-}" != 1 ]]; then
-	step 'staticcheck (AIRC_HOOKS_FAST=1 skips this)'
-	go tool staticcheck ./...
+	step 'staticcheck, both modules (AIRC_HOOKS_FAST=1 skips this)'
+	go tool staticcheck ./... ./gateway/...
 fi
 
 step 'skill and CLI agree (cmd/airc TestSkill)'

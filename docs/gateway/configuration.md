@@ -34,7 +34,7 @@ operations and each listener's status (`disabled`, `disabled_unavailable`
 on a platform the carrier does not run on, `enabled_<protocol>_partial` with
 the operations its authors may request; an unknown protocol is
 `disabled_unimplemented`) without secrets.
-Neither creates state or contacts anything. `examples/gateway/` has minimal
+Neither creates state or contacts anything. `gateway/examples/` has minimal
 files.
 
 ## Top level

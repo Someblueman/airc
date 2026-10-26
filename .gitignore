@@ -2,8 +2,10 @@
 /aircd
 /airc
 /airc-load
+/airc-gateway
+/gateway/airc-gateway
 *.test
 *.prof
 *.out
 .DS_Store
-/.tmp/grpc-tools/
+/gateway/.tmp/grpc-tools/

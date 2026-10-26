@@ -110,12 +110,18 @@ if (( ${#targets[@]} == 0 )); then
 	targets=("$host")
 fi
 
+# airc-gateway is its own Go module, gateway/, built from there (an older
+# checkout holds it in the root module's cmd/, which -C still measures).
 bins=()
 packages=()
+gateway_packages=()
 for bin in airc aircd airc-gateway airc-load; do
 	if [[ -d "$source_dir/cmd/$bin" ]]; then
 		bins+=("$bin")
 		packages+=("./cmd/$bin")
+	elif [[ -d "$source_dir/gateway/cmd/$bin" ]]; then
+		bins+=("$bin")
+		gateway_packages+=("./cmd/$bin")
 	fi
 done
 
@@ -141,6 +147,9 @@ for target in "${targets[@]}"; do
 		out="$work/$goos-$goarch-$variant"
 		mkdir -p -- "$out"
 		(cd -- "$source_dir" && GOOS=$goos GOARCH=$goarch go build ${flags[@]+"${flags[@]}"} -o "$out/" "${packages[@]}")
+		if (( ${#gateway_packages[@]} > 0 )); then
+			(cd -- "$source_dir/gateway" && GOOS=$goos GOARCH=$goarch go build ${flags[@]+"${flags[@]}"} -o "$out/" "${gateway_packages[@]}")
+		fi
 		for bin in "${bins[@]}"; do
 			bytes=$(wc -c < "$out/$bin")
 			gz=$(gzip -9 -n -c -- "$out/$bin" | wc -c)

@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -31,20 +29,18 @@ func newTunnelFixture(t *testing.T) *tunnelFixture {
 	f := &tunnelFixture{ports: map[string]int{}}
 	native := closedTCPPort(t)
 	carriers := []protocol.Carrier{{Name: "irc", Port: native}}
-	var listeners []gwconfig.Listener
+	var listeners []gatewayListener
 	for _, name := range []string{"irc_websocket", "irc_connect"} {
 		f.ports[name] = closedTCPPort(t)
 		carriers = append(carriers, protocol.Carrier{Name: name, Port: f.ports[name]})
-		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(f.ports[name]), Enabled: true})
+		listeners = append(listeners, gatewayListener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(f.ports[name]), Enabled: true})
 	}
 	dir := t.TempDir()
 	accounts, tokenFile := filepath.Join(dir, "accounts"), filepath.Join(dir, "gateway.token")
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := auth.CreateCredential(tokenFile); err != nil {
-		t.Fatal(err)
-	}
+	createGatewayCredential(t, tokenFile)
 	token, err := os.ReadFile(tokenFile)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +52,7 @@ func newTunnelFixture(t *testing.T) *tunnelFixture {
 		return s.RestoreAccounts(accounts)
 	})
 	f.proxy = startNativeProxy(t, "127.0.0.1:"+strconv.Itoa(native), f.daemon)
-	startGatewayUpstream(t, gwconfig.Upstream{Network: "tcp", Address: f.daemon, GatewayTokenFile: tokenFile}, listeners, carriers)
+	startGatewayUpstream(t, gatewayUpstream{Network: "tcp", Address: f.daemon, GatewayTokenFile: tokenFile}, listeners, carriers)
 	return f
 }
 
