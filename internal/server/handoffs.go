@@ -73,6 +73,15 @@ func validHandoff(h handoff) error {
 	return nil
 }
 
+// handoffState is the open and recent handoffs and their append-only log.
+// Every field is read and written with s.mu held; appends and compactions
+// run under s.mu (and messageMu, since every step is a post) with env.sync.
+type handoffState struct {
+	handoffs   map[string]handoff  // by offer ID
+	handoffLog *appendLog[handoff] // nil keeps handoffs in memory only
+	env        *storeEnv
+}
+
 // RestoreHandoffs loads the handoff log at path, keeping every open and
 // accepted handoff and finished ones for a week, compacts it and appends
 // to it from then on. A torn last line, from a crash mid-write, is dropped.
@@ -82,6 +91,10 @@ func (s *Server) RestoreHandoffs(path string) error {
 	if s.listener != nil || s.handoffLog != nil {
 		return errors.New("configure handoffs once before Serve")
 	}
+	return s.handoffState.load(path)
+}
+
+func (st *handoffState) load(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
@@ -92,9 +105,19 @@ func (s *Server) RestoreHandoffs(path string) error {
 	if liveRecords(loaded) > maxLiveHandoffs {
 		return fmt.Errorf("handoffs %s: more than %d open", path, maxLiveHandoffs)
 	}
-	s.handoffs = loaded
-	s.handoffLog = &appendLog[handoff]{path: path}
-	return s.compactHandoffsLocked()
+	st.handoffs = loaded
+	st.handoffLog = &appendLog[handoff]{path: path}
+	return st.compactHandoffsLocked()
+}
+
+// close closes the log; every save completes under s.mu.
+func (st *handoffState) close() error {
+	if st.handoffLog == nil {
+		return nil
+	}
+	err := st.handoffLog.close()
+	st.handoffLog = nil
+	return err
 }
 
 func readHandoffs(path string) (map[string]handoff, error) {
@@ -103,14 +126,14 @@ func readHandoffs(path string) (map[string]handoff, error) {
 
 // compactHandoffsLocked drops handoffs finished more than a week ago and
 // rewrites the log with one line per handoff, then appends to the new file.
-func (s *Server) compactHandoffsLocked() error {
-	return compactLedger(s.handoffLog, s.handoffs, handoffKeep, s.now(), s.cfg.Sync)
+func (st *handoffState) compactHandoffsLocked() error {
+	return compactLedger(st.handoffLog, st.handoffs, handoffKeep, st.env.now(), st.env.sync)
 }
 
 // saveHandoffLocked records h's new state before it takes effect, and
 // compacts the log once superseded lines outnumber the handoffs held.
-func (s *Server) saveHandoffLocked(h handoff) error {
-	return recordLedger(s.handoffLog, s.handoffs, h, s.cfg.Sync, s.compactHandoffsLocked, s.logger, "handoff_compaction_failed")
+func (st *handoffState) saveHandoffLocked(h handoff) error {
+	return recordLedger(st.handoffLog, st.handoffs, h, st.env.sync, st.compactHandoffsLocked, st.env.logger, "handoff_compaction_failed")
 }
 
 func handoffEntry(h handoff) protocol.ChatEntry {

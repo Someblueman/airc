@@ -60,7 +60,7 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	s := &Server{
-		handoffs: map[string]handoff{}, decisions: map[string]decision{},
+		handoffState: handoffState{handoffs: map[string]handoff{}}, decisionState: decisionState{decisions: map[string]decision{}},
 		chatStore: chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
 		cfg:       cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
 		accountsState: accountsState{registrations: make(map[string][]time.Time)},
@@ -75,6 +75,8 @@ func New(cfg Config) *Server {
 	s.directoryState.env = &s.env
 	s.topicState.env = &s.env
 	s.chatStore.env = &s.env
+	s.handoffState.env = &s.env
+	s.decisionState.env = &s.env
 	return s
 }
 
@@ -227,15 +229,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.histFile = nil
 	}
 	for _, p := range s.storesLocked() {
-		_ = p.close()
-	}
-	if s.handoffLog != nil {
-		_ = s.handoffLog.file.Close() // every save completes under mu
-		s.handoffLog = nil
-	}
-	if s.decisionLog != nil {
-		_ = s.decisionLog.file.Close()
-		s.decisionLog = nil
+		_ = p.close() // every save completes under mu
 	}
 	if s.histStop != nil {
 		close(s.histStop) // the janitor stops between segments

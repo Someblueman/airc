@@ -113,10 +113,8 @@ type Server struct {
 	pending          map[string]int         // unregistered connections by remote address
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chatStore                               // pins, rooms, polls, operators, slow mode and signals; see chat_state.go
-	handoffs         map[string]handoff     // by offer ID; see handoffs.go
-	handoffLog       *appendLog[handoff]    // nil keeps handoffs in memory only
-	decisions        map[string]decision    // by offer ID; see decisions.go
-	decisionLog      *appendLog[decision]   // nil keeps decisions in memory only
+	handoffState                            // handoffs and their log; see handoffs.go
+	decisionState                           // decisions and their log; see decisions.go
 	seq              uint64
 	histFile         *os.File
 	histPath         string

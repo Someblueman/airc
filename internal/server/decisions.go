@@ -96,6 +96,16 @@ func decisionOptions(options []string) ([]string, error) {
 	return out, nil
 }
 
+// decisionState is the open and recent decisions and their append-only
+// log. Every field is read and written with s.mu held; appends and
+// compactions run under s.mu (and messageMu, since every step is a post)
+// with env.sync.
+type decisionState struct {
+	decisions   map[string]decision  // by offer ID
+	decisionLog *appendLog[decision] // nil keeps decisions in memory only
+	env         *storeEnv
+}
+
 // RestoreDecisions loads the decision log at path, keeping every open
 // decision and finished ones for a week, compacts it and appends to it from
 // then on. A torn last line, from a crash mid-write, is dropped.
@@ -105,6 +115,10 @@ func (s *Server) RestoreDecisions(path string) error {
 	if s.listener != nil || s.decisionLog != nil {
 		return errors.New("configure decisions once before Serve")
 	}
+	return s.decisionState.load(path)
+}
+
+func (st *decisionState) load(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
@@ -115,9 +129,19 @@ func (s *Server) RestoreDecisions(path string) error {
 	if liveRecords(loaded) > maxLiveDecisions {
 		return fmt.Errorf("decisions %s: more than %d open", path, maxLiveDecisions)
 	}
-	s.decisions = loaded
-	s.decisionLog = &appendLog[decision]{path: path}
-	return s.compactDecisionsLocked()
+	st.decisions = loaded
+	st.decisionLog = &appendLog[decision]{path: path}
+	return st.compactDecisionsLocked()
+}
+
+// close closes the log; every save completes under s.mu.
+func (st *decisionState) close() error {
+	if st.decisionLog == nil {
+		return nil
+	}
+	err := st.decisionLog.close()
+	st.decisionLog = nil
+	return err
 }
 
 func readDecisions(path string) (map[string]decision, error) {
@@ -126,14 +150,14 @@ func readDecisions(path string) (map[string]decision, error) {
 
 // compactDecisionsLocked drops decisions finished more than a week ago and
 // rewrites the log with one line per decision, then appends to the new file.
-func (s *Server) compactDecisionsLocked() error {
-	return compactLedger(s.decisionLog, s.decisions, decisionKeep, s.now(), s.cfg.Sync)
+func (st *decisionState) compactDecisionsLocked() error {
+	return compactLedger(st.decisionLog, st.decisions, decisionKeep, st.env.now(), st.env.sync)
 }
 
 // saveDecisionLocked records d's new state before it takes effect, and
 // compacts the log once superseded lines outnumber the decisions held.
-func (s *Server) saveDecisionLocked(d decision) error {
-	return recordLedger(s.decisionLog, s.decisions, d, s.cfg.Sync, s.compactDecisionsLocked, s.logger, "decision_compaction_failed")
+func (st *decisionState) saveDecisionLocked(d decision) error {
+	return recordLedger(st.decisionLog, st.decisions, d, st.env.sync, st.compactDecisionsLocked, st.env.logger, "decision_compaction_failed")
 }
 
 // decisionEntryLocked is d as a CHAT entry: the offer, the answer once there
