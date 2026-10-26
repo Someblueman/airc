@@ -119,6 +119,9 @@ func (h *http3Conn) call(ctx context.Context, r request) (detached, error) {
 	}
 	q := h.q
 	h.mu.Unlock()
+	if err := awaitHandshake(ctx, q.conn); err != nil {
+		return detached{}, err
+	}
 	d, err := h.httpConn.call(ctx, r)
 	if !errors.Is(err, quic.Err0RTTRejected) {
 		return d, err
@@ -158,15 +161,39 @@ func (h *http3Conn) Close() error {
 // tried alongside it.
 const http3Stagger = 300 * time.Millisecond
 
+// lookupNetIP resolves a host's addresses; tests replace it.
+var lookupNetIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
+	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+}
+
+// awaitHandshake waits for conn's handshake to complete, or for conn to end
+// first, with its error. The HTTP/3 client waits for the handshake too before
+// it sends a request, but watches only the request's context, so a request
+// with no deadline on a connection whose handshake never completes (its
+// address does not answer) would wait for ever.
+func awaitHandshake(ctx context.Context, conn *quic.Conn) error {
+	select {
+	case <-conn.HandshakeComplete():
+		return nil
+	case <-conn.Context().Done():
+		return context.Cause(conn.Context())
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // dial races a QUIC connection to each of the host's addresses, a stagger
-// apart, and keeps the first to complete its handshake. A failure is a
-// net.OpError: nothing was sent to the gateway.
+// apart, and keeps the first to complete its handshake. A resumed session's
+// dial returns before the handshake (0-RTT), so with several addresses a
+// candidate waits for its handshake before it can win: otherwise an address
+// that never answers would win at once. A failure is a net.OpError: nothing
+// was sent to the gateway.
 func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error) {
 	host := h.c.host(h.e)
 	var addrs []netip.Addr
 	if ip, err := netip.ParseAddr(host); err == nil {
 		addrs = []netip.Addr{ip}
-	} else if addrs, err = net.DefaultResolver.LookupNetIP(ctx, "ip", host); err != nil {
+	} else if addrs, err = lookupNetIP(ctx, host); err != nil {
 		return nil, &net.OpError{Op: "dial", Net: "udp", Err: err}
 	}
 	ctx, cancel := context.WithCancel(ctx)
@@ -185,6 +212,12 @@ func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error
 				return
 			}
 			q, err := h.dialAddr(ctx, netip.AddrPortFrom(addr.Unmap(), uint16(h.e.Port)), progress)
+			if err == nil && len(addrs) > 1 {
+				if err = awaitHandshake(ctx, q.conn); err != nil {
+					q.close()
+					q = nil
+				}
+			}
 			results <- result{q, err}
 		}()
 	}
