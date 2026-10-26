@@ -9,25 +9,26 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func waitHTTPRoomResult(t *testing.T, f *reactionTransportFixture, id string, state core.State) core.Result {
 	t.Helper()
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, data := headerRead(t, f, "/v1/requests/"+id)
-		var result core.Result
-		if status == http.StatusOK && json.Unmarshal(data, &result) == nil && result.State == state {
-			if state == core.Accepted && (result.Room == nil || result.Accepted == nil || !*result.Accepted || result.SendAttempts != 1 || result.LookupAttempts != 0 || result.MessageID != "" || result.Persisted != nil || result.RecipientConnected != nil || result.Card != nil || result.Topic != nil) {
-				t.Fatalf("room acknowledgement facts: %+v", result)
-			}
-			return result
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("room %s wanted %s: status=%d body=%s", id, state, status, data)
-		}
-		time.Sleep(20 * time.Millisecond)
+	var status int
+	var data []byte
+	var result core.Result
+	if !testwait.Poll(5*time.Second, 20*time.Millisecond, func() bool {
+		status, data = headerRead(t, f, "/v1/requests/"+id)
+		result = core.Result{}
+		return status == http.StatusOK && json.Unmarshal(data, &result) == nil && result.State == state
+	}) {
+		t.Fatalf("room %s wanted %s: status=%d body=%s", id, state, status, data)
 	}
+	if state == core.Accepted && (result.Room == nil || result.Accepted == nil || !*result.Accepted || result.SendAttempts != 1 || result.LookupAttempts != 0 || result.MessageID != "" || result.Persisted != nil || result.RecipientConnected != nil || result.Card != nil || result.Topic != nil) {
+		t.Fatalf("room acknowledgement facts: %+v", result)
+	}
+	return result
 }
 
 // TestRoomUpdateHTTPPartialAndNativeDenials maps room.update to the native

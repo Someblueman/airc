@@ -331,8 +331,13 @@ var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 	t.Run("registration_holds_no_lease", func(t *testing.T) {
 		// Registering takes no native lease until the observation starts.
 		baseline := nativeObserverCount(t, e.statusClient)
-		e.dial(t).(*coapSuiteClient).register(t, watchBody(t, e.id("registered"), "#wire", e.guest("reg")))
-		time.Sleep(100 * time.Millisecond)
+		client := e.dial(t).(*coapSuiteClient)
+		client.register(t, watchBody(t, e.id("registered"), "#wire", e.guest("reg")))
+		// The registration's reply is sent once its handler has returned,
+		// and another round trip on the same association follows it.
+		if r := client.call(t, capabilitiesBody(t, e)); r.result == nil {
+			t.Fatalf("capabilities after registration: %+v", r)
+		}
 		if got := nativeObserverCount(t, e.statusClient); got != baseline {
 			t.Fatalf("registration took a native lease: %d, baseline %d", got, baseline)
 		}

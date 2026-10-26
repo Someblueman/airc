@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 // syncBuffer is a writer the test can read while the watcher is still writing.
@@ -34,7 +35,7 @@ func (b *syncBuffer) String() string {
 
 func waitForOutput(t *testing.T, out *syncBuffer, want string) {
 	t.Helper()
-	eventuallyEvery(t, 8*time.Second, 20*time.Millisecond, fmt.Sprintf("%q in watcher output", want), func() bool { return strings.Contains(out.String(), want) })
+	testwait.Every(t, 8*time.Second, 20*time.Millisecond, fmt.Sprintf("%q in watcher output", want), func() bool { return strings.Contains(out.String(), want) })
 }
 
 // startWatch runs the watcher until the test ends.

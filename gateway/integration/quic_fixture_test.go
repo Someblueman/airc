@@ -18,6 +18,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/quic-go/quic-go"
 )
@@ -143,12 +144,11 @@ func rawQUICRequest(t *testing.T, f rawQUICFixture, request core.Request, encryp
 
 func waitNativeLeaseGone(t *testing.T, statusClient *irc.Client, baseline int) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, statusClient) <= baseline {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
+	current := 0
+	if !testwait.Poll(2*time.Second, 50*time.Millisecond, func() bool {
+		current = nativeObserverCount(t, statusClient)
+		return current <= baseline
+	}) {
+		t.Fatalf("gateway watch lease remained: baseline=%d current=%d", baseline, current)
 	}
-	t.Fatalf("gateway watch lease remained: baseline=%d current=%d", baseline, nativeObserverCount(t, statusClient))
 }

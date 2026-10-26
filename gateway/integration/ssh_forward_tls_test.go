@@ -24,6 +24,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward(t *testing.T) {
@@ -324,8 +325,7 @@ func reserveLoopbackPort(t *testing.T) int {
 
 func waitTCP(t *testing.T, address string, stopped <-chan struct{}) {
 	t.Helper()
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
+	testwait.Every(t, 4*time.Second, 20*time.Millisecond, "the SSH listener to become ready at "+address, func() bool {
 		select {
 		case <-stopped:
 			t.Fatal("SSH process exited before becoming ready")
@@ -334,36 +334,36 @@ func waitTCP(t *testing.T, address string, stopped <-chan struct{}) {
 		conn, err := net.DialTimeout("tcp", address, 100*time.Millisecond)
 		if err == nil {
 			_ = conn.Close()
-			return
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("SSH listener failed to become ready at %s", address)
+		return err == nil
+	})
 }
 
 func connectForwardedTLS(t *testing.T, forward *sshForwardProcess, cert testtls.Certificate) *tls.Conn {
 	t.Helper()
-	deadline := time.Now().Add(4 * time.Second)
 	var lastErr error
-	for time.Now().Before(deadline) {
+	var tlsConn *tls.Conn
+	if !testwait.Poll(4*time.Second, 20*time.Millisecond, func() bool {
 		conn, err := net.DialTimeout("tcp", forward.localAddress, 150*time.Millisecond)
-		if err == nil {
-			client := cert.Client.Clone()
-			client.NextProtos = []string{adapter.FramedALPN}
-			client.ServerName = "127.0.0.1"
-			tlsConn := tls.Client(conn, client)
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			err = tlsConn.HandshakeContext(ctx)
-			cancel()
-			if err == nil {
-				return tlsConn
-			}
+		if err != nil {
+			lastErr = err
+			return false
+		}
+		client := cert.Client.Clone()
+		client.NextProtos = []string{adapter.FramedALPN}
+		client.ServerName = "127.0.0.1"
+		tlsConn = tls.Client(conn, client)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		err = tlsConn.HandshakeContext(ctx)
+		cancel()
+		if err != nil {
 			lastErr = err
 			_ = conn.Close()
-		} else {
-			lastErr = err
+			return false
 		}
-		time.Sleep(20 * time.Millisecond)
+		return true
+	}) {
+		return tlsConn
 	}
 	log, _ := os.ReadFile(forward.logPath)
 	t.Fatalf("authenticated SSH forward did not reach the framed TLS listener; TLS err=%v log=%s", lastErr, log)

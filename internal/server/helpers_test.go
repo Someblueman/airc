@@ -82,19 +82,6 @@ func collaborationServer(t *testing.T, dir string) (string, *Server) {
 	})
 }
 
-// eventually polls condition until it holds, failing the test with what if it
-// does not within five seconds. The deadline only bounds failure.
-func eventually(t *testing.T, what string, condition func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatal(what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
 func rawConn(t *testing.T, address string) (net.Conn, *bufio.Reader) {
 	t.Helper()
 	conn, err := net.Dial("tcp", address)

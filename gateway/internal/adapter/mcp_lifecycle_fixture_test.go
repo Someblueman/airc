@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -59,18 +60,14 @@ func (f mcpLifecycleFixture) connect(t *testing.T, ctx context.Context, index in
 
 func waitMCPOwnership(t *testing.T, owner *MCPHTTP, count int) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	var current, servers int
+	if !testwait.Poll(2*time.Second, 10*time.Millisecond, func() bool {
 		owner.mu.Lock()
-		current := owner.global
+		current = owner.global
 		owner.mu.Unlock()
-		servers := owner.handler.Sessions()
-		if current == count && servers == count {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("MCP ownership=%d servers=%d want=%d", current, servers, count)
-		}
-		time.Sleep(10 * time.Millisecond)
+		servers = owner.handler.Sessions()
+		return current == count && servers == count
+	}) {
+		t.Fatalf("MCP ownership=%d servers=%d want=%d", current, servers, count)
 	}
 }

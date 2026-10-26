@@ -300,13 +300,9 @@ func TestHTTPProgressCancellationAndIdleTimeout(t *testing.T) {
 	if !strings.Contains(body, `"notifications/progress"`) || strings.Contains(body, `"id":9`) {
 		t.Fatalf("cancelled call stream %q", body)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for h.Sessions() != 0 || closed.Load() != 1 {
-		if time.Now().After(deadline) {
-			t.Fatal("idle session not closed", h.Sessions(), closed.Load())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	testwait.Every(t, 2*time.Second, 10*time.Millisecond, "the idle session to close", func() bool {
+		return h.Sessions() == 0 && closed.Load() == 1
+	})
 }
 
 func TestHTTPLoopbackRejectsForeignHost(t *testing.T) {

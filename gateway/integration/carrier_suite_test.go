@@ -47,6 +47,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/gateway/internal/store"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -413,22 +414,24 @@ func observe(client *irc.Client) *suiteObserver {
 // wait returns the first observed message with text.
 func (o *suiteObserver) wait(t *testing.T, text string) *irc.MessageEvent {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	var found *irc.MessageEvent
+	if !testwait.Poll(10*time.Second, 20*time.Millisecond, func() bool {
 		o.mu.Lock()
+		defer o.mu.Unlock()
 		for _, m := range o.messages {
 			if m.Message == text {
-				o.mu.Unlock()
-				return m
+				found = m
+				return true
 			}
 		}
-		disconnected := o.disconnected
-		o.mu.Unlock()
-		if disconnected {
+		if o.disconnected {
 			t.Fatalf("the IRC observer disconnected before AIRC posted %q", text)
 		}
+		return false
+	}) {
+		t.Fatalf("AIRC never posted %q", text)
 	}
-	t.Fatalf("AIRC never posted %q", text)
-	return nil
+	return found
 }
 
 // A guest names only a nickname: AIRC posts as that guest. The body is

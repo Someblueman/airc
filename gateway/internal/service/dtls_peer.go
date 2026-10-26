@@ -5,15 +5,19 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const dtlsPeerQueueSize = 32
 
 type dtlsPeer struct {
-	listener      *dtlsPacketListener
-	remote        *net.UDPAddr
-	packets       chan []byte
+	listener *dtlsPacketListener
+	remote   *net.UDPAddr
+	packets  chan []byte
+	// dropped counts the packets the listener discarded because packets
+	// was full: the newest lose out to a peer that stops reading.
+	dropped       atomic.Uint64
 	closed        chan struct{}
 	closeOnce     sync.Once
 	releaseOnce   sync.Once

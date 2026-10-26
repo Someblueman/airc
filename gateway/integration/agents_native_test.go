@@ -4,11 +4,14 @@ package gateway_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -79,20 +82,12 @@ func requireNativeAgent(t *testing.T, socket, nick string, present bool) {
 
 func waitNativeAgentAbsent(t *testing.T, socket, nick string) []irc.AgentInfo {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		agents := nativeAgents(t, socket)
-		found := false
-		for _, agent := range agents {
-			found = found || agent.Nick == nick
-		}
-		if !found {
-			return agents
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
-	t.Fatalf("native AGENTS still contained %q", nick)
-	return nil
+	var agents []irc.AgentInfo
+	testwait.Every(t, 2*time.Second, 30*time.Millisecond, fmt.Sprintf("native AGENTS to drop %q", nick), func() bool {
+		agents = nativeAgents(t, socket)
+		return !slices.ContainsFunc(agents, func(agent irc.AgentInfo) bool { return agent.Nick == nick })
+	})
+	return agents
 }
 
 func jsonEqual(left, right any) bool {

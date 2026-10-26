@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func appendLogCall(t *testing.T, f *appendLogFixture, r core.Request, encrypted bool) adapter.FrameResponse {
@@ -64,22 +65,18 @@ func appendLogResult(t *testing.T, f *appendLogFixture, name string) adapter.Fra
 	var data []byte
 	var err error
 	output := filepath.Join(f.directory, "response.json")
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		data, err = os.ReadFile(output)
-		if err == nil {
-			break
-		}
-		if !os.IsNotExist(err) || !time.Now().Before(deadline) {
-			t.Fatal("missing append-log result", err)
-		}
+	testwait.Every(t, 5*time.Second, 10*time.Millisecond, "the append-log result", func() bool {
 		select {
 		case <-f.process.done:
 			t.Fatal("append-log service stopped", f.process.err, f.process.stderr.String())
 		default:
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
+		data, err = os.ReadFile(output)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal("missing append-log result", err)
+		}
+		return err == nil
+	})
 	var response adapter.FrameResponse
 	if err := json.Unmarshal(data, &response); err != nil || response.Version != 1 {
 		t.Fatal("append-log RPC failure", err, response)

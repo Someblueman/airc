@@ -12,6 +12,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/auth"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/quic-go/quic-go"
 )
 
@@ -47,21 +48,12 @@ func TestHTTP3HandshakeAdmissionSharesAndReleasesServiceSlots(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancelBase()
-	deadline := time.After(time.Second)
-	for {
-		select {
-		case <-deadline:
-			t.Fatal("handshake slot was not released when base context closed")
-		default:
-			select {
-			case slots <- struct{}{}:
-				<-slots
-				_ = accepted
-				return
-			default:
-				time.Sleep(time.Millisecond)
-			}
-		}
+	select {
+	case slots <- struct{}{}:
+		<-slots
+		_ = accepted
+	case <-time.After(time.Second):
+		t.Fatal("handshake slot was not released when base context closed")
 	}
 }
 
@@ -103,21 +95,11 @@ func TestHTTP3OwnerServeJoinsOnShutdown(t *testing.T) {
 	}
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- owner.serve(context.Background()) }()
-	deadline := time.After(time.Second)
-	for {
+	testwait.Until(t, time.Second, "the HTTP/3 accept loop to start", func() bool {
 		owner.mu.Lock()
-		started := owner.serveStarted
-		owner.mu.Unlock()
-		if started {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatal("HTTP/3 accept loop did not start")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
+		defer owner.mu.Unlock()
+		return owner.serveStarted
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := owner.close(ctx); err != nil {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/adapter"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func unixgramFrame(t *testing.T, f unixgramFixture, request core.Request, stream bool) frameRequest {
@@ -41,16 +42,17 @@ func writeUnixgramFragments(t *testing.T, f unixgramFixture, fragments [][]byte)
 		t.Fatal(err)
 	}
 	for _, fragment := range fragments {
-		for {
+		// The gateway's socket buffer drains between ENOBUFS refusals.
+		testwait.Until(t, time.Until(deadline), "the Unix datagram write to be taken", func() bool {
 			n, err := f.source.WriteToUnix(fragment, &net.UnixAddr{Name: f.address, Net: "unixgram"})
 			if err == nil && n == len(fragment) {
-				break
+				return true
 			}
-			if n != 0 || !errors.Is(err, syscall.ENOBUFS) || !time.Now().Before(deadline) {
+			if n != 0 || !errors.Is(err, syscall.ENOBUFS) {
 				t.Fatalf("Unix datagram client write bytes=%d err=%v", n, err)
 			}
-			time.Sleep(time.Millisecond)
-		}
+			return false
+		})
 	}
 }
 
@@ -81,18 +83,13 @@ func unixgramAccepted(t *testing.T, f unixgramFixture, request core.Request, enc
 
 func pollUnixgramReceipt(t *testing.T, f unixgramFixture, id string) core.Result {
 	t.Helper()
-	var last core.Result
-	for deadline, attempt := time.Now().Add(5*time.Second), 0; time.Now().Before(deadline); attempt++ {
+	attempt := 0
+	return acceptedReceipt(t, 5*time.Second, 40*time.Millisecond, "the Unix datagram send "+id+" to be accepted", func() *core.Result {
 		response := unixgramCall(t, f, core.Request{Version: 1, RequestID: fmt.Sprintf("%s-r-%d", id, attempt), Operation: core.ReceiptGet, LookupID: id}, true)
+		attempt++
 		if response.Result.Result == nil || response.Result.Result.RequestID != id {
 			t.Fatalf("Unix datagram receipt=%+v", response)
 		}
-		last = *response.Result.Result
-		if last.State == core.Accepted {
-			return last
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	t.Fatalf("Unix datagram never accepted: %+v", last)
-	return core.Result{}
+		return response.Result.Result
+	})
 }

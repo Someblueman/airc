@@ -17,6 +17,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestDirectoryMailboxServicePollsAndJoinsRestart(t *testing.T) {
@@ -59,19 +60,18 @@ func TestDirectoryMailboxServicePollsAndJoinsRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 		result := filepath.Join(c.Listeners[0].Address, "results", "request.json")
-		for {
-			data, err := os.ReadFile(result)
-			if err == nil {
-				var response adapter.FrameResponse
-				if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.InvalidRequest {
-					t.Fatal("wrong polled refusal", response)
-				}
-				break
-			}
-			if !os.IsNotExist(err) || ctx.Err() != nil {
+		var data []byte
+		testwait.Every(t, 5*time.Second, 10*time.Millisecond, "the polled refusal", func() bool {
+			var err error
+			data, err = os.ReadFile(result)
+			if err != nil && (!os.IsNotExist(err) || ctx.Err() != nil) {
 				t.Fatal("no polled result", err, ctx.Err())
 			}
-			time.Sleep(10 * time.Millisecond)
+			return err == nil
+		})
+		var response adapter.FrameResponse
+		if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.InvalidRequest {
+			t.Fatal("wrong polled refusal", response)
 		}
 		cancel()
 		select {

@@ -126,26 +126,6 @@ func (s *restartableServer) restart(t testing.TB, missed func(address string)) *
 	return startServerAt(t, s.addr, s.cfg, s.file)
 }
 
-// eventually polls condition until it holds. It is a real synchronisation
-// point: the deadline is generous and only bounds a failure, never a success.
-func eventually(t testing.TB, within time.Duration, what string, condition func() bool) {
-	t.Helper()
-	eventuallyEvery(t, within, 2*time.Millisecond, what, condition)
-}
-
-// eventuallyEvery is eventually with a caller-chosen polling interval, for
-// conditions that cost a daemon round trip to evaluate.
-func eventuallyEvery(t testing.TB, within, interval time.Duration, what string, condition func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(within)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out after %s waiting for %s", within, what)
-		}
-		time.Sleep(interval)
-	}
-}
-
 // liveEventWait bounds a test's wait for one event on a live client. It only
 // bounds a failure: a passing wait returns as soon as the event arrives.
 const liveEventWait = 10 * time.Second

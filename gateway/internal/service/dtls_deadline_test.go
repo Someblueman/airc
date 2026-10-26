@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testwait"
 )
 
 func TestDTLSPeerReadDeadlineAndPinnedWrite(t *testing.T) {
@@ -54,15 +56,12 @@ func TestDTLSPacketListenerRoutesKnownApplicationRecordAndDropsNewestOnOverflow(
 	for payload := byte(1); payload <= dtlsPeerQueueSize; payload++ {
 		sendDTLSTestPacket(t, client, l.Addr(), testDTLSApplication(payload))
 	}
-	deadline := time.Now().Add(time.Second)
-	for len(peer.packets) < dtlsPeerQueueSize && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+	testwait.Until(t, time.Second, "the peer queue to fill", func() bool { return len(peer.packets) >= dtlsPeerQueueSize })
 	if got := len(peer.packets); got != dtlsPeerQueueSize {
 		t.Fatalf("queue fill=%d want=%d", got, dtlsPeerQueueSize)
 	}
 	sendDTLSTestPacket(t, client, l.Addr(), testDTLSApplication(0xff))
-	time.Sleep(20 * time.Millisecond)
+	testwait.Until(t, time.Second, "the overflow packet to be dropped", func() bool { return peer.dropped.Load() == 1 })
 	if got := len(peer.packets); got != dtlsPeerQueueSize {
 		t.Fatalf("overflow changed queue length=%d want=%d", got, dtlsPeerQueueSize)
 	}

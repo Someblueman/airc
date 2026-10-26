@@ -23,6 +23,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/service"
 	"github.com/Someblueman/airc/internal/testfs"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
 )
@@ -217,22 +218,21 @@ func sendRequest(id, room, message, nick, token string) map[string]any {
 // waitReceipt polls receipt.get over HTTP until the job is terminal.
 func waitReceipt(t *testing.T, base, id string, headers map[string]string) core.Result {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		var result core.Result
-		status := plainHTTP(t, http.MethodGet, base+"/v1/requests/"+id, nil, headers, &result)
-		if status != http.StatusOK {
+	var result core.Result
+	if !testwait.Poll(15*time.Second, 25*time.Millisecond, func() bool {
+		result = core.Result{}
+		if status := plainHTTP(t, http.MethodGet, base+"/v1/requests/"+id, nil, headers, &result); status != http.StatusOK {
 			t.Fatalf("receipt %s: HTTP %d", id, status)
 		}
 		switch result.State {
 		case core.Accepted, core.Blocked, core.Rejected, core.Expired, core.CredentialWait:
-			return result
+			return true
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("receipt %s still %s", id, result.State)
-		}
-		time.Sleep(25 * time.Millisecond)
+		return false
+	}) {
+		t.Fatalf("receipt %s still %s", id, result.State)
 	}
+	return result
 }
 
 func authorHeaders(nick, token string) map[string]string {
