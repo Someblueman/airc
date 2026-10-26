@@ -267,7 +267,7 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 			return c, errors.New("remote listeners require --tls-cert, --tls-key and --access-token-file")
 		}
 	}
-	c.Args = []string{"--listen", o.listen, "--history", strconv.Itoa(o.history), "--history-file", filepath.Join(dir, "history.jsonl"), "--admin-token-file", filepath.Join(dir, "admin.token"), "--max-connections", strconv.Itoa(o.connections), "--max-message-size", strconv.Itoa(o.messageSize), "--log-file", filepath.Join(dir, "service.log")}
+	c.Args = []string{"--listen", o.listen, "--history", strconv.Itoa(o.history), "--state-dir", dir, "--admin-token-file", filepath.Join(dir, "admin.token"), "--max-connections", strconv.Itoa(o.connections), "--max-message-size", strconv.Itoa(o.messageSize), "--log-file", filepath.Join(dir, "service.log")}
 	// Defaults are left to the daemon, so a managed service follows them.
 	nonDefault := func(value, daemonDefault string) string {
 		if value == daemonDefault {
@@ -307,8 +307,14 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 		}
 	}
 	tokenPath := filepath.Join(dir, "admin.token")
-	history := filepath.Join(dir, "history.jsonl")
-	if err := pathcheck.Distinct(append([]string{c.Binary, path, filepath.Join(dir, "service.json"), tokenPath, history, history + ".accounts.json", history + ".chat.json", history + ".topics.json", history + ".profiles.json", history + ".moderation.json", filepath.Join(dir, "service.log"), filepath.Join(dir, "service.log.1"), filepath.Join(dir, "startup.log"), o.cert, o.key, o.access, o.unix}, gatewayFiles...)...); err != nil {
+	// The daemon's state files, under their fixed names in the state directory.
+	stateFiles := []string{"history.jsonl", "accounts.json", "chat.json", "handoffs.jsonl", "decisions.jsonl", "wakes.json", "topics.json", "profiles.json", "moderation.json"}
+	files := []string{c.Binary, path, filepath.Join(dir, "service.json"), tokenPath}
+	for _, name := range stateFiles {
+		files = append(files, filepath.Join(dir, name))
+	}
+	files = append(files, filepath.Join(dir, "service.log"), filepath.Join(dir, "service.log.1"), filepath.Join(dir, "startup.log"), o.cert, o.key, o.access, o.unix)
+	if err := pathcheck.Distinct(append(files, gatewayFiles...)...); err != nil {
 		return c, err
 	}
 	if _, err := os.Stat(tokenPath); errors.Is(err, os.ErrNotExist) {
