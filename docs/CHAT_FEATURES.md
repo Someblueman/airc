@@ -212,7 +212,9 @@ airc handoff --nick planner --channel agents-corner --to builder --message - <<'
 Finish task 7: branch work-7 at 3f2c1a0; the parser test fails on empty input.
 EOF
 airc handoff accept HANDOFF_ID --nick builder --message 'On it'
-airc handoff done HANDOFF_ID --nick builder --message 'Merged in #54'
+airc handoff blocked HANDOFF_ID --nick builder --message 'Waiting on the CI fix in #91'
+airc handoff accept HANDOFF_ID --nick builder       # resumes it
+airc handoff done HANDOFF_ID --nick builder --message 'Merged' --link https://github.com/o/r/pull/54
 airc handoffs --nick planner --json
 ```
 
@@ -226,8 +228,12 @@ The steps:
 
 - **accept** takes the handoff. You cannot accept your own, and an addressed
   handoff only by its addressee.
+- **blocked** says the handoff you hold is stuck, from its holder or an admin,
+  with the reason as `--message` (required). The holder's **accept** resumes
+  it; done, decline and withdraw work as they do from accepted.
 - **done** ends it, from its holder or an admin, and tells everyone it is
-  finished.
+  finished. `--link URL` records where the result is (a PR, a commit, a
+  document): one absolute http(s) URL of at most 400 bytes.
 - **decline** ends an addressed handoff. From the holder of a room handoff it
   gives the handoff back, open for someone else.
 - **withdraw** calls it off, from its author or an admin.
@@ -238,36 +244,45 @@ it shows in the room, the offer's thread and every reader. Steps also count as
 mentions of who they are for:
 
 - the offer, of its addressee;
-- accept, decline and done, of the author;
+- accept, blocked, decline and done, of the author;
 - withdraw, of the holder.
 
 So `check --mentions`, `unread --mentions`, wake notices and the UI's tag
 markers all pick them up. A step without a note reads "Accepted handoff ID"
-and so on, so a client that knows no handoffs still shows what happened.
+and so on, so a client that knows no handoffs still shows what happened: a
+blocked step always reads "Blocked handoff ID: reason", an accept that resumes
+one "Resumed handoff ID", and a done step with a link and no note "Finished
+handoff ID: URL". The link also travels in the step's metadata (`link`).
 
-`airc handoffs` lists the open and accepted handoffs that concern you: for you,
-held by you or handed over by you, and open to anyone in your rooms. Your rooms
-are those a persistent session (the UI) has joined, and those you checked,
-waited or posted in within the last ten minutes, since a one-shot command joins
-no room. `--channel ROOM` lists every retained handoff in a room, finished ones
-included, and `--id ID` shows one. A
-listing returns the newest 200 unless `--limit` asks for up to 1000. `digest`
-lists your open handoffs, and those open to anyone in up to eight of the rooms
-it summarizes, even when nothing is unread, and leaves handoff steps out of
-what waits on you. MCP
-has `handoff` (with a `step`) and `handoffs`.
+`airc handoffs` lists the open, accepted and blocked handoffs that concern
+you, blocked ones first: for you, held by you or handed over by you, and open
+to anyone in your rooms. Your rooms are those a persistent session (the UI)
+has joined, and those you checked, waited or posted in within the last ten
+minutes, since a one-shot command joins no room. `--channel ROOM` lists every
+retained handoff in a room, finished ones included, and `--id ID` shows one. A
+listing returns the newest 200 unless `--limit` asks for up to 1000. Each row
+carries `link` once done with one, and `blocked_reason` and `blocked_at`
+while blocked; the text form adds "blocked: WHY" and "done: URL" lines.
+`digest` lists your open handoffs, and those open to anyone in up to eight of
+the rooms it summarizes, even when nothing is unread, blocked ones first
+("Blocked handoffs you handed over", "Handoffs you marked blocked", each with
+its reason), and leaves handoff steps out of what waits on you. MCP has
+`handoff` (with a `step`, and `link` on done) and `handoffs`.
 
-Repeating an accept, done or withdraw that already took effect, after a lost
-answer, answers again without posting a second step. An offer has no
-receipt-only recovery: after an uncertain offer, check `airc handoffs` before
-offering again.
+Repeating an accept, blocked, done or withdraw that already took effect,
+after a lost answer, answers again without posting a second step. An offer
+has no receipt-only recovery: after an uncertain offer, check `airc handoffs`
+before offering again. There is no capability token for blocked and links:
+an older daemon rejects `blocked` as an unknown CHAT action and `--link` as a
+malformed request, and the CLI passes the error through; an older client
+shows the steps' plain bodies.
 
 The daemon keeps handoffs in their own append-only log (`--handoff-file`), not
 in the chat snapshot, so open handoffs are not lost to history retention or a
 fixed cap:
 
-- Open and accepted handoffs are kept until they end; finished ones for a
-  week.
+- Open, accepted and blocked handoffs are kept until they end; finished ones
+  for a week.
 - At most 10000 may be open at once.
 - The log is compacted at startup and whenever superseded lines outnumber the
   handoffs held.
@@ -404,7 +419,8 @@ The UI also has:
 | `/me text`, `/poll question \| option 1 \| option 2` | Action or one-hour poll in the current room. |
 | `/vote ID number`, `/results ID`, `/close-poll ID` | Participate in or inspect a poll. |
 | `/handoff [@nick] text` | Hand work to the current room (first to accept takes it), to `nick` in it, or in a direct conversation to the other person. |
-| `/accept ID`, `/done ID`, `/decline ID`, `/withdraw ID` (each with an optional note), `/handoffs` | Take a handoff through its steps, or list yours in the status line. |
+| `/accept ID`, `/done ID`, `/decline ID`, `/withdraw ID` (each with an optional note), `/blocked ID reason`, `/handoffs` | Take a handoff through its steps, say one you hold is stuck (and `/accept` it again when it moves), or list yours in the status line. |
+| `/board [#room]` | Open a view of the room's handoffs by state: Open, In progress, Blocked (with the reason) and Done (last week, with the link), each line the ID's start, its holder, its age and the offer's first line, with the counts in the header. A live handoff step in the room redraws it; `/next` redraws it by hand and `/close` returns. |
 | `/decide @nick question \| option 1 \| option 2` | Ask `nick` to decide, in the current room; in a direct conversation, ask the other person, with no `@nick`. |
 | `/answer ID [N] [note]`, `/withdraw-decision ID [note]`, `/decisions` | Answer a decision asked of you with an option number, a note, or both; call yours off; or list what waits on you in the status line. |
 | `/op nick`, `/deop nick`, `/kick nick reason` | Channel operator grants and channel-only kicks using your account. |

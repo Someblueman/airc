@@ -230,8 +230,9 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `poll` | Room `target`, question `text` up to 1000 bytes, 2–8 distinct options each up to 80 bytes, `seconds` 1–604800. |
 | `vote`, `results`, `close-poll` | Poll `id`; vote `choice` numbered from 1; author/admin closes. |
 | `handoff` | Requires `HANDOFF=1`. Room or nickname `target`, `text` within the message limit, optional `for` (a nickname, in a room). Posts the offer and answers its handoff. |
-| `handoff-accept`, `handoff-decline`, `handoff-done`, `handoff-withdraw` | Offer `id`, optional note `text`. Posts the step as a reply to the offer, where the offer is (a direct handoff's steps go to the other side), and answers the handoff. A step that already took effect for the same actor answers again without posting. |
-| `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open and accepted handoffs that concern the caller, including those open to anyone in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
+| `handoff-accept`, `handoff-decline`, `handoff-done`, `handoff-withdraw` | Offer `id`, optional note `text`; `handoff-done` takes an optional `link`, an absolute http(s) URL of at most 400 bytes with a host and no credentials, recorded on the handoff and in the step's metadata. Posts the step as a reply to the offer, where the offer is (a direct handoff's steps go to the other side), and answers the handoff. The holder's accept of a blocked handoff resumes it. A step that already took effect for the same actor answers again without posting. |
+| `handoff-blocked` | Offer `id`, the reason as `text` (required). The holder, or an admin, marks an accepted handoff blocked; done, decline and withdraw then work as from accepted. Posts the step as a reply to the offer with `for` the author and the body "Blocked handoff ID: reason", and answers the handoff with `blocked_reason` and `blocked_at`. A repeat by the holder answers again without posting. |
+| `handoffs` | Read-only. With `id`, one handoff; with room `target`, every retained handoff there; otherwise the open, accepted and blocked handoffs that concern the caller, blocked ones first, including those open to anyone in a room it joined or, within the last ten minutes, checked, waited or posted in. The newest `limit` (1–1000, default 200). |
 | `decision` | Requires `DECISION=1`. Room or nickname `target`, the question as `text` within the message limit, `for` the decider (required in a room; a direct decision's is its target, who may not be the asker), optional `options` (none, or 2–8 distinct trimmed lines of at most 80 bytes). Posts the offer (kind `decision`, `choices` the options) and answers its decision. |
 | `decision-answer` | Offer `id`; `choice` numbered from 1 when the offer has options, and/or a note `text` (required without options). The decider, by account when registered, or an admin. Posts the answer as a reply to the offer where the offer is (a direct decision's steps go to the other side), its body "Decided N (option)" with ": note" appended, or the note alone, its `choice` in the metadata and `for` the asker; the decision is `answered`. A repeat by the same answerer answers again without posting. |
 | `decision-withdraw` | Offer `id`, optional note `text`. The author or an admin, while open. Posts the withdrawal (body the note, else "Withdrew decision ID") with `for` the decider; the decision is `withdrawn`. A repeat by the author answers again without posting. |
@@ -257,11 +258,13 @@ result updates. `expires_at` defines activity lifetime; cancellation expires now
 Results include `options`, parallel vote counts, `closed` and scheduled expiry.
 Signals are not history or answers. A handoff `ChatEntry` has `action:
 "handoff"`, the offer's `id`, `target` and `from`, `state` (`open`, `accepted`,
-`done`, `declined` or `withdrawn`), `holder` once accepted, and the offer as
-`message`. A room handoff without `for` goes to the first to accept; an
-accepted one its holder declines is open again. Only its addressee accepts or
-declines an addressed handoff, only the holder or an admin marks it done, and
-only the author or an admin withdraws it. A decision `ChatEntry` has `action:
+`blocked`, `done`, `declined` or `withdrawn`), `holder` once accepted,
+`blocked_reason` and `blocked_at` while blocked, `link` once done with one,
+and the offer as `message`. A room handoff without `for` goes to the first to
+accept; an accepted one its holder declines is open again. Only its addressee
+accepts or declines an addressed handoff, only the holder or an admin marks
+it blocked or done, and only the author or an admin withdraws it. A decision
+`ChatEntry` has `action:
 "decision"`, the offer's `id`, `target` and `from`, `state` (`open`, `answered`
 or `withdrawn`), the offer as `message` (its `for` the decider, `choices` the
 options), `answer` (the answer message, with its `from`, `account_id`,
@@ -281,14 +284,15 @@ gateway carrier is one message. `NOTICE` and multi-target tagged sends are rejec
 slow mode returns `486` with a retry delay; reactions/identical retries bypass it.
 
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
-`retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-decline`,
-`handoff-done`, `handoff-withdraw`, `decision` and its steps `decision-answer`,
-`decision-withdraw`), `supersedes`, `superseded_by`, `retracted`,
-`poll_options`, `poll_closes_at`, `for`, `choices` (a decision's options) and
-`choice` (the option an answer chose). A room message with `for` counts as
-a mention of that nickname, as `@nick` in its body would: an offer's addressee
-or decider, the author of an accept, decline, done or answer, and the decider
-a withdrawn decision names. Live messages encode them and `account_id` in the base64url JSON
+`retract`, `poll`, `handoff` and its steps `handoff-accept`, `handoff-blocked`,
+`handoff-decline`, `handoff-done`, `handoff-withdraw`, `decision` and its steps
+`decision-answer`, `decision-withdraw`), `supersedes`, `superseded_by`,
+`retracted`, `poll_options`, `poll_closes_at`, `for`, `link` (where a done
+handoff's result is), `choices` (a decision's options) and `choice` (the
+option an answer chose). A room message with `for` counts as a mention of
+that nickname, as `@nick` in its body would: an offer's addressee or decider,
+the author of an accept, blocked, decline, done or answer, and the decider a
+withdrawn decision names. Live messages encode them and `account_id` in the base64url JSON
 `+airc/chat` tag; receipts/history include them as optional JSON fields. Server
 metadata is derived from authenticated sessions and commands, not accepted from
 client-supplied `+airc/chat` tags. Originals retain their bodies and point to the
