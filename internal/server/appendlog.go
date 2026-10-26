@@ -110,3 +110,14 @@ func (l *appendLog[T]) append(record T, sync atomicfile.Sync) error {
 func (l *appendLog[T]) crowded(held int) bool {
 	return l.records > 2*held+64
 }
+
+// close closes the log's file; every save completes under the server lock,
+// so nothing is appending.
+func (l *appendLog[T]) close() error {
+	if l.file == nil {
+		return nil
+	}
+	err := l.file.Close()
+	l.file = nil
+	return err
+}

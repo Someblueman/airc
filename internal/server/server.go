@@ -59,12 +59,14 @@ func New(cfg Config) *Server {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
-	return &Server{
+	s := &Server{
 		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, activity: map[string]*activity{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time), failedAddresses: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
+	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
+	return s
 }
 
 func ListenTCP(address string) (net.Listener, error) {
@@ -214,6 +216,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if ordered && s.histFile != nil {
 		s.commit.retire(s.histFile)
 		s.histFile = nil
+	}
+	for _, p := range s.storesLocked() {
+		_ = p.close()
 	}
 	if s.handoffLog != nil {
 		_ = s.handoffLog.file.Close() // every save completes under mu

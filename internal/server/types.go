@@ -90,7 +90,8 @@ type Message struct {
 type Server struct {
 	cfg              Config
 	logger           *slog.Logger
-	mu               sync.Mutex
+	env              storeEnv   // clock, durability policy and log handed to every store (set in New)
+	mu               sync.Mutex // guards everything below except where noted
 	messageMu        sync.Mutex // serializes posts while mu is released for history I/O; released while a post waits for its sync
 	commit           groupCommit
 	clients          map[string]*session
