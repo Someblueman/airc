@@ -528,6 +528,10 @@ type Message struct {
 	Target, ParentID, Body string
 	// RequestID makes every attempt one message. Required.
 	RequestID string
+	// Run is the post's run label (protocol.ValidRunID), kept in the
+	// message's metadata as a native +airc/run tag is. A gateway from before
+	// run labels posts without it; the Receipt's RunDropped says so.
+	Run string
 }
 
 // Reaction adds Symbol to ParentID, a message in Room.
@@ -548,6 +552,9 @@ type Receipt struct {
 	Persisted          *bool
 	RecipientConnected *bool
 	RecipientActive    *bool
+	// RunDropped reports that the message's run label did not travel: the
+	// gateway predates run labels and the post went without it.
+	RunDropped bool
 }
 
 // Page is a bounded read of a room's history, oldest first.
@@ -578,6 +585,10 @@ func (c *Client) post(ctx context.Context, first *Conn, m Message) (*Receipt, er
 	if !protocol.ValidRequestID(m.RequestID) || m.Target == "" || strings.TrimSpace(m.Body) == "" || m.ParentID != "" && !protocol.ValidMessageID(m.ParentID) {
 		closeConn(first)
 		return nil, errors.New("a post needs a target, a body and a valid request ID")
+	}
+	if m.Run != "" && !protocol.ValidRunID(m.Run) {
+		closeConn(first)
+		return nil, errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")
 	}
 	var receipt *Receipt
 	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {

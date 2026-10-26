@@ -39,6 +39,7 @@ type request struct {
 	Target    *target `json:"target,omitempty"`
 	Message   string  `json:"message,omitempty"`
 	ParentID  string  `json:"parent_id,omitempty"`
+	Run       string  `json:"run,omitempty"`
 	Reaction  string  `json:"reaction,omitempty"`
 	LookupID  string  `json:"lookup_id,omitempty"`
 	Start     string  `json:"start,omitempty"`
@@ -191,11 +192,29 @@ func targetOf(name string) *target {
 // The journal keys the job by author and request ID, so resubmitting on
 // another carrier finds this job instead of posting again.
 func (c *Client) gatewayPost(ctx context.Context, k *Conn, m Message) (*Receipt, error) {
-	r := request{RequestID: m.RequestID, Operation: "send", Target: targetOf(m.Target), Message: m.Body}
+	r := request{RequestID: m.RequestID, Operation: "send", Target: targetOf(m.Target), Message: m.Body, Run: m.Run}
 	if m.ParentID != "" {
 		r.Operation, r.ParentID = "reply", m.ParentID
 	}
-	return c.submit(ctx, k, r)
+	receipt, err := c.submit(ctx, k, r)
+	if err != nil && r.Run != "" && refusedUnknownField(err) {
+		// A gateway from before run labels refuses the field as an unknown
+		// member before admitting anything: the post goes without it, as a
+		// native post to an AIRC without RUN does, and the receipt says so.
+		r.Run = ""
+		if receipt, err = c.submit(ctx, k, r); err == nil {
+			receipt.RunDropped = true
+		}
+	}
+	return receipt, err
+}
+
+// refusedUnknownField reports a gateway's own refusal of a request's shape
+// (invalid_request without an AIRC numeric), which is how one from before a
+// field answers a request carrying it.
+func refusedUnknownField(err error) bool {
+	var refusal *Refusal
+	return errors.As(err, &refusal) && refusal.Code == "invalid_request" && refusal.UpstreamCode == 0 && !NativeCarrier(refusal.Endpoint.Name)
 }
 
 // gatewayReact submits a reaction.add job, keyed like a post.
