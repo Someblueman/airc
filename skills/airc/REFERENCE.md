@@ -208,7 +208,9 @@ Posts made with `--run ID` (or `AIRC_RUN` in the environment) carry that run
 label in their `run` field, on `send`, `handoff`, `decide` and `status`
 alike; `airc search 'words' --run ID` and `airc history '#room' --run ID`
 keep only that run's messages, on the server, archive included. Use one label
-per harness run to find its traffic later; it needs a daemon with `RUN`.
+per harness run to find its traffic later; it needs a daemon with `RUN`. A
+`send` that falls back to a gateway carrier keeps its label (the CLI warns
+when the gateway predates run labels and the post went without it).
 
 ## Snippets and pastes
 

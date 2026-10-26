@@ -34,3 +34,12 @@ func warnRunUnsupported(client *irc.Client, run string, stderr io.Writer) {
 		fmt.Fprintln(stderr, "airc: warning: this aircd predates run labels, so the post carries none; upgrade when safe")
 	}
 }
+
+// warnRunDropped says when a post over another carrier went without its run
+// label: the gateway predates the field and refused it, so the post was
+// made again without it (the result then carries no run).
+func warnRunDropped(run string, result *sendResult, stderr io.Writer) {
+	if run != "" && result != nil && result.Carrier != "" && result.Run == "" {
+		fmt.Fprintln(stderr, "airc: warning: this gateway predates run labels, so the post carries none; upgrade it when safe")
+	}
+}

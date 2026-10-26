@@ -358,6 +358,45 @@ func TestSendAndHistoryFallBackWhenNativeIRCIsUnreachable(t *testing.T) {
 	}
 }
 
+// A send over another carrier carries its run label: the gateway relays it
+// as the +airc/run tag, so the stored message has run exactly as a native
+// post's does, as history reads it natively and over the gateway alike.
+func TestSendRunLabelTravelsOverTheGateway(t *testing.T) {
+	f := newFallbackFixture(t)
+	closed := strconv.Itoa(f.proxy.port())
+	f.proxy.down()
+	common := []string{"--addr", "127.0.0.1:" + closed, "--nick", "alice", "--channel", "#ops", "--carriers", f.carrier("http")}
+	sent, stderr, err := sendJSON(t, append(common, "--message", "labelled over http", "--run", "run-2026.10_26")...)
+	if err != nil || sent.Carrier != f.carrier("http") || sent.Run != "run-2026.10_26" || !strings.HasPrefix(sent.Code, "accepted") || strings.Contains(stderr, "run label") {
+		t.Fatalf("%+v %v %s", sent, err, stderr)
+	}
+	if got := historyOf(t, f.daemon, "#ops", "labelled over http"); len(got) != 1 || got[0].ID != sent.ID || got[0].Run != "run-2026.10_26" {
+		t.Fatalf("stored post: %+v", got)
+	}
+	// A reply, named with its conversation, carries its own label.
+	reply, stderr, err := sendJSON(t, append(common, "--reply-to", sent.ID, "--message", "labelled reply", "--run", "run-reply")...)
+	if err != nil || reply.Run != "run-reply" || reply.ReplyTo != sent.ID {
+		t.Fatalf("reply: %+v %v %s", reply, err, stderr)
+	}
+	if got := historyOf(t, f.daemon, "#ops", "labelled reply"); len(got) != 1 || got[0].Run != "run-reply" || got[0].ReplyTo != sent.ID {
+		t.Fatalf("stored reply: %+v", got)
+	}
+	var stdout bytes.Buffer
+	if err := run([]string{"history", "#ops", "--addr", "127.0.0.1:" + closed, "--carriers", f.carrier("http"), "--json"}, nil, &stdout, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if lines := strings.Split(strings.TrimSpace(stdout.String()), "\n"); len(lines) != 2 || !strings.Contains(lines[0], `"run":"run-2026.10_26"`) || !strings.Contains(lines[1], `"run":"run-reply"`) {
+		t.Fatalf("history over the gateway: %s", stdout.String())
+	}
+	// An invalid label is refused before any carrier is dialled.
+	if _, _, err := sendJSON(t, append(common, "--message", "never", "--run", "bad label")...); err == nil || !strings.Contains(err.Error(), "--run must be") {
+		t.Fatalf("invalid label: %v", err)
+	}
+	if got := historyOf(t, f.daemon, "#ops", "never"); len(got) != 0 {
+		t.Fatalf("refused post stored: %+v", got)
+	}
+}
+
 // closedTCPPort reserves a port that is free now, below Linux's ephemeral
 // range (32768+): a port from :0 is in that range, and a concurrent test's
 // outgoing connection can take it before the fixture binds it again.

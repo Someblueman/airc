@@ -159,10 +159,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			if *reaction != "" {
 				return reactViaFallback(ctx, *opt, r, conversation, *replyTo, *reaction, *check, settings, *maxBytes, stdout, stderr)
 			}
-			if run != "" {
-				fmt.Fprintln(stderr, "airc: warning: the other carriers carry no run label; the post goes without it")
-			}
-			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
+			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, run, *check, settings, *maxBytes, stdout, stderr)
 		}
 		client = r.native
 		nativeCarrier = carrierName(*opt, r.endpoint)
@@ -211,6 +208,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			entry.Paste = pasteID
 		}
 		pasteID = entry.Paste
+		if entry.Run == "" {
+			entry.Run = run
+		}
 	}
 	if result == nil {
 		awaited := false
@@ -282,6 +282,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			}
 		}
 	}
+	warnRunDropped(run, result, stderr)
 	if result != nil && nativeCarrier != "" {
 		result.Carrier = nativeCarrier
 	}
@@ -294,7 +295,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 // sendViaFallback posts over another carrier whose connection won the race
 // against native IRC. The outbox keeps the request ID across attempts exactly
 // as a native send does, so a later retry on any carrier is the same message.
-func sendViaFallback(ctx context.Context, opt options, r reached, target, conversation, replyTo, message, requestID string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
+func sendViaFallback(ctx context.Context, opt options, r reached, target, conversation, replyTo, message, requestID, run string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
 	box, err := openOutbox(opt)
 	if err != nil {
 		_ = r.conn.Close()
@@ -306,6 +307,9 @@ func sendViaFallback(ctx context.Context, opt options, r reached, target, conver
 	if err != nil {
 		_ = r.conn.Close()
 		return err
+	}
+	if entry.Run == "" {
+		entry.Run = run
 	}
 	result := entry.Result
 	if result == nil {
@@ -336,6 +340,7 @@ func sendViaFallback(ctx context.Context, opt options, r reached, target, conver
 	} else {
 		_ = r.conn.Close()
 	}
+	warnRunDropped(entry.Run, result, stderr)
 	if err := outputSend(ctx, opt, result, check, settings, maxBytes, nil, stdout, stderr); err != nil {
 		return acceptedFailure(err, result)
 	}
@@ -369,7 +374,7 @@ func reactViaFallback(ctx context.Context, opt options, r reached, room, parent,
 // postViaFallback posts an outbox entry with its own request ID; a reply goes
 // to its parent in conversation.
 func postViaFallback(ctx context.Context, opt options, post func(context.Context, fallback.Message) (*fallback.Receipt, error), entry *outboundMessage, conversation string) (*sendResult, fallback.Endpoint, error) {
-	m := fallback.Message{Target: entry.Target, Body: entry.Body, RequestID: entry.RequestID}
+	m := fallback.Message{Target: entry.Target, Body: entry.Body, RequestID: entry.RequestID, Run: entry.Run}
 	if entry.ReplyTo != "" {
 		m.Target, m.ParentID = conversation, entry.ReplyTo
 	}
@@ -377,7 +382,11 @@ func postViaFallback(ctx context.Context, opt options, post func(context.Context
 	if err != nil {
 		return nil, fallback.Endpoint{}, err
 	}
-	return fallbackResult(opt, receipt, opt.nick, m.Target, entry.Body, entry.ReplyTo, ""), receipt.Endpoint, nil
+	result := fallbackResult(opt, receipt, opt.nick, m.Target, entry.Body, entry.ReplyTo, "")
+	if !receipt.RunDropped {
+		result.Run = entry.Run // the label the post carries, as a native receipt reports it
+	}
+	return result, receipt.Endpoint, nil
 }
 
 // fallbackResult is a carrier's receipt in the shape of a native one. The
