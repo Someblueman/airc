@@ -52,6 +52,20 @@ type digestHandoff struct {
 	Preview string `json:"preview"`
 }
 
+// digestDecision is an open decision that concerns the digest's nick: one
+// for it to make, or one it asked. Human says the asker is marked as a
+// person in the directory, so a decider knows someone is waiting.
+type digestDecision struct {
+	ID      string   `json:"id"`
+	State   string   `json:"state"`
+	From    string   `json:"from"`
+	Target  string   `json:"target"`
+	Decider string   `json:"decider"`
+	Options []string `json:"options,omitempty"`
+	Preview string   `json:"preview"`
+	Human   bool     `json:"human,omitempty"`
+}
+
 type digestSpeaker struct {
 	Nick     string `json:"nick"`
 	Messages int    `json:"messages"`
@@ -90,22 +104,24 @@ type digestHeader struct {
 // much where, what is addressed to you and still unanswered, and what
 // changed the record (corrections, polls, headers, pins).
 type digestSummary struct {
-	Type         string          `json:"type"`
-	Nick         string          `json:"nick"`
-	Unread       int             `json:"unread"`
-	Addressed    int             `json:"addressed"`
-	More         bool            `json:"more"`
-	MarkedRead   bool            `json:"marked_read"`
-	Rooms        []digestRoom    `json:"rooms"`
-	Waiting      []digestItem    `json:"waiting_on_you"`
-	WaitingMore  int             `json:"waiting_omitted,omitempty"`
-	Corrections  []digestItem    `json:"corrections,omitempty"`
-	Polls        []digestItem    `json:"open_polls,omitempty"`
-	Handoffs     []digestHandoff `json:"handoffs,omitempty"`
-	HandoffsMore int             `json:"handoffs_omitted,omitempty"`
-	Headers      []digestHeader  `json:"headers,omitempty"`
-	Gaps         []string        `json:"gaps,omitempty"`
-	Warnings     []string        `json:"warnings,omitempty"`
+	Type          string           `json:"type"`
+	Nick          string           `json:"nick"`
+	Unread        int              `json:"unread"`
+	Addressed     int              `json:"addressed"`
+	More          bool             `json:"more"`
+	MarkedRead    bool             `json:"marked_read"`
+	Rooms         []digestRoom     `json:"rooms"`
+	Waiting       []digestItem     `json:"waiting_on_you"`
+	WaitingMore   int              `json:"waiting_omitted,omitempty"`
+	Corrections   []digestItem     `json:"corrections,omitempty"`
+	Polls         []digestItem     `json:"open_polls,omitempty"`
+	Handoffs      []digestHandoff  `json:"handoffs,omitempty"`
+	HandoffsMore  int              `json:"handoffs_omitted,omitempty"`
+	Decisions     []digestDecision `json:"decisions,omitempty"`
+	DecisionsMore int              `json:"decisions_omitted,omitempty"`
+	Headers       []digestHeader   `json:"headers,omitempty"`
+	Gaps          []string         `json:"gaps,omitempty"`
+	Warnings      []string         `json:"warnings,omitempty"`
 }
 
 func runDigestSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) (resultErr error) {
@@ -154,6 +170,11 @@ func runDigestSession(ctx context.Context, session *agentConnection, args []stri
 	if len(summary.Handoffs) > digestWaiting {
 		summary.HandoffsMore = len(summary.Handoffs) - digestWaiting
 		summary.Handoffs = summary.Handoffs[:digestWaiting]
+	}
+	summary.Decisions = openDecisions(ctx, *opt, settings.channels, &summary.Warnings)
+	if len(summary.Decisions) > digestWaiting {
+		summary.DecisionsMore = len(summary.Decisions) - digestWaiting
+		summary.Decisions = summary.Decisions[:digestWaiting]
 	}
 	summary.MarkedRead = *markRead
 	if opt.json {
@@ -232,8 +253,9 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 		if m.Mentioned {
 			r.room.Mentions++
 			d.Addressed++
-			// Handoffs are listed by state, and their steps need no reply.
-			if !repliedTo[m.ID] && !strings.HasPrefix(m.Kind, "handoff") {
+			// Handoffs and decisions are listed by state, and their steps
+			// need no reply.
+			if !repliedTo[m.ID] && !strings.HasPrefix(m.Kind, "handoff") && !strings.HasPrefix(m.Kind, "decision") {
 				d.Waiting = append(d.Waiting, item) // resolveAnswered asks the server about the rest
 			}
 		}
@@ -354,6 +376,52 @@ func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]
 	return out
 }
 
+// openDecisions lists the open decisions that concern opt.nick: for it to
+// make or asked by it, and those asked in the first digestRooms of rooms,
+// since a one-shot command joins no room. Each carries whether its asker is
+// a human, from the card the daemon attaches. A daemon without decisions
+// has none; other failures warn.
+func openDecisions(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestDecision {
+	var out []digestDecision
+	seen := map[string]bool{}
+	err := chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+		if !client.Supports("DECISION") {
+			return nil
+		}
+		requests := []irc.ChatRequest{{Action: "decisions"}}
+		for _, room := range rooms[:min(len(rooms), digestRooms)] {
+			if room = channelName(room); protocol.IsChannel(room) {
+				requests = append(requests, irc.ChatRequest{Action: "decisions", Target: room})
+			}
+		}
+		for _, r := range requests {
+			entries, err := irc.RequestChat(ctx, client, r, nil)
+			if err != nil {
+				return err
+			}
+			for _, e := range entries {
+				if seen[e.ID] || e.State != "open" {
+					continue
+				}
+				seen[e.ID] = true
+				d := digestDecision{ID: e.ID, State: e.State, From: e.From, Target: e.Target}
+				if e.Message != nil {
+					d.Decider, d.Options, d.Preview = e.Message.For, e.Message.Choices, preview(e.Message.Message)
+				}
+				if e.Profile != nil {
+					d.Human = e.Profile.Kind == "human"
+				}
+				out = append(out, d)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		*warnings = append(*warnings, "could not list your decisions: "+err.Error())
+	}
+	return out
+}
+
 // preview is a message on one line, cut to digestPreview runes.
 func preview(text string) string {
 	return ellipsize(strings.Join(strings.Fields(cleanText(strings.NewReplacer("\n", " ", "\t", " ").Replace(text))), " "), digestPreview)
@@ -372,7 +440,7 @@ func unique(values []string) []string {
 // writeDigest prints a digest for a person or an agent without JSON. Like
 // unread, it prints nothing when there is nothing new, so a hook adds nothing.
 func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
-	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 && len(d.Handoffs) == 0 {
+	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 && len(d.Handoffs) == 0 && len(d.Decisions) == 0 {
 		return nil
 	}
 	var b strings.Builder
@@ -440,6 +508,7 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 			fmt.Fprintf(&b, "  and %d more; airc handoffs lists them\n", d.HandoffsMore)
 		}
 	}
+	writeDecisions(&b, d)
 	for _, h := range d.Headers {
 		if h.Type == "pin" {
 			fmt.Fprintf(&b, "Pinned in %s [%s] by %s: %q\n", h.Target, h.ID, h.From, h.Preview)
@@ -463,6 +532,65 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	}
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+// writeDecisions lists the decisions waiting on nick, humans' first, then
+// the ones nick asked and others open in its rooms:
+//
+//	Decisions waiting on you:
+//	  [ID] a human (sws) asks in #work: "Ship with the simple parser?" options: yes / no
+//	Your open decisions:
+//	  [ID] you asked sws in #work: "Rename the flag?"
+func writeDecisions(b *strings.Builder, d digestSummary) {
+	if len(d.Decisions) == 0 {
+		return
+	}
+	var waiting, others []digestDecision
+	for _, item := range d.Decisions {
+		if strings.EqualFold(item.Decider, d.Nick) {
+			waiting = append(waiting, item)
+		} else {
+			others = append(others, item)
+		}
+	}
+	slices.SortStableFunc(waiting, func(a, b digestDecision) int { return cmp.Compare(boolInt(b.Human), boolInt(a.Human)) })
+	line := func(item digestDecision, who string) string {
+		text := fmt.Sprintf("  [%s] %s in %s: %q", item.ID, who, item.Target, item.Preview)
+		if len(item.Options) > 0 {
+			text += " options: " + strings.Join(item.Options, " / ")
+		}
+		return text + "\n"
+	}
+	if len(waiting) > 0 {
+		b.WriteString("Decisions waiting on you:\n")
+		for _, item := range waiting {
+			who := item.From + " asks"
+			if item.Human {
+				who = "a human (" + item.From + ") asks"
+			}
+			b.WriteString(line(item, who))
+		}
+	}
+	if len(others) > 0 {
+		b.WriteString("Your open decisions:\n")
+		for _, item := range others {
+			who := item.From + " asked " + item.Decider
+			if strings.EqualFold(item.From, d.Nick) {
+				who = "you asked " + item.Decider
+			}
+			b.WriteString(line(item, who))
+		}
+	}
+	if d.DecisionsMore > 0 {
+		fmt.Fprintf(b, "  and %d more; airc decisions lists them\n", d.DecisionsMore)
+	}
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
 
 // handoffStanding says where a handoff stands for nick: who it is from or
