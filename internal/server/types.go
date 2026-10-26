@@ -101,8 +101,7 @@ type Server struct {
 	history          historyRing
 	topics           map[string]topic // channel headers; independent of who is connected
 	topicsAt         string           // file the topics are saved to, if any
-	directory        map[string]protocol.AgentCard
-	profilesAt       string
+	directoryState                    // profiles, presence and activity; see profiles.go
 	accessEnabled    bool
 	accessHash       [32]byte
 	adminEnabled     bool
@@ -120,7 +119,6 @@ type Server struct {
 	handoffLog       *appendLog[handoff]  // nil keeps handoffs in memory only
 	decisions        map[string]decision  // by offer ID; see decisions.go
 	decisionLog      *appendLog[decision] // nil keeps decisions in memory only
-	activity         map[string]*activity // by nickname; see activity.go
 	slowPosts        map[string]time.Time
 	signals          map[string]activitySignal
 	seq              uint64

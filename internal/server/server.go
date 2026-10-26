@@ -60,15 +60,17 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	s := &Server{
-		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, activity: map[string]*activity{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
+		chat: newChatState(), handoffs: map[string]handoff{}, decisions: map[string]decision{}, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), failedAddresses: make(map[string][]time.Time),
 		accountsState: accountsState{registrations: make(map[string][]time.Time)},
 		nicks:         make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
-		history: newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
+		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
+		history:        newHistoryWindow(cfg.HistoryLimit, cfg.HistoryBytes), topics: make(map[string]topic), closed: make(chan struct{}),
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
 	s.accountsState.env = &s.env
 	s.moderationState.env = &s.env
+	s.directoryState.env = &s.env
 	return s
 }
 

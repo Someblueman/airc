@@ -84,19 +84,6 @@ func (s *Server) cardReplyLocked(client *session, card protocol.AgentCard) {
 	s.numericLocked(client, "773", nil, string(data))
 }
 
-func (s *Server) roomForCardLocked(key string, now time.Time) bool {
-	if _, exists := s.directory[key]; exists {
-		return true
-	}
-	// Expired presence without a profile is disposable; profiles stay until cleared.
-	for other, card := range s.directory {
-		if card.AgentProfile == (protocol.AgentProfile{}) && !now.Before(card.ExpiresAt) {
-			delete(s.directory, other)
-		}
-	}
-	return len(s.directory) < maxDirectoryCards
-}
-
 func (s *Server) presenceLocked(client *session, command protocol.Command) {
 	state, _ := command.Param(0)
 	ttl, _ := command.Param(1)
