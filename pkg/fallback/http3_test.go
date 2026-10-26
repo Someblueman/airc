@@ -291,3 +291,77 @@ func TestHTTP3RecoversFromRejected0RTTAcrossAddresses(t *testing.T) {
 		t.Fatalf("the request after: %v", err)
 	}
 }
+
+// A failed dial does not forget the session the others resume: crypto/tls
+// evicts a session when a handshake resuming it fails, and a losing address
+// in a race fails that way.
+func TestSessionCacheKeepsASessionAFailedDialWouldEvict(t *testing.T) {
+	cache := copiedSessions{tls.NewLRUClientSessionCache(4)}
+	g := newFakeGateway(t)
+	port, trust := serveHTTP3(t, g)
+	e, _ := ParseEndpoint("http3:127.0.0.1:" + strconv.Itoa(port))
+	c := &Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: trust, Endpoints: []Endpoint{e}}
+	k, err := c.Connect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer k.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	cs, ok := quicSessions.Get("127.0.0.1")
+	for ; !ok && time.Now().Before(deadline); cs, ok = quicSessions.Get("127.0.0.1") {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !ok {
+		t.Fatal("no session was cached")
+	}
+	cache.Put("gateway", cs)
+	cache.Put("gateway", nil) // what a failed resumption does
+	if _, ok := cache.Get("gateway"); !ok {
+		t.Fatal("the eviction was not ignored")
+	}
+}
+
+// The same concurrent resumption when the host has several addresses and
+// the first never answers, which fails that address's dial while the others
+// resume: every dial still resumes the session.
+func TestHTTP3ConcurrentDialsResumeAcrossAddresses(t *testing.T) {
+	previous := lookupNetIP
+	lookupNetIP = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("::1"), netip.MustParseAddr("127.0.0.1")}, nil
+	}
+	t.Cleanup(func() { lookupNetIP = previous })
+	g := newFakeGateway(t)
+	port, trust := serveHTTP3(t, g)
+	e, _ := ParseEndpoint("http3:localhost:" + strconv.Itoa(port))
+	c := &Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: trust, Endpoints: []Endpoint{e}}
+	k, err := c.Connect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.gateway.call(t.Context(), request{RequestID: "a", Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for _, ok := quicSessions.Get("localhost"); !ok && time.Now().Before(deadline); _, ok = quicSessions.Get("localhost") {
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = k.Close()
+	var wg sync.WaitGroup
+	for i := range 4 {
+		wg.Go(func() {
+			k, err := c.Connect(t.Context())
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer k.Close()
+			if _, err := k.gateway.call(t.Context(), request{RequestID: strconv.Itoa(i), Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"}); err != nil {
+				t.Error(err)
+			}
+			if !k.gateway.(*http3Conn).Resumed0RTT() {
+				t.Error("a concurrent dial did not resume the session")
+			}
+		})
+	}
+	wg.Wait()
+}
