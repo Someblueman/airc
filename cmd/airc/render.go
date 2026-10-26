@@ -328,10 +328,15 @@ func chatBody(m irc.ChatMetadata, id, replyTo, from, text string) string {
 		} else {
 			body = "[handoff " + id + "] " + body
 		}
-	case "handoff-accept", "handoff-decline", "handoff-done", "handoff-withdraw":
-		// A step without a note already says what it did.
-		if label := protocol.HandoffStepText(m.Kind, replyTo); body != label {
+	case "handoff-accept", "handoff-blocked", "handoff-decline", "handoff-done", "handoff-withdraw":
+		// A step without a note already says what it did; a done step's
+		// link follows its note.
+		if !protocol.PlainHandoffStep(m.Kind, replyTo, body) {
+			label := protocol.HandoffStepText(m.Kind, replyTo, "")
 			body = "[" + strings.ToLower(label[:1]) + label[1:] + "] " + body
+		}
+		if m.Link != "" && !strings.Contains(body, m.Link) {
+			body += " " + m.Link
 		}
 	case "decision":
 		body = "[decision " + id + " for " + m.For + "] " + body

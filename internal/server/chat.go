@@ -53,6 +53,7 @@ var chatActionTable = []chatAction{
 	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked)},
 	{name: "handoff", handler: (*Server).offerHandoffLocked, requires: "HANDOFF"},
 	{name: "handoff-accept", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
+	{name: "handoff-blocked", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
 	{name: "handoff-decline", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
 	{name: "handoff-done", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
 	{name: "handoff-withdraw", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
