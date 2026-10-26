@@ -47,6 +47,46 @@ func TestRemovedIdentityFieldsPointToTheMigrationNote(t *testing.T) {
 	}
 }
 
+// A configuration naming a carrier removed on 2026-10-26 (a bridge section,
+// a listener protocol or an option object only that carrier had) fails with
+// one error naming the field and the removed-carriers note, before any other
+// check.
+func TestRemovedCarriersPointToTheNote(t *testing.T) {
+	listener := func(fields string) string {
+		return strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x",`+fields+`}]`, 1)
+	}
+	cases := map[string]string{
+		"listeners[0].reply_to":        listener(`"protocol":"unixgram","address":"/private/gram.sock","reply_to":"/private/out.sock"`),
+		"listeners[0].oscore":          listener(`"protocol":"coap_udp","oscore":{"principal":"a"}`),
+		"listeners[0].mach_ipc":        listener(`"protocol":"udp","mach_ipc":{"callers":[{"uid":1,"principal":"a"}]}`),
+		"listeners[0].amqp":            listener(`"protocol":"mqtt","amqp":{"routes":[{"request_address":"a","response_address":"b","target":{"kind":"room","name":"#r"}}]}`),
+		"listeners[0].mqtt_sn":         listener(`"protocol":"udp","mqtt_sn":{"routes":[{"topic_id":1,"target":{"kind":"room","name":"#r"}}]}`),
+		"listeners[0].fifo":            listener(`"protocol":"stdio","fifo":{}`),
+		"listeners[0].bundle_protocol": listener(`"protocol":"file_mailbox","address":"/private/mailbox","bundle_protocol":{}`),
+	}
+	for _, section := range []string{"redis_pubsub", "redis_streams", "irc_bridges", "xmpp_bridges", "sftp", "postgres_notify"} {
+		cases[section] = strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[],"`+section+`":[]`, 1)
+	}
+	for _, protocol := range []string{"fifo", "uart", "system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6", "sctp", "sctp_unordered", "sctp_pr_ttl", "coap_tcp", "coaps_tcp", "coap_oscore", "mqtt_sn", "amqp", "stomp", "scp_inbox", "offline_bundle", "bpv7", "syslog_tls", "syslog_signed", "snmp_v3"} {
+		for _, enabled := range []string{"true", "false"} {
+			cases["listeners[0].protocol/"+protocol+"/"+enabled] = listener(`"protocol":"` + protocol + `","address":"127.0.0.1:1","enabled":` + enabled)
+		}
+	}
+	for name, input := range cases {
+		field, _, _ := strings.Cut(name, "/")
+		_, err := Parse([]byte(input))
+		if err == nil || !strings.Contains(err.Error(), `"`+field+`"`) || !strings.Contains(err.Error(), RemovedCarriersDoc) || strings.Contains(err.Error(), RemovedIdentityDoc) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// The kept carriers still parse.
+	for _, protocol := range []string{"udp", "coap_udp", "mqtt", "zeromq"} {
+		if _, err := Parse([]byte(listener(`"protocol":"` + protocol + `","address":"127.0.0.1:1"`))); err != nil {
+			t.Errorf("%s refused: %v", protocol, err)
+		}
+	}
+}
+
 // The removed Matrix bridge, GitHub webhook and ChirpStack carriers fail with
 // one error naming the field and the removed-modes note.
 func TestRemovedBridgeCarriersPointToTheNote(t *testing.T) {
