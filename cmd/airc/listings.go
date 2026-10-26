@@ -49,6 +49,9 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 				if agent.ConnectedAt.IsZero() {
 					when = "active " + agent.ActiveAt.Format(time.RFC3339)
 				}
+				if s := agent.Status; s != nil {
+					when += "\t[" + s.State + "] " + s.Task
+				}
 				if _, err := fmt.Fprintf(stdout, "%s\t%s\t%s\n", agent.Nick, strings.Join(agent.Channels, ","), when); err != nil {
 					return true, err
 				}

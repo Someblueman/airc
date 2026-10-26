@@ -80,6 +80,18 @@ type digestThread struct {
 	Participants []string `json:"participants"`
 	FirstID      string   `json:"first_id"`
 	Preview      string   `json:"preview"` // the first unread message in it
+	// Resolved says a resolution closed the thread: its root needs no answer.
+	Resolved bool `json:"resolved,omitempty"`
+}
+
+// digestStatus is a nickname's latest status post in a room among what was
+// read: where everyone is, without their narration.
+type digestStatus struct {
+	Nick  string    `json:"nick"`
+	State string    `json:"state"`
+	Task  string    `json:"task"`
+	Link  string    `json:"link,omitempty"`
+	At    time.Time `json:"at"`
 }
 
 type digestRoom struct {
@@ -93,6 +105,7 @@ type digestRoom struct {
 	Speakers []digestSpeaker `json:"speakers"`
 	Others   int             `json:"other_speakers,omitempty"`
 	Threads  []digestThread  `json:"threads,omitempty"`
+	Statuses []digestStatus  `json:"statuses,omitempty"` // the latest per nickname, newest first
 }
 
 type digestHeader struct {
@@ -205,14 +218,41 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 			roots[m.ThreadID] = true
 		}
 	}
+	// A thread with a resolution is settled, whoever posted it: its root
+	// carries the mark while the resolution is retained, and the resolution
+	// itself names the root.
+	resolved := map[string]bool{}
+	for _, m := range rows.messages {
+		if m.Resolved {
+			resolved[m.ID] = true
+		}
+		if m.Kind == "resolved" && m.ThreadID != "" {
+			resolved[m.ThreadID] = true
+		}
+	}
 	type roomState struct {
 		room     digestRoom
 		speakers map[string]*digestSpeaker
 		threads  map[string]*digestThread
 		order    []string // thread keys in first-seen order
+		statuses map[string]*digestStatus
 	}
 	rooms := map[string]*roomState{}
 	var roomOrder []string
+	// Where everyone is: the latest status per nickname in each room, own
+	// ones included, since they count toward nothing else.
+	statuses := map[string]map[string]*digestStatus{}
+	for _, m := range rows.messages {
+		if m.Kind != "status" || !protocol.IsChannel(m.Target) {
+			continue
+		}
+		if statuses[m.Target] == nil {
+			statuses[m.Target] = map[string]*digestStatus{}
+		}
+		if s := statuses[m.Target][strings.ToLower(m.From)]; s == nil || m.Timestamp.After(s.At) {
+			statuses[m.Target][strings.ToLower(m.From)] = &digestStatus{Nick: m.From, State: m.State, Task: m.Task, Link: m.Link, At: m.Timestamp}
+		}
+	}
 	for _, m := range rows.messages {
 		if own(m) {
 			continue
@@ -223,7 +263,7 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 		}
 		r := rooms[name]
 		if r == nil {
-			r = &roomState{room: digestRoom{Target: name, FirstID: m.ID, FirstAt: m.Timestamp}, speakers: map[string]*digestSpeaker{}, threads: map[string]*digestThread{}}
+			r = &roomState{room: digestRoom{Target: name, FirstID: m.ID, FirstAt: m.Timestamp}, speakers: map[string]*digestSpeaker{}, threads: map[string]*digestThread{}, statuses: statuses[name]}
 			rooms[name] = r
 			roomOrder = append(roomOrder, name)
 		}
@@ -248,6 +288,7 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 				r.order = append(r.order, thread)
 			}
 			t.Messages++
+			t.Resolved = t.Resolved || resolved[thread]
 			if !slices.ContainsFunc(t.Participants, func(p string) bool { return strings.EqualFold(p, m.From) }) {
 				t.Participants = append(t.Participants, m.From)
 			}
@@ -257,8 +298,10 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 			r.room.Mentions++
 			d.Addressed++
 			// Handoffs and decisions are listed by state, and their steps
-			// need no reply.
-			if !repliedTo[m.ID] && !strings.HasPrefix(m.Kind, "handoff") && !strings.HasPrefix(m.Kind, "decision") {
+			// need no reply; a status is narration, a resolution closes a
+			// thread, and a settled thread waits on nobody.
+			settled := resolved[m.ID] || m.ThreadID != "" && resolved[m.ThreadID]
+			if !repliedTo[m.ID] && !settled && !strings.HasPrefix(m.Kind, "handoff") && !strings.HasPrefix(m.Kind, "decision") && m.Kind != "status" && m.Kind != "resolved" {
 				d.Waiting = append(d.Waiting, item) // resolveAnswered asks the server about the rest
 			}
 		}
@@ -292,6 +335,15 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 		if len(r.room.Threads) > digestThreads {
 			r.room.Threads = r.room.Threads[:digestThreads]
 		}
+		for _, s := range r.statuses {
+			r.room.Statuses = append(r.room.Statuses, *s)
+		}
+		slices.SortFunc(r.room.Statuses, func(a, b digestStatus) int {
+			return cmp.Or(b.At.Compare(a.At), cmp.Compare(strings.ToLower(a.Nick), strings.ToLower(b.Nick)))
+		})
+		if len(r.room.Statuses) > digestSpeakers {
+			r.room.Statuses = r.room.Statuses[:digestSpeakers]
+		}
 		d.Rooms = append(d.Rooms, r.room)
 	}
 	for _, h := range rows.headers {
@@ -309,7 +361,8 @@ const digestReplyChecks = 40
 // resolveAnswered drops the messages this nick has replied to with a reply
 // link the rows did not show: replies to direct messages, which live in the
 // sender's conversation rather than this inbox, and replies in rooms the
-// digest did not read. A lookup that fails keeps the message, with a warning.
+// digest did not read. A resolution by anyone settles the message too. A
+// lookup that fails keeps the message, with a warning.
 func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, warnings *[]string) []digestItem {
 	if len(waiting) == 0 {
 		return waiting
@@ -323,7 +376,7 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 				return err
 			}
 			for _, reply := range page.messages {
-				if strings.EqualFold(reply.From, opt.nick) && reply.Reaction == "" {
+				if reply.Kind == "resolved" || strings.EqualFold(reply.From, opt.nick) && reply.Reaction == "" {
 					answered[item.ID] = true
 				}
 			}
@@ -471,9 +524,14 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 		}
 		fmt.Fprintf(&b, "%s: %d unread%s, %s, from %s\n", r.Target, r.Unread, tags, when, strings.Join(people, ", "))
 		for _, t := range r.Threads {
-			fmt.Fprintf(&b, "  thread %s: %d messages from %s, starting %q\n", t.ID, t.Messages, strings.Join(t.Participants, ", "), t.Preview)
+			mark := ""
+			if t.Resolved {
+				mark = " (resolved)"
+			}
+			fmt.Fprintf(&b, "  thread %s: %d messages from %s, starting %q%s\n", t.ID, t.Messages, strings.Join(t.Participants, ", "), t.Preview, mark)
 		}
 	}
+	writeStatuses(&b, d, now)
 	section := func(title string, items []digestItem, line func(digestItem) string) {
 		if len(items) == 0 {
 			return
@@ -579,6 +637,29 @@ func writeDecisions(b *strings.Builder, d digestSummary) {
 	}
 	if d.DecisionsMore > 0 {
 		fmt.Fprintf(b, "  and %d more; airc decisions lists them\n", d.DecisionsMore)
+	}
+}
+
+// writeStatuses says where everyone is: the latest status per nickname in
+// each summarised room, newest first:
+//
+//	Where everyone is:
+//	  #work builder [done] port the fix (12:01) https://github.com/o/r/pull/54
+//	  #work reviewer [working] review the parser (11:58)
+func writeStatuses(b *strings.Builder, d digestSummary, now time.Time) {
+	wrote := false
+	for _, r := range d.Rooms {
+		for _, s := range r.Statuses {
+			if !wrote {
+				b.WriteString("Where everyone is:\n")
+				wrote = true
+			}
+			fmt.Fprintf(b, "  %s %s [%s] %s (%s)", r.Target, s.Nick, s.State, s.Task, clock(s.At, now))
+			if s.Link != "" {
+				b.WriteString(" " + s.Link)
+			}
+			b.WriteString("\n")
+		}
 	}
 }
 

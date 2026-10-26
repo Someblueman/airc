@@ -157,6 +157,11 @@ var commandTable = []command{
 		help: `  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]`},
 	{name: "react", run: local(runReact), group: groupAgent,
 		help: `  airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]`},
+	{name: "status", run: reading(runStatusSession), session: true, mcp: true, group: groupAgent,
+		help: `  airc status --nick N --channel #room --task TEXT --state working|blocked|done [--link URL] [--message NOTE] [--json]   post where you are
+  airc status --channel #room [--json]           the room's latest status per nickname, newest first`},
+	{name: "resolve", run: reading(runResolveSession), session: true, mcp: true, group: groupAgent,
+		help: `  airc resolve MESSAGE_ID --nick N [--message NOTE] [--json]   close a question settled elsewhere; author, addressee or admin`},
 	{name: "handoff", run: reading(runHandoffSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc handoff (--channel #room [--to N] | --to N) --message TEXT|- [--json]   hand work over; in a room, first to accept takes it
   airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
