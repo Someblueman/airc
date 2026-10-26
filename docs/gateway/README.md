@@ -115,24 +115,27 @@ use, were [removed](removed-carriers.md) on 2026-10-26.
 ## Adding a carrier
 
 Each carrier is one descriptor in
-[`internal/gateway/config/transports.go`](../../internal/gateway/config/transports.go):
+[`gateway/internal/config/transports.go`](../../gateway/internal/config/transports.go):
 kind (stream, packet or process), network, address shape, TLS
 policy, author model, platforms, and the listener options it owns (their
 validators run from `listener_blocks.go`). Configuration validation, the
 `capabilities` report, the dispatcher's author policy and
 `airc service install --gateway` read it. `serve` starts the carrier through
 its entry in
-[`internal/gateway/service/owners.go`](../../internal/gateway/service/owners.go);
+[`gateway/internal/service/owners.go`](../../gateway/internal/service/owners.go);
 a process carrier names its own `airc-gateway` command instead.
 `TestOwnersCoverTheRegistry` fails until
 the descriptor and its owner both exist. Then write the adapter, register a
-suite carrier in `integration/gateway` and add a row to the table above.
+suite carrier in `gateway/integration` and add a row to the table above.
 
 ## Testing
 
-`go test -race -count=1 -timeout 60m ./internal/gateway/... ./integration/gateway`
-covers the gateway; integration tests build aircd and `airc-gateway` from
-this tree and give every fixture its own state, sockets and processes. On
+The gateway is its own Go module, `gateway/`, so that its carriers'
+dependencies never reach `aircd` or `airc`; the root `go.work` joins the
+two modules. `go test -race -count=1 -timeout 60m ./...` inside `gateway/`
+(or `go test ./gateway/...` from the repository root) covers the gateway;
+integration tests build aircd and `airc-gateway` from this tree and give
+every fixture its own state, sockets and processes. On
 Linux the journal needs ext4, XFS or Btrfs, so if `/tmp` is tmpfs point
 `TMPDIR` at a short owner-only directory on such a filesystem. Platform-only
 carriers skip elsewhere; a few probes are opt-in through `AGW_*`

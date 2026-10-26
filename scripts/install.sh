@@ -45,12 +45,24 @@ fi
 
 mkdir -p -- "$output"
 output=$(cd -- "$output" && pwd -P)
+# airc-gateway is its own Go module (gateway/), built from there; the rest
+# are the root module's.
 packages=()
+gateway=0
 for name in "${names[@]}"; do
-	packages+=("./cmd/$name")
+	if [[ "$name" == airc-gateway ]]; then
+		gateway=1
+	else
+		packages+=("./cmd/$name")
+	fi
 done
 source_dir=$(cd -- "$(dirname -- "$0")/.." && pwd -P)
-(cd -- "$source_dir" && go build -trimpath -ldflags='-s -w' -o "$output/" "${packages[@]}")
+if (( ${#packages[@]} > 0 )); then
+	(cd -- "$source_dir" && go build -trimpath -ldflags='-s -w' -o "$output/" "${packages[@]}")
+fi
+if (( gateway == 1 )); then
+	(cd -- "$source_dir/gateway" && go build -trimpath -ldflags='-s -w' -o "$output/" ./cmd/airc-gateway)
+fi
 for name in "${names[@]}"; do
 	printf '%s\n' "$output/$name"
 done

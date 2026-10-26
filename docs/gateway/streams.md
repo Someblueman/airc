@@ -53,7 +53,7 @@ calls four and streams twenty (at most 128 frames, 1 MiB). A disconnect
 cancels reads; admitted mutations continue.
 
 ```sh
-go run ./examples/gateway/framed-client --address 127.0.0.1:6683 \
+go run -C gateway ./examples/framed-client --address 127.0.0.1:6683 \
   --correlation c1 < request.json          # --ca FILE for TLS, --stream for a watch
 ```
 
