@@ -167,11 +167,23 @@ func (s *Server) slowAllowedLocked(client *session, target string) bool {
 	return true
 }
 
-func (s *Server) pinsLocked(client *session, request protocol.ChatRequest) error {
+// pinRequest lists a room's pins (Action pins, by Target) or pins or unpins
+// message ID, whose room names the target.
+type pinRequest struct {
+	Action string
+	Target string
+	ID     string
+}
+
+func decodePinRequest(_ Config, r protocol.ChatRequest) (pinRequest, error) {
+	if r.Action == "pins" && !validChannel(r.Target) {
+		return pinRequest{}, errors.New("pins requires a channel")
+	}
+	return pinRequest{Action: r.Action, Target: r.Target, ID: r.ID}, nil
+}
+
+func (s *Server) pinsLocked(client *session, request pinRequest) error {
 	if request.Action == "pins" {
-		if !validChannel(request.Target) {
-			return errors.New("pins requires a channel")
-		}
 		for _, message := range s.chat.Pins[request.Target] {
 			m := s.annotated(message)
 			metadata := messageMetadata(m)

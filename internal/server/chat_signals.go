@@ -16,7 +16,41 @@ type activitySignal struct {
 	sent  time.Time
 }
 
+// signalRequest is a live signal: typing or thinking in Target for Seconds,
+// or prepare, cancel or waiting about question ID, whose target it names.
+// Text is a brief note on what is being prepared.
+type signalRequest struct {
+	Action  string
+	Target  string
+	ID      string
+	Seconds int64
+	Text    string
+}
+
+// replySignal reports whether action concerns a question (prepare, cancel,
+// waiting) rather than a target (typing, thinking).
+func replySignal(action string) bool {
+	return action == "prepare" || action == "cancel" || action == "waiting"
+}
+
+func decodeSignalRequest(_ Config, r protocol.ChatRequest) (signalRequest, error) {
+	if !replySignal(r.Action) && !validChannel(r.Target) && !protocol.ValidNick(r.Target) {
+		return signalRequest{}, errors.New("typing/thinking requires a room or nickname")
+	}
+	return signalRequest{Action: r.Action, Target: r.Target, ID: r.ID, Seconds: r.Seconds, Text: r.Text}, nil
+}
+
+// signalLocked is the table's handler for the signal actions; the signal
+// tests drive it with the wire request.
 func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
+	request, err := decodeSignalRequest(s.cfg, r)
+	if err != nil {
+		return err
+	}
+	return s.activitySignalLocked(client, request)
+}
+
+func (s *Server) activitySignalLocked(client *session, r signalRequest) error {
 	now := s.now().UTC()
 	for key, signal := range s.signals {
 		if !now.Before(signal.entry.ExpiresAt) {
@@ -25,7 +59,7 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 	}
 	target := r.Target
 	var parent Message
-	if r.Action == "prepare" || r.Action == "cancel" || r.Action == "waiting" {
+	if replySignal(r.Action) {
 		var found bool
 		parent, found = s.history.message(r.ID)
 		if !found {
@@ -43,8 +77,6 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 		if !protocol.IsChannel(target) && !strings.EqualFold(client.client.Nick, parent.From) && !strings.EqualFold(client.client.Nick, parent.Target) {
 			return errors.New("only DM participants can signal a reply")
 		}
-	} else if !validChannel(target) && !protocol.ValidNick(target) {
-		return errors.New("typing/thinking requires a room or nickname")
 	}
 	if !s.postAllowedLocked(client, target) {
 		return errChatDenied

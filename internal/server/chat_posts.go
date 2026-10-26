@@ -28,7 +28,21 @@ func (s *Server) annotated(m Message) Message {
 	return m
 }
 
-func (s *Server) chatPostLocked(client *session, r protocol.ChatRequest) error {
+// postRequest posts Text as an action in Target, or as a correction or
+// retraction of message ID, whose target it takes. Every check depends on
+// the retained message or the poster's standing, so none is made here.
+type postRequest struct {
+	Action string
+	Target string
+	ID     string
+	Text   string
+}
+
+func decodePostRequest(_ Config, r protocol.ChatRequest) (postRequest, error) {
+	return postRequest{Action: r.Action, Target: r.Target, ID: r.ID, Text: r.Text}, nil
+}
+
+func (s *Server) chatPostLocked(client *session, r postRequest) error {
 	var parent *Message
 	if r.Action != "action" {
 		m, found := s.history.message(r.ID)
