@@ -228,3 +228,66 @@ func TestHTTP3DialSkipsAnAddressThatDoesNotAnswer(t *testing.T) {
 		t.Fatal("the redial did not resume the session")
 	}
 }
+
+// The same recovery when the host has several addresses: the race then
+// waits for the winner's handshake, during which the restarted gateway
+// rejects the resumed session's 0-RTT, and the HTTP/3 client must be built
+// on the connection quic-go hands over after the rejection.
+func TestHTTP3RecoversFromRejected0RTTAcrossAddresses(t *testing.T) {
+	previous := lookupNetIP
+	lookupNetIP = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("127.0.0.2"), netip.MustParseAddr("127.0.0.1")}, nil
+	}
+	t.Cleanup(func() { lookupNetIP = previous })
+	g := newFakeGateway(t)
+	cert := testtls.New(t)
+	udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := udp.LocalAddr().(*net.UDPAddr).Port
+	serve := func(udp *net.UDPConn, key byte) *http3.Server {
+		config := cert.Server.Clone()
+		config.NextProtos = []string{http3.NextProtoH3}
+		config.SetSessionTicketKeys([][32]byte{{key}})
+		srv := &http3.Server{Handler: g.srv.Config.Handler, TLSConfig: config}
+		go func() { _ = srv.Serve(udp) }()
+		return srv
+	}
+	first := serve(udp, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	e, _ := ParseEndpoint("http3:localhost:" + strconv.Itoa(port))
+	c := &Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: cert.Client, Endpoints: []Endpoint{e}}
+	k, err := c.Connect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer k.Close()
+	h := k.gateway.(*http3Conn)
+	read := func(id string) error {
+		_, err := h.call(ctx, request{RequestID: id, Operation: "history.read", Target: targetOf("#room"), Limit: 1, Start: "recent"})
+		return err
+	}
+	if err := read("a"); err != nil {
+		t.Fatal(err)
+	}
+	_ = first.Close()
+	_ = udp.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for h.q.conn.Context().Err() == nil && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	udp, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := serve(udp, 2)
+	t.Cleanup(func() { _ = second.Close(); _ = udp.Close() })
+	if err := read("b"); err != nil {
+		t.Fatalf("after the gateway restarted: %v", err)
+	}
+	if err := read("c"); err != nil {
+		t.Fatalf("the request after: %v", err)
+	}
+}

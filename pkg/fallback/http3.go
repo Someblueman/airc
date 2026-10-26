@@ -213,7 +213,13 @@ func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error
 			}
 			q, err := h.dialAddr(ctx, netip.AddrPortFrom(addr.Unmap(), uint16(h.e.Port)), progress)
 			if err == nil && len(addrs) > 1 {
-				if err = awaitHandshake(ctx, q.conn); err != nil {
+				if err = awaitHandshake(ctx, q.conn); err == nil {
+					// Nothing was sent early, so if the gateway rejected the
+					// resumed session's 0-RTT the connection only needs
+					// enabling for use after the rejection.
+					_, err = q.conn.NextConnection(ctx)
+				}
+				if err != nil {
 					q.close()
 					q = nil
 				}
