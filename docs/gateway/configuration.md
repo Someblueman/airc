@@ -43,9 +43,10 @@ The file is one UTF-8 JSON object of at most 64 KiB and ten nesting levels.
 Unknown, duplicate, case-aliased and null fields, malformed escapes and
 trailing data fail. Fields of [removed connection modes](removed-modes.md)
 fail as unknown; fields of the removed identity model (`principals`,
-`bindings`, keys, return routes, fixed broker targets) fail with one error
-naming the field and [removed-identity.md](removed-identity.md). Restart is
-the only reload.
+`bindings`, keys, return routes, fixed topic targets) fail with one error
+naming the field and [removed-identity.md](removed-identity.md), and a
+listener, option or section of a [removed carrier](removed-carriers.md)
+with one naming the field and that note. Restart is the only reload.
 
 | Field | Content |
 |---|---|
@@ -56,8 +57,6 @@ the only reload.
 | `carriers` | Optional ordered list published by `capabilities.get`, in aircd's `005 CARRIERS` format ([discovery](../SERVICE.md#carrier-discovery)) |
 | `cursor_key_file` | Owner-only 32-byte key for history, search and watch cursors |
 | `listeners` | At most 128 listeners |
-| `redis_pubsub`, `redis_streams`, `postgres_notify`, `sftp` | Route-owned ingress ([brokers](brokers.md), [offline](offline.md#sftp-mailbox)) |
-| `irc_bridges`, `xmpp_bridges` | Chat bridges ([bridges](bridges.md)) |
 | `limits`, `retry` | Optional resource and retry settings (below) |
 
 ## Upstream
@@ -72,9 +71,8 @@ plaintext TCP must be loopback. TLS needs `tls_server_name` and
 must differ from the access token. With it, each author session first
 sends `WEBIRC <source>`, so aircd applies its per-address limits to the real
 client: its IP address, `listener:<id>:pid:<pid>` for a Unix socket
-client process, `listener:<id>` for other carriers without addresses,
-`route:<id>` for route-owned ingress, or `bridge:<id>:<nick>` for a bridged
-user. Sources live only in memory; after a restart a pending job uses its
+client process, or `listener:<id>` for other carriers without addresses.
+Sources live only in memory; after a restart a pending job uses its
 listener's source. The [native tunnels](native.md) require it.
 
 ## Listeners
@@ -82,10 +80,9 @@ listener's source. The [native tunnels](native.md) require it.
 Each listener has a unique `id` (1–64 letters, digits, `-`, `_`), a
 `protocol`, `enabled` (default `false`) and an `address`. Network
 carriers default to `127.0.0.1:0` (port chosen at startup and reported in
-the ready record); SCTP and ICMPv6 need an explicit address. Network
-addresses are numeric. Local carriers take a path or name; `stdio`,
-`socketpair`, `inherited`, `offline_bundle`, `bpv7` and `scp_inbox` take
-none. Enabled listeners may not share an address.
+the ready record). Network addresses are numeric. Local carriers take a
+path; `stdio`, `socketpair` and `inherited` take none. Enabled listeners
+may not share an address.
 
 Every listener that carries author requests takes this access policy, all
 optional; the empty policy admits guests from anywhere the listener is
@@ -110,14 +107,10 @@ outside `operations` answers `unsupported_operation`.
 
 Some listeners narrow `operations`:
 
-- Exactly `["send"]`: `offline_bundle`, `bpv7`, `scp_inbox`, `mqtt_sn`,
-  `snmp_v3`, `syslog_tls`, `syslog_signed`.
-- Explicit list required: `fifo`, `uart`, and the mailboxes (`file_mailbox`,
-  `directory_mailbox`, `append_log`, which allow only `send`, `receipt.get`
-  and `history.read`).
-- Mutations only: `mqtt` (a publication gets no reply).
-- `send`, `context.read`, `history.read`, `search` only: `amqp`, `stomp`, and
-  the Redis, SFTP and bridge routes.
+- Explicit list required: the mailboxes (`file_mailbox`,
+  `directory_mailbox`, `append_log`), which allow only `send`,
+  `receipt.get` and `history.read`.
+- Mutations only: `mqtt` 3.1.1 (a publication gets no reply).
 
 Enabled reads (history, search, directory, context, pins, room, waiting,
 poll, topic, members, channels, agents) and WebRTC need at least two global
@@ -127,16 +120,13 @@ and per-author sessions; watches also need nonzero `watches` and
 ### TLS
 
 TLS is optional, on any address, for carriers with a plaintext form:
-`http`, `websocket`, `mcp_http`, `framed`, `grpc`, `mqtt`, `amqp`, `stomp`
-and `uart`. Supply `tls_cert_file` and `tls_key_file` together. As on IRC,
-account tokens sent without TLS can be read on the network. `unix`,
-`coap_tcp`, `zeromq`, `nng` and the datagram carriers (`udp`, `coap_udp`,
-`udp_lite`, multicast, broadcast, `icmp_v6`, `mqtt_sn`, `snmp_v3`, SCTP)
+`http`, `websocket`, `mcp_http`, `framed`, `grpc`, `mqtt` and
+`mqtt_websocket`. Supply `tls_cert_file` and `tls_key_file` together. As on
+IRC, account tokens sent without TLS can be read on the network. `unix`,
+`unixpacket`, `zeromq`, `nng` and the datagram carriers (`udp`, `coap_udp`)
 refuse TLS settings. Carriers that are encrypted by definition (`http3`,
-`webtransport`, `rawquic`, `rawquic_datagrams`, `dtls`, `coaps`,
-`coaps_tcp`, `webrtc`) and the TLS provider listeners (`syslog_tls`,
-`syslog_signed`) require a certificate even on loopback. `coap_oscore` uses an OSCORE context instead
-([network](network.md#oscore)).
+`webtransport`, `rawquic`, `rawquic_datagrams`, `dtls`, `coaps`, `webrtc`)
+require a certificate even on loopback.
 
 ### Per-carrier options
 
@@ -144,19 +134,12 @@ refuse TLS settings. Carriers that are encrypted by definition (`http3`,
 |---|---|---|
 | `allowed_origins` | `http`, `http3`, `webtransport`, `websocket`, `mcp_http`, `webrtc`, `mqtt_websocket` | [http](http.md#browsers) |
 | `webrtc` | `webrtc` | [network](network.md#webrtc) |
-| `mqtt`, `amqp`, `stomp`, `mqtt_sn` | brokers (`mqtt` also on `mqtt_websocket`) | [brokers](brokers.md) |
-| `udp_lite`, `ipv4_multicast`, `ipv6_multicast`, `ipv4_broadcast`, `icmp_v6` | packet carriers | [network](network.md#udp-family) |
-| `oscore` | `coap_oscore` | [network](network.md#oscore) |
-| `bound_author` | mailboxes, queues, shared memory, mapped file, `offline_bundle`, `bpv7` | [authentication](authentication.md#bound-authors) |
-| `reply_to` | `posix_mqueue`, `system_v_queue`, `shared_memory`, `mapped_file` (required) | [streams](streams.md#queues-shared-memory-and-mapped-files) |
-| `posix_queue`, `shared_memory`, `mach_ipc` | local IPC | [streams](streams.md) |
-| `scp_inbox`, `bundle_protocol` | `scp_inbox`, `bpv7` | [offline](offline.md) |
-| `syslog`, `signed_syslog`, `snmp` | provider ingress | [bridges](bridges.md) |
+| `mqtt` | `mqtt`, `mqtt_websocket` | [brokers](brokers.md) |
+| `bound_author` | `file_mailbox`, `directory_mailbox`, `append_log` | [authentication](authentication.md#bound-authors) |
 | `keepalive` | `websocket`, `http3`, `webtransport`, `rawquic`, `rawquic_datagrams` | [below](#keepalive) |
 
-`stdio`, `socketpair`, `inherited`, `fifo`, `uart`, `scp_inbox`,
-`file_mailbox`, `offline_bundle` and `bpv7` run under their own command and
-must be the only enabled listener in their file.
+`stdio`, `socketpair`, `inherited` and `file_mailbox` run under their own
+command and must be the only enabled listener in their file.
 
 ### Keepalive
 
@@ -256,8 +239,7 @@ more seconds to save what it observed) and closes the journal; pending jobs
 resume on the next start. A startup failure closes anything already bound.
 
 Other commands own one carrier each: `serve-stdio`, `serve-socketpair`,
-`serve-inherited`, `serve-fifo`, `serve-uart`, `mailbox-once`, `scp-inbox`,
-`import-bundle`, `import-bpv7` and `oscore init` (see the carrier pages).
+`serve-inherited` and `mailbox-once` (see the carrier pages).
 
 ### Journal
 
@@ -270,7 +252,7 @@ beside it in owner-only `mqtt-<listener id>.sessions` files; a listener
 whose file is not a private regular file it can read refuses to start, and
 removing the file forgets its sessions.
 
-The schema is one version (SQLite `user_version` 27) with no migrations; an
+The schema is one version (SQLite `user_version` 28) with no migrations; an
 empty journal is created at it. A journal written by an earlier gateway
 (any lower version) refuses to open and is left unchanged: drain its jobs
 with the previous binary, then start this one with a new state directory.
