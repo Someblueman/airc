@@ -172,7 +172,8 @@ func TestSlashCommands(t *testing.T) {
 		t.Fatalf("/msg without text sent %#v", got)
 	}
 	got := run("/join newroom")
-	if m.current != "#newroom" || m.find("#newroom") == nil || len(got) != 2 || got[1] != (uiCmd{kind: "observe", target: "#newroom"}) {
+	// Observed, then its charter read once observed.
+	if m.current != "#newroom" || m.find("#newroom") == nil || len(got) != 3 || got[1] != (uiCmd{kind: "observe", target: "#newroom"}) || got[2] != (uiCmd{kind: "charter", target: "#newroom"}) {
 		t.Fatalf("/join: current=%s cmds=%#v", m.current, got)
 	}
 	run("/close")
