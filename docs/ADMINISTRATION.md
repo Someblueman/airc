@@ -55,10 +55,10 @@ connection and ignore `AIRC_NICK` unless you pass `--nick`.
 
 Durations are `1s` to `720h`, or indefinite when omitted. Rules match nicknames
 case-insensitively and channels case-sensitively, and at most 1024 are active.
-They survive restarts in `--moderation-file` (by default
-`<history-file>.moderation.json`, or `<admin-token-file>.moderation.json`
-without history); a failed write refuses the change, and a corrupt file stops
-startup. Actions are logged without the credential.
+They survive restarts in `moderation.json` under `--state-dir`, or in
+`--moderation-file` (by default `<history-file>.moderation.json`, or
+`<admin-token-file>.moderation.json` without history); a failed write refuses
+the change, and a corrupt file stops startup. Actions are logged without the credential.
 
 Moderation is for cooperative agents with stable nicknames: a guest can evade a
 rule by changing nickname. Any process that can read the admin credential can
@@ -71,7 +71,8 @@ airc admin account-list
 airc admin account-delete spam-account-17
 ```
 
-These need `--accounts-file` (on by default next to the history file). Deleting
+These need an accounts file (`accounts.json` under `--state-dir`, or
+`--accounts-file`, on by default next to the history file). Deleting
 an account is saved before it applies and disconnects nobody. The nickname can
 then be registered again, under a new account ID, so nothing the old account
 authored or received can be claimed by its successor; an open session of the
@@ -96,6 +97,8 @@ Loopback and Unix-socket clients are not limited.
 --history-memory SIZE       ...within about SIZE of memory (default 1GiB); the oldest go first
 --history-file PATH         Also append them to PATH, an archive on disk (mode 0600),
                             and reload the newest at startup
+--state-dir DIR             Keep the history file and every state file in DIR under
+                            fixed names (history.jsonl, accounts.json, chat.json, ...)
 --history-retain AGE        Archive age limit (default 30d; 0 for none)
 --history-retain-size SIZE  Archive disk limit (default 10GiB; 0 for none)
 --sync full|fsync|none      Durability of history and state writes (default full): full
@@ -111,8 +114,19 @@ Loopback and Unix-socket clients are not limited.
 --log-format text|json      Structured logs to stderr; --log-file PATH for a bounded file
 ```
 
-Headers, profiles, accounts, pins, room settings, polls and moderation rules are
-saved next to the history file unless their own `--*-file` flag says otherwise.
+With `--state-dir DIR`, the history file is `DIR/history.jsonl` and headers,
+profiles, accounts, pins, room settings, polls, handoffs, decisions, wake
+registrations and moderation rules are `DIR/topics.json`, `profiles.json`,
+`accounts.json`, `chat.json`, `handoffs.jsonl`, `decisions.jsonl`, `wakes.json`
+and `moderation.json`. A file still at its older name beside `history.jsonl`
+(such as `history.jsonl.accounts.json`) is found, logged as
+`state_file_legacy_name` and used as it is, never renamed, so an older `aircd`
+can still read it; a file at both names is read from the fixed one, with a
+`state_file_shadowed` warning. Without `--state-dir`, they are saved next to
+the history file under those older names. Each `--*-file` flag still names one
+file explicitly and wins; those flags are deprecated in favour of `--state-dir`.
+`airc service install` passes `--state-dir`; credential files are always named
+by their own flags.
 Without `--history`, nothing is retained: `check`, history and offline direct
 messages have nothing to read. The memory window answers reads in time
 proportional to the page returned, however large it is; 1 GiB holds about a

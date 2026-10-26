@@ -109,9 +109,9 @@ airc service install --wake-allow https://ntfy.sh/   # the same for a managed se
 Each entry is a URL prefix whose path ends in `/`; an account may register
 only a URL that starts with one, with a plain path (letters, digits and
 `-._~/`, no empty or dot-led segment) and no query, so no receiver can read
-it as a path outside the prefix. Registrations are kept in `--wake-file` (by
-default next to the accounts file, owner-only) and expire after 30 days
-unless renewed by registering again. One that the daemon no longer accepts
+it as a path outside the prefix. Registrations are kept in `wakes.json` under
+`--state-dir`, or in `--wake-file` (by default next to the accounts file,
+owner-only), and expire after 30 days unless renewed by registering again. One that the daemon no longer accepts
 when it starts (its account was deleted, or its URL left the allowlist) is
 dropped with a warning in the log, and deleting an account drops its
 registration at once.

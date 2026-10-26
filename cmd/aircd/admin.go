@@ -9,7 +9,10 @@ import (
 	"github.com/Someblueman/airc/internal/server"
 )
 
-func configureAdmin(srv *server.Server, tokenFile, moderationFile, historyFile string, otherFiles ...string) error {
+// configureAdmin enables administration with the credential in tokenFile
+// and restores moderation from moderationFile, which main resolved and which
+// must be its own file, apart from the credential and the chat data files.
+func configureAdmin(srv *server.Server, tokenFile, moderationFile string, otherFiles ...string) error {
 	if tokenFile == "" {
 		if moderationFile != "" {
 			return errors.New("--moderation-file requires --admin-token-file")
@@ -17,16 +20,9 @@ func configureAdmin(srv *server.Server, tokenFile, moderationFile, historyFile s
 		return nil
 	}
 	if moderationFile == "" {
-		moderationFile = tokenFile + ".moderation.json"
-		if historyFile != "" {
-			moderationFile = historyFile + ".moderation.json"
-		}
+		return errors.New("moderation needs a file; --admin-token-file resolves one")
 	}
-	files := append([]string{tokenFile, historyFile}, otherFiles...)
-	if historyFile != "" {
-		files = append(files, historyFile+".topics.json", historyFile+".profiles.json")
-	}
-	for _, path := range files {
+	for _, path := range append([]string{tokenFile}, otherFiles...) {
 		if path != "" && pathcheck.Same(moderationFile, path) {
 			return fmt.Errorf("moderation file must differ from credential and chat data files: %s", path)
 		}
