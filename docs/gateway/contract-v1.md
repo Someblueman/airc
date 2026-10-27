@@ -35,8 +35,8 @@ never appear in the stored request, its fingerprint or any journal row.
 
 | Operation | Required | Optional |
 |---|---|---|
-| `send` | target, nonblank `message` | mutation fields¹ |
-| `reply` | target, `message`, `parent_id` | mutation fields |
+| `send` | target, nonblank `message` | `run`; mutation fields¹ |
+| `reply` | target, `message`, `parent_id` | `run`; mutation fields |
 | `reaction.add` | room target, `parent_id`, `reaction` | mutation fields |
 | `message.action` | room or direct target, `message` | mutation fields |
 | `message.correct` | room or direct target, `parent_id`, replacement `message` | mutation fields |
@@ -76,6 +76,14 @@ Field rules:
 
 - `message` normalizes CRLF and CR to LF, refuses NUL and fits 4096 UTF-8
   bytes. `parent_id` and `poll_id` are 32 lowercase hex characters.
+- `run` is a post's run label, 1–64 ASCII letters, digits, `.`, `_` or `-`
+  (AIRC's grammar, [PROTOCOL.md](../PROTOCOL.md)). The gateway relays it as
+  the `+airc/run` tag on the `PRIVMSG` or `REPLY`, so the message AIRC
+  stores carries it as `run` exactly as a native post's does; an AIRC
+  without `RUN` ignores the tag. The label is part of the request's intent:
+  the same request ID with another label is `id_conflict`. A gateway from
+  before this field refuses a request carrying it as an unknown member
+  (`invalid_request`), which is how a client tells one apart.
 - `reaction` uses AIRC's built-in or custom reaction grammar.
 - `topic` fits 400 bytes without controls and is trimmed.
 - `room`: at least one of `slow_seconds` (0–3600) and `history_limit` (≥ 0).

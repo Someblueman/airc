@@ -29,6 +29,7 @@ type fakeGateway struct {
 	stall    time.Duration // hold every answer this long
 	noCheck  bool          // refuse check, as a gateway from before it does
 	noThread bool          // refuse a check with threads, as a gateway from before them does
+	noRun    bool          // refuse a post with a run label, as a gateway from before them does
 	srv      *httptest.Server
 }
 
@@ -51,6 +52,9 @@ func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *
 		g.requests = append(g.requests, req)
 		refuse, stall := g.refuse, g.stall
 		if req.Operation == "check" && (g.noCheck || g.noThread && len(req.Threads) > 0) {
+			refuse = &failure{Code: "invalid_request"}
+		}
+		if g.noRun && req.Run != "" {
 			refuse = &failure{Code: "invalid_request"}
 		}
 		g.mu.Unlock()
@@ -185,6 +189,43 @@ func TestPostFallsBackInOrderWithOneRequestID(t *testing.T) {
 	}
 	if seen := up.seen(); len(seen) != 2 || seen[1].Operation != "receipt.get" || seen[1].LookupID != "req-1" {
 		t.Fatalf("receipt was not followed: %+v", seen)
+	}
+}
+
+// A post carries its run label on the wire, as a send or a reply. A gateway
+// from before run labels refuses the field as an unknown member; the post is
+// then made again without it, and the receipt says the label was dropped.
+func TestPostCarriesTheRunLabelOrDropsItForAnOlderGateway(t *testing.T) {
+	current, older := newFakeGateway(t), newFakeGateway(t)
+	older.noRun = true
+	c := &Client{Host: "127.0.0.1", Nick: "alice", Endpoints: []Endpoint{current.endpoint(t)}}
+	receipt, err := c.Post(t.Context(), Message{Target: "#room", Body: "hello", RequestID: "req-run", Run: "run-2026.10_26"})
+	if err != nil || receipt.RunDropped || receipt.MessageID != strings.Repeat("a", 32) {
+		t.Fatalf("%+v %v", receipt, err)
+	}
+	receipt, err = c.Post(t.Context(), Message{Target: "#room", ParentID: strings.Repeat("b", 32), Body: "hello", RequestID: "req-run-reply", Run: "run-reply"})
+	if err != nil || receipt.RunDropped {
+		t.Fatalf("reply: %+v %v", receipt, err)
+	}
+	if seen := current.seen(); len(seen) != 4 || seen[0].Operation != "send" || seen[0].Run != "run-2026.10_26" || seen[1].Operation != "receipt.get" || seen[2].Operation != "reply" || seen[2].Run != "run-reply" {
+		t.Fatalf("%+v", seen)
+	}
+	c.Endpoints = []Endpoint{older.endpoint(t)}
+	receipt, err = c.Post(t.Context(), Message{Target: "#room", Body: "hello", RequestID: "req-run-old", Run: "run-1"})
+	if err != nil || !receipt.RunDropped || receipt.MessageID != strings.Repeat("a", 32) || receipt.RequestID != "req-run-old" {
+		t.Fatalf("older gateway: %+v %v", receipt, err)
+	}
+	if seen := older.seen(); len(seen) != 3 || seen[0].Run != "run-1" || seen[1].Operation != "send" || seen[1].Run != "" || seen[1].RequestID != "req-run-old" || seen[2].Operation != "receipt.get" {
+		t.Fatalf("older gateway saw %+v", seen)
+	}
+	// A post without a label is not retried on a refusal, and an invalid
+	// label is refused before any carrier is tried.
+	older.refuse = &failure{Code: "invalid_request"}
+	if _, err := c.Post(t.Context(), Message{Target: "#room", Body: "hello", RequestID: "req-plain"}); err == nil || !Definite(err) || len(older.seen()) != 4 {
+		t.Fatalf("unlabelled refusal: %v %d", err, len(older.seen()))
+	}
+	if _, err := c.Post(t.Context(), Message{Target: "#room", Body: "hello", RequestID: "req-run-bad", Run: "bad label"}); err == nil || len(older.seen()) != 4 {
+		t.Fatalf("invalid label: %v %d", err, len(older.seen()))
 	}
 }
 

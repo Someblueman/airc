@@ -28,6 +28,9 @@ type outboundMessage struct {
 	// Paste is the paste the message shares; such a send is only recovered
 	// over native IRC, never reposted through another carrier.
 	Paste string `json:"paste,omitempty"`
+	// Run is the run label the message carries, so a retry over another
+	// carrier posts it with the label.
+	Run string `json:"run,omitempty"`
 }
 
 // How long a send waits for another send on the same identity; a variable so

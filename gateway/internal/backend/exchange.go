@@ -140,12 +140,15 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 	stopClose := context.AfterFunc(writeCtx, func() { _ = client.Close(); close(closed) })
 	var err error
 	if may {
+		// The run label travels as the +airc/run tag, as a native post's
+		// does; an AIRC without RUN ignores it.
+		options := irc.SendOptions{RequestID: a.Job.UpstreamID, Run: a.Job.Request.Run}
 		if a.Job.Request.Operation == core.ReactionAdd {
 			err = client.React(a.Job.Request.ParentID, a.Job.Request.Reaction)
 		} else if a.Job.Request.Operation == core.Reply {
-			err = client.ReplyWithID(a.Job.Request.ParentID, a.Job.Request.Message, a.Job.UpstreamID)
+			err = client.ReplyWith(a.Job.Request.ParentID, a.Job.Request.Message, options)
 		} else {
-			err = client.SendWithID(a.Job.Request.Target.Name, a.Job.Request.Message, a.Job.UpstreamID)
+			err = client.SendWith(a.Job.Request.Target.Name, a.Job.Request.Message, options)
 		}
 	} else {
 		err = client.RetryRequest(a.Job.UpstreamID)

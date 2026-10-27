@@ -94,10 +94,11 @@ func (c *Client) nativePost(ctx context.Context, k *Conn, m Message) (*Receipt, 
 	client, stop := native(ctx, k)
 	defer stop()
 	var err error
+	options := irc.SendOptions{RequestID: m.RequestID, Run: m.Run}
 	if m.ParentID != "" {
-		err = client.ReplyWithID(m.ParentID, m.Body, m.RequestID)
+		err = client.ReplyWith(m.ParentID, m.Body, options)
 	} else {
-		err = client.SendWithID(m.Target, m.Body, m.RequestID)
+		err = client.SendWith(m.Target, m.Body, options)
 	}
 	if err != nil {
 		if !client.Supports("IDEMPOTENCY") {
