@@ -82,7 +82,6 @@ type gatewayTimer struct {
 
 var (
 	readLeaseTimer     = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/store.linkedReadLease", 6 * time.Second, 15 * time.Second, &store.ReadLeaseDuration}
-	dtlsPeerIdleTimer  = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/service.linkedDTLSPeerIdle", 8 * time.Second, 30 * time.Second, nil}
 	websocketPingTimer = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/adapter.linkedWebSocketPing", 2 * time.Second, 10 * time.Second, nil}
 )
 

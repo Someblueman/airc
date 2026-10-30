@@ -70,8 +70,6 @@ var owners = map[string]owner{
 	"nng":               stream{serve: serveNNG}.start,
 	"mqtt":              stream{alpn: noALPN, serve: serveMQTT}.start,
 	"mqtt_websocket":    stream{http: mqttWebSocketServer}.start,
-	"dtls":              startDTLS,
-	"coaps":             startDTLS,
 	"udp":               packet(udpOwner),
 	"coap_udp":          packet(udpOwner),
 	"unixgram":          packet(unixgramListener),
@@ -96,14 +94,6 @@ func packet(open func(*startup, config.Listener, *dispatch.Dispatcher) (*packetO
 		}
 		return closing(p.addr().String(), func() error { return p.serve(o.work) }, func() { _ = p.close() }), nil
 	}
-}
-
-func startDTLS(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	owner, err := newDTLSOwner(d, o.connections, o.requests, o.certificates[l.ID], l.Address, l.Protocol)
-	if err != nil {
-		return instance{}, err
-	}
-	return closing(owner.addr().String(), func() error { return owner.serve(o.work) }, func() { _ = owner.close() }), nil
 }
 
 // quicListener owns a QUIC listener, which requires its certificate.

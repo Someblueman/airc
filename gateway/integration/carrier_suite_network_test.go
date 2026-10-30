@@ -4,8 +4,8 @@ package gateway_test
 
 // The encrypted network carriers in TestCarrierSuite: raw QUIC (bidirectional
 // streams, paired unidirectional streams, datagrams), HTTP/3, WebTransport
-// (bidirectional and unidirectional streams, datagrams) and DTLS. Every one
-// but HTTP/3 carries the same
+// (bidirectional and unidirectional streams, datagrams). Every one but
+// HTTP/3 carries the same
 // correlated plain frame ({"version","correlation_id","profile","stream",
 // "request"}), as a 4-byte length-prefixed frame on a stream or as AGD1
 // fragments on a datagram channel, so one netFrameClient speaks them all over
@@ -36,7 +36,6 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/pkg/irc"
-	"github.com/pion/dtls/v3"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	wt "github.com/quic-go/webtransport-go"
@@ -59,7 +58,6 @@ func networkSuiteCarriers() []suiteCarrier {
 		wtCarrier("webtransport_uni", "webtransport_uni_stream", wtUni, webTransportUniSuiteWire),
 		wtCarrier("webtransport_dgram", "webtransport_datagrams", wtDatagrams, webTransportDatagramSuiteWire),
 		{name: "http3", listener: config.Listener{Protocol: "http3"}, dial: dialHTTP3Suite, configure: suiteUDPAddress, secure: true, results: true, reads: true, watch: true, wire: http3SuiteWire},
-		{name: "dtls", listener: config.Listener{Protocol: "dtls"}, dial: dialDTLSSuite, configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "dtls_datagrams"}, wire: dtlsSuiteWire},
 	}
 }
 
@@ -450,62 +448,6 @@ func dialWebTransportSuite(transport func(*wt.Transport, *wt.Session) netTranspo
 		}
 		return &netFrameClient{transport: transport(dialer, session)}, nil
 	}
-}
-
-// DTLS: one association per client; AGD1 fragments are DTLS records.
-
-func dialDTLSSuite(t *testing.T, d suiteDial) (suiteClient, error) {
-	conn, err := dialDTLSPeer(t, d.address, d.tls, adapter.DTLSALPN)
-	if err != nil {
-		return nil, err
-	}
-	return &netFrameClient{transport: &agd1Transport{
-		sendDatagram: func(b []byte) error {
-			_ = conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
-			_, err := conn.Write(b)
-			return err
-		},
-		receiveDatagram: func(ctx context.Context) ([]byte, error) {
-			deadline, _ := ctx.Deadline()
-			_ = conn.SetReadDeadline(deadline)
-			buffer := make([]byte, 1201)
-			n, err := conn.Read(buffer)
-			return buffer[:n], err
-		},
-		closeConn: func() { _ = conn.Close() },
-	}}, nil
-}
-
-// dialDTLSPeer completes a DTLS 1.2 handshake trusting trust's roots, with
-// the extended master secret and an AEAD ECDSA suite.
-func dialDTLSPeer(t *testing.T, address string, trust *tls.Config, alpn string) (*dtls.Conn, error) {
-	t.Helper()
-	remote, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := dtls.DialWithOptions("udp", remote, dtls.WithRootCAs(trust.RootCAs), dtls.WithServerName(cmpServerName(trust)), dtls.WithSupportedProtocols(alpn), dtls.WithExtendedMasterSecret(dtls.RequireExtendedMasterSecret), dtls.WithCipherSuites(dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, dtls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384), dtls.WithMTU(1200))
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := suiteContext(t)
-	defer cancel()
-	if err := conn.HandshakeContext(ctx); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	if state, ok := conn.ConnectionState(); !ok || state.NegotiatedProtocol != alpn || len(state.PeerCertificates) == 0 {
-		_ = conn.Close()
-		t.Fatalf("DTLS state %+v", state)
-	}
-	return conn, nil
-}
-
-func cmpServerName(c *tls.Config) string {
-	if c.ServerName != "" {
-		return c.ServerName
-	}
-	return "localhost"
 }
 
 // HTTP/3 serves the HTTP contract: POST /v1/request takes any operation, and
@@ -1015,59 +957,4 @@ func http3SuiteWire(t *testing.T, e *suiteEnv) {
 			t.Fatalf("live events: HTTP/%d %d %q %q %v", response.ProtoMajor, response.StatusCode, response.Header.Get("Content-Type"), line, err)
 		}
 	})
-}
-
-func dtlsSuiteWire(t *testing.T, e *suiteEnv) {
-	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
-	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
-	t.Run("unknown_profile", func(t *testing.T) {
-		// A whole frame with an unknown profile gets a correlated refusal
-		// and the association stays usable.
-		client := e.dial(t).(*netFrameClient)
-		d := client.transport.(*agd1Transport)
-		id := e.id("profile")
-		frame := fmt.Appendf(nil, `{"version":1,"correlation_id":%q,"profile":"unknown","request":%s}`, id, sendBody(t, id, "#wire", "must not post", e.guest("profile"), ""))
-		next, _ := d.open(t, id, frame)
-		if r := next(5 * time.Second); r == nil || r.Event != "error" || r.Error == nil || r.Error.Code != core.InvalidRequest {
-			t.Fatalf("unknown profile: %+v", r)
-		}
-		e.noJob(t, id)
-		if r := client.call(t, capabilitiesBody(t, e)); r.result == nil || r.result.Capabilities == nil {
-			t.Fatalf("association unusable: %v", r)
-		}
-	})
-	t.Run("oversize_record", func(t *testing.T) {
-		// A record larger than an AGD1 fragment ends the association
-		// without a response.
-		d := e.dial(t).(*netFrameClient).transport.(*agd1Transport)
-		if err := d.sendDatagram(make([]byte, webTransportDatagramHeader+webTransportDatagramChunk+1)); err != nil {
-			t.Fatal(err)
-		}
-		ctx, cancel := context.WithTimeout(t.Context(), 1500*time.Millisecond)
-		defer cancel()
-		if data, err := d.receiveDatagram(ctx); err == nil {
-			t.Fatalf("oversize record answered: %q", data)
-		}
-	})
-	t.Run("handshake_refusals", func(t *testing.T) {
-		for name, configure := range map[string]func(*tls.Config) string{
-			"untrusted":  func(c *tls.Config) string { c.RootCAs = x509.NewCertPool(); return adapter.DTLSALPN },
-			"wrong_name": func(c *tls.Config) string { c.ServerName = "wrong.example"; return adapter.DTLSALPN },
-			"wrong_alpn": func(*tls.Config) string { return "wrong-protocol" },
-		} {
-			trust := e.cert.Client.Clone()
-			alpn := configure(trust)
-			conn, err := dialDTLSPeer(t, e.address, trust, alpn)
-			if err == nil {
-				_ = conn.Close()
-				t.Fatalf("%s: DTLS handshake accepted", name)
-			}
-			var hostname x509.HostnameError
-			var unknown x509.UnknownAuthorityError
-			if errors.Is(err, context.DeadlineExceeded) || name == "wrong_name" && !errors.As(err, &hostname) || name == "untrusted" && !errors.As(err, &unknown) {
-				t.Fatalf("%s: %v", name, err)
-			}
-		}
-	})
-	agd1SuiteWire(t, e)
 }

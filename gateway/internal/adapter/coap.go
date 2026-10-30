@@ -6,30 +6,18 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"io"
-	"net"
 	"sync"
 	"time"
 
-	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/gateway/internal/store"
-	coapserver "github.com/plgd-dev/go-coap/v3/dtls/server"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
-	coapNet "github.com/plgd-dev/go-coap/v3/net"
-	"github.com/plgd-dev/go-coap/v3/net/blockwise"
-	"github.com/plgd-dev/go-coap/v3/net/monitor/inactivity"
-	"github.com/plgd-dev/go-coap/v3/net/responsewriter"
-	coapclient "github.com/plgd-dev/go-coap/v3/udp/client"
-	"github.com/plgd-dev/go-coap/v3/udp/coder"
 )
 
 const (
-	CoAPALPN        = "coap"
 	coapMTU         = 1200
 	coapMaxMessage  = MaxResponseFrameBytes
 	coapMaxRequest  = MaxRequestFrameBytes
@@ -39,7 +27,7 @@ const (
 	coapMaxBlocks   = 4
 )
 
-// CoAPRegistration is a single-use, association-local Observe activation token.
+// CoAPRegistration is a single-use, peer-local Observe activation token.
 // It carries no AIRC authority beyond its original request.
 type CoAPRegistration struct {
 	Version          int    `json:"version"`
@@ -145,131 +133,6 @@ func (s *coapState) reset(mid int32) {
 			watch.cancel()
 		}
 	}
-}
-
-// coapSession replaces the dependency's mutex-only write path with cancellable
-// admission and one deadline for both waiting and the actual DTLS record write.
-// Its inherited reader owns library parsing and bounded Block1/Block2 handling.
-type coapSession struct {
-	*coapserver.Session
-	conn     net.Conn
-	writes   chan struct{}
-	state    *coapState
-	activity func()
-}
-
-func (s *coapSession) WriteMessage(msg *pool.Message) error {
-	ctx, cancel := context.WithTimeout(msg.Context(), 3*time.Second)
-	defer cancel()
-	select {
-	case s.writes <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	defer func() { <-s.writes }()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	wire, err := msg.MarshalWithEncoder(coder.DefaultCoder)
-	if err != nil {
-		return err
-	}
-	if len(wire) > coapMTU {
-		return store.ErrCapacity
-	}
-	deadline, _ := ctx.Deadline()
-	if err := s.conn.SetWriteDeadline(deadline); err != nil {
-		return err
-	}
-	s.state.setNotificationMID(msg)
-	n, err := s.conn.Write(wire)
-	if err != nil {
-		return err
-	}
-	if n != len(wire) {
-		return io.ErrShortWrite
-	}
-	s.state.sent(msg, s.activity)
-	return nil
-}
-
-// ServeCoAP owns one already-handshaken DTLS association. It closes the carrier
-// and joins its expiry, handler and native watch workers on every return path.
-// Dependency reader cleanup is driven by Session.Done; late queued handlers are
-// denied by the closed gate and cannot create native work after the join.
-func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, activity func()) error {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests || activity == nil {
-		return store.ErrInvalid
-	}
-	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
-	defer cancel()
-	state := newCoAPState(requests, "coaps_observe_fragments")
-	// One author session per DTLS association.
-	state.plain = authorIngress(d, conn.RemoteAddr(), true)
-	defer closeIngress(state.plain)
-	session := &coapSession{Session: coapserver.NewSession(ctx, coapNet.NewConn(conn), coapMaxMessage, coapMTU, true), conn: conn, writes: make(chan struct{}, 1), state: state, activity: activity}
-	cfg := coapclient.DefaultConfig
-	cfg.Ctx = ctx
-	cfg.MaxMessageSize = coapMaxMessage
-	cfg.BlockwiseEnable = true
-	cfg.BlockwiseSZX = blockwise.SZX1024
-	cfg.BlockwiseTransferTimeout = 3 * time.Second
-	cfg.ReceivedMessageQueueSize = 16
-	cfg.MTU = coapMTU
-	cfg.TransmissionMaxRetransmit = 2
-	cfg.TransmissionAcknowledgeTimeout = time.Second
-	cfg.Errors = func(error) {}
-	cfg.Handler = func(w *responsewriter.ResponseWriter[*coapclient.Conn], req *pool.Message) {
-		if !state.beginHandler() {
-			return
-		}
-		defer state.endHandler()
-		serveCoAPRequest(ctx, w, w.Conn(), req, d, state)
-	}
-	ledger := newCoAPLedger(state.reset)
-	cc := coapclient.NewConnWithOpts(session, &cfg,
-		coapclient.WithRequestMonitor(func(_ *coapclient.Conn, req *pool.Message) (bool, error) {
-			return ledger.check(req)
-		}),
-		coapclient.WithResponseMessageCache(newRefusingCache(coapMaxMIDs)),
-		coapclient.WithBlockWise(func(c *coapclient.Conn) *blockwise.BlockWise[*coapclient.Conn] {
-			return blockwise.New(c, 3*time.Second, func(error) {}, nil)
-		}),
-		coapclient.WithInactivityMonitor(inactivity.NewNilMonitor[*coapclient.Conn]()),
-	)
-	cc.AddOnClose(state.close)
-	stopped := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { state.close(); _ = session.Close(); close(stopped) })
-	periodicDone := make(chan struct{})
-	go func() {
-		defer close(periodicDone)
-		ticker := time.NewTicker(250 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case now := <-ticker.C:
-				cc.CheckExpirations(now)
-				state.expire(now)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	defer func() {
-		cancel()
-		state.close()
-		_ = session.Close()
-		if !stop() {
-			<-stopped
-		}
-		<-periodicDone
-		state.workers.Wait()
-	}()
-	err := cc.Run()
-	if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
-		return nil
-	}
-	return err
 }
 
 func coapJSON(w coapResponder, code codes.Code, value any) error {

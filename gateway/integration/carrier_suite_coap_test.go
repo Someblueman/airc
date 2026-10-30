@@ -2,103 +2,53 @@
 
 package gateway_test
 
-// The CoAP carriers in TestCarrierSuite: CoAP over DTLS (coaps, confirmable
-// and non-confirmable) and plain over UDP. A
-// request is a plain frame POSTed to /v1/coap/rpc and its outcome is the
-// response body; a streamed watch registers on /v1/coap/observe/register and
-// observes /v1/coap/observe, which notifies AGD1 fragments of each page.
+// The CoAP carrier in TestCarrierSuite: CoAP over UDP, with confirmable and
+// with non-confirmable requests. A request is a plain frame POSTed to
+// /v1/coap/rpc and its outcome is the response body; a streamed watch
+// registers on /v1/coap/observe/register and observes /v1/coap/observe, which
+// notifies AGD1 fragments of each page.
 
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/backend"
 	"github.com/Someblueman/airc/gateway/internal/config"
-	piondtls "github.com/pion/dtls/v3"
-	coapdtls "github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 	"github.com/plgd-dev/go-coap/v3/net/blockwise"
-	coapNetClient "github.com/plgd-dev/go-coap/v3/net/client"
 	coapOptions "github.com/plgd-dev/go-coap/v3/options"
 	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
+	coapClient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
 
 var _ = registerSuiteCarriers(
-	suiteCarrier{name: "coaps", listener: config.Listener{Protocol: "coaps"}, dial: dialCoAPSSuite(message.Confirmable), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_observe_fragments"}, wire: coapsSuiteWire},
-	suiteCarrier{name: "coaps_non", listener: config.Listener{Protocol: "coaps"}, dial: dialCoAPSSuite(message.NonConfirmable), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_observe_fragments"}},
-	suiteCarrier{name: "coap_udp", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite, configure: suiteUDPAddress, results: true, reads: true, watch: true, watchModes: []string{"long_poll", "coap_udp_observe_fragments"}, wire: coapUDPSuiteWire},
+	suiteCarrier{name: "coap_udp", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite(message.Confirmable), configure: suiteUDPAddress, results: true, reads: true, watch: true, watchModes: []string{"long_poll", "coap_udp_observe_fragments"}, wire: coapUDPSuiteWire},
+	suiteCarrier{name: "coap_udp_non", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite(message.NonConfirmable), configure: suiteUDPAddress, results: true, reads: true, watch: true, watchModes: []string{"long_poll", "coap_udp_observe_fragments"}},
 )
 
-// coapSuiteConn is what the suite uses of a go-coap UDP or DTLS client.
-type coapSuiteConn interface {
-	NewPostRequest(ctx context.Context, path string, contentFormat message.MediaType, payload io.ReadSeeker, opts ...message.Option) (*pool.Message, error)
-	NewGetRequest(ctx context.Context, path string, opts ...message.Option) (*pool.Message, error)
-	Do(*pool.Message) (*pool.Message, error)
-	DoObserve(*pool.Message, func(*pool.Message)) (coapNetClient.Observation, error)
-	ReleaseMessage(*pool.Message)
-	Done() <-chan struct{}
-	Close() error
-}
-
 type coapSuiteClient struct {
-	conn coapSuiteConn
+	conn *coapClient.Conn
 	// nonConfirmable sends every request as a NON message.
 	nonConfirmable bool
 	sequence       int
 }
 
-func dialCoAPSSuite(typ message.Type) func(*testing.T, suiteDial) (suiteClient, error) {
-	return func(t *testing.T, d suiteDial) (suiteClient, error) {
-		conn, err := dialCoAPSPeer(t, d.address, d.tls, coapALPN)
+func dialCoAPUDPSuite(typ message.Type) func(*testing.T, suiteDial) (suiteClient, error) {
+	return func(_ *testing.T, d suiteDial) (suiteClient, error) {
+		conn, err := coapUDP.Dial(d.address, coapOptions.WithBlockwise(true, blockwise.SZX1024, 5*time.Second))
 		if err != nil {
 			return nil, err
 		}
 		return &coapSuiteClient{conn: conn, nonConfirmable: typ == message.NonConfirmable}, nil
 	}
-}
-
-// dialCoAPSPeer completes a CoAP DTLS handshake trusting trust's roots.
-func dialCoAPSPeer(t *testing.T, address string, trust *tls.Config, alpn string) (coapSuiteConn, error) {
-	t.Helper()
-	conn, err := coapdtls.Dial(address, coapdtls.NewDTLSClientOptions(
-		piondtls.WithRootCAs(trust.RootCAs), piondtls.WithServerName(cmpServerName(trust)), piondtls.WithSupportedProtocols(alpn),
-		piondtls.WithExtendedMasterSecret(piondtls.RequireExtendedMasterSecret),
-		piondtls.WithCipherSuites(piondtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, piondtls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384), piondtls.WithMTU(1200),
-	), coapOptions.WithBlockwise(true, blockwise.SZX1024, 5*time.Second))
-	if err != nil {
-		return nil, err
-	}
-	raw := conn.NetConn().(*piondtls.Conn)
-	ctx, cancel := suiteContext(t)
-	defer cancel()
-	if err := raw.HandshakeContext(ctx); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	if state, ok := raw.ConnectionState(); !ok || state.NegotiatedProtocol != alpn || len(state.PeerCertificates) == 0 {
-		_ = conn.Close()
-		t.Fatalf("CoAPS state %+v", state)
-	}
-	return conn, nil
-}
-
-func dialCoAPUDPSuite(_ *testing.T, d suiteDial) (suiteClient, error) {
-	conn, err := coapUDP.Dial(d.address, coapOptions.WithBlockwise(true, blockwise.SZX1024, 5*time.Second))
-	if err != nil {
-		return nil, err
-	}
-	return &coapSuiteClient{conn: conn}, nil
 }
 
 // post sends body to path and returns the response code and payload; a nil
@@ -281,51 +231,30 @@ func (c *coapSuiteClient) observe(t *testing.T, token []byte) (func() *backend.H
 
 // Wire hooks.
 
-// coapSuiteWire covers what every CoAP carrier shares: frame bounds, frames
-// refused with a bare 4.00 before intake, and Block2 and notification
-// fragmentation of a page larger than a request frame.
-func coapSuiteWire(observe bool, extra func(*testing.T, *suiteEnv)) func(*testing.T, *suiteEnv) {
-	return func(t *testing.T, e *suiteEnv) {
-		t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, observe) })
-		t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
-		t.Run("malformed_frames", func(t *testing.T) {
-			client := e.dial(t).(*coapSuiteClient)
-			id := e.id("malformed")
-			request := sendBody(t, id, "#wire", "must not post", e.guest("malformed"), "")
-			for name, frame := range map[string][]byte{
-				"array_request":   []byte(`{"version":1,"correlation_id":"array","profile":"plain","request":[]}`),
-				"empty_request":   []byte(`{"version":1,"correlation_id":"empty","profile":"plain","request":{}}`),
-				"missing_request": []byte(`{"version":1,"correlation_id":"missing"}`),
-				"unknown_profile": fmt.Appendf(nil, `{"version":1,"correlation_id":"profile","profile":"unknown","request":%s}`, request),
-				"stream_on_rpc":   netFrame("stream", request, true),
-			} {
-				if code, payload, err := client.post(t, "/v1/coap/rpc", frame); err != nil || code != codes.BadRequest || len(payload) != 0 {
-					t.Fatalf("%s: %v %q %v", name, code, payload, err)
-				}
-			}
-			e.noJob(t, id)
-			if r := client.call(t, capabilitiesBody(t, e)); r.result == nil || r.result.Capabilities == nil {
-				t.Fatalf("client unusable after refused frames: %v", r)
-			}
-		})
-		if extra != nil {
-			extra(t, e)
-		}
-	}
-}
-
-var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
-	t.Run("handshake_refusals", func(t *testing.T) {
-		for name, configure := range map[string]func(*tls.Config) string{
-			"untrusted":  func(c *tls.Config) string { c.RootCAs = x509.NewCertPool(); return coapALPN },
-			"wrong_name": func(c *tls.Config) string { c.ServerName = "wrong.example"; return coapALPN },
-			"wrong_alpn": func(*tls.Config) string { return "wrong-alpn" },
+// coapUDPSuiteWire covers frame bounds, frames refused with a bare 4.00
+// before intake, Block2 and notification fragmentation of a page larger than
+// a request frame, and the scope of an Observe registration.
+func coapUDPSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
+	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
+	t.Run("malformed_frames", func(t *testing.T) {
+		client := e.dial(t).(*coapSuiteClient)
+		id := e.id("malformed")
+		request := sendBody(t, id, "#wire", "must not post", e.guest("malformed"), "")
+		for name, frame := range map[string][]byte{
+			"array_request":   []byte(`{"version":1,"correlation_id":"array","profile":"plain","request":[]}`),
+			"empty_request":   []byte(`{"version":1,"correlation_id":"empty","profile":"plain","request":{}}`),
+			"missing_request": []byte(`{"version":1,"correlation_id":"missing"}`),
+			"unknown_profile": fmt.Appendf(nil, `{"version":1,"correlation_id":"profile","profile":"unknown","request":%s}`, request),
+			"stream_on_rpc":   netFrame("stream", request, true),
 		} {
-			trust := e.cert.Client.Clone()
-			if conn, err := dialCoAPSPeer(t, e.address, trust, configure(trust)); err == nil {
-				_ = conn.Close()
-				t.Fatalf("%s: CoAPS handshake accepted", name)
+			if code, payload, err := client.post(t, "/v1/coap/rpc", frame); err != nil || code != codes.BadRequest || len(payload) != 0 {
+				t.Fatalf("%s: %v %q %v", name, code, payload, err)
 			}
+		}
+		e.noJob(t, id)
+		if r := client.call(t, capabilitiesBody(t, e)); r.result == nil || r.result.Capabilities == nil {
+			t.Fatalf("client unusable after refused frames: %v", r)
 		}
 	})
 	t.Run("registration_holds_no_lease", func(t *testing.T) {
@@ -334,7 +263,7 @@ var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 		client := e.dial(t).(*coapSuiteClient)
 		client.register(t, watchBody(t, e.id("registered"), "#wire", e.guest("reg")))
 		// The registration's reply is sent once its handler has returned,
-		// and another round trip on the same association follows it.
+		// and another round trip from the same source follows it.
 		if r := client.call(t, capabilitiesBody(t, e)); r.result == nil {
 			t.Fatalf("capabilities after registration: %+v", r)
 		}
@@ -342,8 +271,8 @@ var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 			t.Fatalf("registration took a native lease: %d, baseline %d", got, baseline)
 		}
 	})
-	t.Run("token_bound_to_association", func(t *testing.T) {
-		// An observation token is useless on another DTLS association.
+	t.Run("token_bound_to_source", func(t *testing.T) {
+		// An observation token is useless from another source.
 		token := e.dial(t).(*coapSuiteClient).register(t, watchBody(t, e.id("owner"), "#wire", e.guest("owner")))
 		other := e.dial(t).(*coapSuiteClient)
 		ctx, cancel := suiteContext(t)
@@ -362,20 +291,4 @@ var coapsSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 			t.Fatalf("observation token transferred: %v", err)
 		}
 	})
-	t.Run("correlation_collision", func(t *testing.T) {
-		// A request reusing a pending registration's correlation ID closes
-		// the peer before intake; the same intent on a fresh peer posts.
-		client := e.dial(t).(*coapSuiteClient)
-		client.register(t, watchBody(t, e.id("pending"), "#wire", e.guest("pending")))
-		id, nick, text := e.id("collision"), e.guest("collision"), e.text("collision")
-		body := sendBody(t, id, "#wire", text, nick, "")
-		if code, payload, err := client.post(t, "/v1/coap/rpc", netFrame("watch", body, false)); err == nil {
-			t.Fatalf("collision answered %v %q", code, payload)
-		}
-		e.noJob(t, id)
-		e.admitted(t, e.dial(t).call(t, body), id)
-		e.posted(t, id, "#wire", text, nick, "")
-	})
-})
-
-var coapUDPSuiteWire = coapSuiteWire(true, nil)
+}
