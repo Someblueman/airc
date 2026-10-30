@@ -426,14 +426,7 @@ func sendBody(file, language, message string, stdin io.Reader) (string, error) {
 		}
 		message = strings.TrimRight(string(data), "\r\n")
 	}
-	message = irc.NormalizeMessage(message)
-	if len(message) > 4096 {
-		return "", errors.New("message exceeds 4096 bytes")
-	}
-	if strings.TrimSpace(message) == "" {
-		return "", errors.New("--message is required")
-	}
-	return message, nil
+	return messageText(message, true)
 }
 
 func outputSend(ctx context.Context, opt options, result *sendResult, check bool, settings *checkOptions, maxBytes int, client *irc.Client, stdout, stderr io.Writer) error {

@@ -90,17 +90,31 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 			return errors.New("use --channel and --message (or --question/--option for polls)")
 		}
 	}
+	// Pins and polls are structured actions with one builder each; the rest
+	// are shaped here.
+	var shaped chatInput
+	switch kind {
+	case "pin", "unpin":
+		shaped = pinInput{Step: kind, ID: r.ID, Channel: *channel}
+	case "pins":
+		shaped = pinInput{Step: "list", Channel: r.Target}
+	case "poll":
+		shaped = pollInput{Channel: *channel, Question: *question, Options: choices, Seconds: int(r.Seconds)}
+	case "vote":
+		shaped = pollInput{Step: "vote", ID: r.ID, Choice: r.Choice}
+	case "poll-results":
+		shaped = pollInput{Step: "results", ID: r.ID}
+	case "poll-close":
+		shaped = pollInput{Step: "close", ID: r.ID}
+	}
+	if shaped != nil {
+		var err error
+		if r, err = shaped.request(); err != nil {
+			return err
+		}
+	}
 	if kind == "me" {
 		r.Action = "action"
-	}
-	if kind == "poll-results" {
-		r.Action = "results"
-	}
-	if kind == "poll-close" {
-		r.Action = "close-poll"
-	}
-	if kind == "poll" {
-		r.Text, r.Options = *question, choices
 	}
 	if kind == "prepare" {
 		if *eta > 0 {
@@ -129,10 +143,13 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	if *wait < 0 || *wait > 5*time.Minute || *wait > 0 && kind != "waiting" {
 		return errors.New("--wait applies to waiting and must be 0-5m")
 	}
-	query := kind == "pins" || kind == "room" || kind == "waiting" || kind == "poll-results"
-	if query && opt.nick == "" && opt.identityFile == "" {
-		opt.nick = defaultQueryNick()
-	} else if err := identity(opt); err != nil {
+	var err error
+	if kind == "pins" || kind == "room" || kind == "waiting" || kind == "poll-results" {
+		err = queryIdentity(opt)
+	} else {
+		err = identity(opt)
+	}
+	if err != nil {
 		return err
 	}
 	if *wait > 0 {

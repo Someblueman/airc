@@ -97,6 +97,16 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 	return nil, result, nil
 }
 
+// shaped runs a structured chat action from its shared input: the input is
+// checked first, so a bad call is refused before a connection is leased, then
+// its CLI command runs in process and checks it again on the way.
+func (a *mcpAdapter) shaped(ctx context.Context, in chatInput) (*mcpserver.Result, mcpOutput, error) {
+	if _, err := in.request(); err != nil {
+		return nil, mcpOutput{}, err
+	}
+	return a.call(ctx, in.args(), "", 15*time.Second, false)
+}
+
 func (a *mcpAdapter) server() *mcpserver.Server {
 	s := mcpserver.NewServer(mcpserver.Implementation{Name: "airc", Version: "1"}, mcpInstructions)
 	a.addCoreTools(s)

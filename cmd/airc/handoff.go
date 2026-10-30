@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -15,37 +14,24 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// handoffSteps maps airc handoff's step words to their CHAT actions.
-var handoffSteps = map[string]string{
-	"accept":   "handoff-accept",
-	"blocked":  "handoff-blocked",
-	"decline":  "handoff-decline",
-	"done":     "handoff-done",
-	"withdraw": "handoff-withdraw",
-}
-
 // runHandoffSession offers a handoff, or with a step word and an ID takes
 // one through accept, blocked, decline, done or withdraw.
 func runHandoffSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	step := ""
+	in := handoffInput{}
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		step, args = args[0], args[1:]
-		if handoffSteps[step] == "" {
-			return fmt.Errorf("unknown handoff step %q: use accept, blocked, decline, done or withdraw ID", step)
+		in.Step, args = args[0], args[1:]
+		if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+			in.ID, args = args[0], args[1:]
 		}
-	}
-	id := ""
-	if step != "" && len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		id, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("airc handoff", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	opt.session = session
-	channel := fs.String("channel", "", "room to hand the work to, or to post the handoff in (env AIRC_CHANNEL)")
-	to := fs.String("to", "", "nickname the work is for; alone, a direct handoff")
-	message := fs.String("message", "", "what to hand over, or a note on the step (blocked: why, required); - reads stdin")
-	link := fs.String("link", "", "done: where the result is, an absolute http(s) URL (a PR, a commit, a document)")
+	fs.StringVar(&in.Channel, "channel", "", "room to hand the work to, or to post the handoff in (env AIRC_CHANNEL)")
+	fs.StringVar(&in.To, "to", "", "nickname the work is for; alone, a direct handoff")
+	fs.StringVar(&in.Message, "message", "", "what to hand over, or a note on the step (blocked: why, required); - reads stdin")
+	fs.StringVar(&in.Link, "link", "", "done: where the result is, an absolute http(s) URL (a PR, a commit, a document)")
 	runFlag := addRunFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -53,50 +39,14 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	if *link != "" && step != "done" {
-		return errors.New("--link applies to done")
-	}
-	if *link != "" && !protocol.ValidLink(*link) {
-		return fmt.Errorf("--link needs an absolute http(s) URL of at most %d bytes", protocol.MaxLinkBytes)
-	}
-	run, err := runLabel(*runFlag)
-	if err != nil {
+	var err error
+	if in.Message, err = flagText(in.Message, stdin); err != nil {
 		return err
 	}
-	r := irc.ChatRequest{Action: "handoff", Link: *link, Run: run}
-	if step == "" {
-		if *channel == "" && *to == "" {
-			*channel = os.Getenv("AIRC_CHANNEL")
-		}
-		if *channel == "" && *to == "" {
-			return errors.New("hand off to a room (--channel), a nickname (--to), or a nickname in a room (both)")
-		}
-		body, err := sendBody("", "", *message, stdin)
-		if err != nil {
-			return err
-		}
-		r.Text, r.For = body, *to
-		if r.Target = channelName(*channel); r.Target == "" {
-			r.Target = *to
-		}
-	} else {
-		if !protocol.ValidMessageID(id) {
-			return fmt.Errorf("airc handoff %s needs the handoff's ID", step)
-		}
-		if *channel != "" || *to != "" {
-			return errors.New("a handoff step names only the handoff's ID; it goes where the handoff is")
-		}
-		if step == "blocked" && *message == "" {
-			return errors.New("airc handoff blocked needs --message: say why it is blocked")
-		}
-		if *message != "" {
-			body, err := sendBody("", "", *message, stdin)
-			if err != nil {
-				return err
-			}
-			r.Text = body
-		}
-		r.Action, r.ID = handoffSteps[step], id
+	in.Run = *runFlag
+	r, err := in.request()
+	if err != nil {
+		return err
 	}
 	if err := identity(opt); err != nil {
 		return err

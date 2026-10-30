@@ -17,28 +17,28 @@ import (
 // root of the message's thread with a resolution, so a digest stops waiting
 // on it. The root's author, whoever it addresses, or an admin may resolve it.
 func runResolveSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	id := ""
+	in := resolveInput{}
 	if len(args) > 0 && protocol.ValidMessageID(args[0]) {
-		id, args = args[0], args[1:]
+		in.ID, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("airc resolve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	opt.session = session
-	message := fs.String("message", "", "how it was settled; - reads stdin (default \"Resolved\")")
+	fs.StringVar(&in.Message, "message", "", "how it was settled; - reads stdin (default \"Resolved\")")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if id == "" || fs.NArg() > 0 {
+	if in.ID == "" || fs.NArg() > 0 {
 		return errors.New("usage: airc resolve MESSAGE_ID --nick N [--message NOTE] [--json]")
 	}
-	r := irc.ChatRequest{Action: "resolve", ID: id}
-	if *message != "" {
-		body, err := sendBody("", "", *message, stdin)
-		if err != nil {
-			return err
-		}
-		r.Text = body
+	var err error
+	if in.Message, err = flagText(in.Message, stdin); err != nil {
+		return err
+	}
+	r, err := in.request()
+	if err != nil {
+		return err
 	}
 	if err := identity(opt); err != nil {
 		return err

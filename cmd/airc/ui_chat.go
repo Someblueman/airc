@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +32,20 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return false
 		}
 		return true
+	}
+	// tail is rest after its first field: a step's note, a question's text.
+	tail := ""
+	if len(fields) > 0 {
+		tail = strings.TrimSpace(rest[len(fields[0]):])
+	}
+	// build shapes a structured action's request, or says why it cannot.
+	build := func(in chatInput) ([]uiCmd, bool) {
+		r, err := in.request()
+		if err != nil {
+			m.setStatus(err.Error(), true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "chat", request: &r}}, true
 	}
 	if len(fields) > 0 && fields[0] == "last" && b != nil {
 		for _, v := range slices.Backward(b.items) {
@@ -76,80 +89,78 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return nil, true
 		}
 		return []uiCmd{{kind: "charter", target: room, text: "open"}}, true
-	case "/pin", "/unpin", "/correct", "/retract", "/prepare", "/waiting", "/cancel", "/vote", "/results", "/close-poll":
+	case "/correct", "/retract", "/prepare", "/waiting", "/cancel":
 		if !need(1) {
 			return nil, true
 		}
-		request.Action, request.ID = name[1:], fields[0]
-		if len(fields) > 1 {
-			request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
-		}
+		request.Action, request.ID, request.Text = name[1:], fields[0], tail
 		if name == "/prepare" {
 			request.Seconds = 120
 		}
-		if name == "/vote" {
-			if !need(2) {
-				return nil, true
-			}
-			if _, err := fmt.Sscan(fields[1], &request.Choice); err != nil {
-				m.setStatus("/vote ID CHOICE_NUMBER", true)
-				return nil, true
-			}
-			request.Text = ""
+	case "/pin", "/unpin":
+		if !need(1) {
+			return nil, true
 		}
+		return build(pinInput{Step: name[1:], ID: fields[0]})
+	case "/vote":
+		if !need(2) {
+			return nil, true
+		}
+		choice, err := strconv.Atoi(fields[1])
+		if err != nil {
+			m.setStatus("/vote ID CHOICE_NUMBER", true)
+			return nil, true
+		}
+		return build(pollInput{Step: "vote", ID: fields[0], Choice: choice})
+	case "/results", "/close-poll":
+		if !need(1) {
+			return nil, true
+		}
+		return build(pollInput{Step: strings.TrimSuffix(name[1:], "-poll"), ID: fields[0]})
 	case "/me", "/pins", "/poll":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("This command requires a room", true)
 			return nil, true
 		}
-		request.Target = b.name
-		if name == "/me" {
+		switch name {
+		case "/me":
 			if !need(1) {
 				return nil, true
 			}
-			request.Action, request.Text = "action", rest
-		}
-		if name == "/pins" {
-			request.Action = "pins"
-		}
-		if name == "/poll" {
-			parts := strings.Split(rest, "|")
+			request.Action, request.Target, request.Text = "action", b.name, rest
+		case "/pins":
+			return build(pinInput{Step: "list", Channel: b.name})
+		case "/poll":
+			parts := splitPipes(rest)
 			if len(parts) < 3 {
 				m.setStatus("/poll Question | option 1 | option 2", true)
 				return nil, true
 			}
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
-			}
-			request.Action, request.Text, request.Options, request.Seconds = "poll", parts[0], parts[1:], 3600
+			return build(pollInput{Channel: b.name, Question: parts[0], Options: parts[1:], Seconds: 3600})
 		}
 	case "/handoff":
 		if !need(1) {
 			return nil, true
 		}
+		in := handoffInput{Message: rest}
 		switch {
 		case b != nil && b.kind == bufChannel:
-			request.Target, request.Text = b.name, rest
+			in.Channel = b.name
 			if nick, ok := strings.CutPrefix(fields[0], "@"); ok && len(fields) > 1 {
-				request.For, request.Text = nick, strings.TrimSpace(rest[len(fields[0]):])
+				in.To, in.Message = nick, tail
 			}
 		case b != nil && b.kind == bufQuery && protocol.ValidNick(b.name):
-			request.Target, request.Text = b.name, rest
+			in.To = b.name
 		default:
 			m.setStatus("/handoff needs a room or a direct conversation", true)
 			return nil, true
 		}
-		request.Action = "handoff"
+		return build(in)
 	case "/accept", "/blocked", "/decline", "/done", "/withdraw":
 		if !need(1) {
 			return nil, true
 		}
-		if name == "/blocked" && len(fields) < 2 {
-			m.setStatus("/blocked ID reason: say why the handoff is stuck", true)
-			return nil, true
-		}
-		request.Action, request.ID = "handoff-"+name[1:], fields[0]
-		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+		return build(handoffInput{Step: name[1:], ID: fields[0], Message: tail})
 	case "/handoffs":
 		request.Action = "handoffs"
 	case "/board":
@@ -166,6 +177,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		if !need(1) {
 			return nil, true
 		}
+		in := decisionInput{}
 		switch {
 		case b != nil && b.kind == bufChannel:
 			nick, ok := strings.CutPrefix(fields[0], "@")
@@ -173,39 +185,35 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 				m.setStatus("/decide @nick question | option | option", true)
 				return nil, true
 			}
-			request.Target, request.For, request.Text = b.name, nick, strings.TrimSpace(rest[len(fields[0]):])
+			in.Channel, in.From, in.Message = b.name, nick, tail
 		case b != nil && b.kind == bufQuery && protocol.ValidNick(b.name):
-			request.Target, request.For, request.Text = b.name, b.name, rest
+			in.To, in.Message = b.name, rest
 		default:
 			m.setStatus("/decide needs a room or a direct conversation", true)
 			return nil, true
 		}
-		parts := strings.Split(request.Text, "|")
-		for i := range parts {
-			parts[i] = strings.TrimSpace(parts[i])
-		}
-		request.Action, request.Text = "decision", parts[0]
+		parts := splitPipes(in.Message)
+		in.Message = parts[0]
 		if len(parts) > 1 {
-			request.Options = parts[1:]
+			in.Options = parts[1:]
 		}
+		return build(in)
 	case "/answer":
 		if !need(1) {
 			return nil, true
 		}
-		request.Action, request.ID = "decision-answer", fields[0]
-		note := strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+		in := decisionInput{Step: "answer", ID: fields[0], Message: tail}
 		if len(fields) > 1 {
 			if n, err := strconv.Atoi(fields[1]); err == nil && n > 0 {
-				request.Choice, note = n, strings.TrimSpace(note[len(fields[1]):])
+				in.Choice, in.Message = n, strings.TrimSpace(tail[len(fields[1]):])
 			}
 		}
-		request.Text = note
+		return build(in)
 	case "/withdraw-decision":
 		if !need(1) {
 			return nil, true
 		}
-		request.Action, request.ID = "decision-withdraw", fields[0]
-		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+		return build(decisionInput{Step: "withdraw", ID: fields[0], Message: tail})
 	case "/decisions":
 		request.Action = "decisions"
 	case "/status":
@@ -215,27 +223,24 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			m.setStatus("/status works in a room", true)
 			return nil, true
 		}
-		request.Action, request.Target = "statuses", b.name
+		in := statusInput{Channel: b.name}
 		if rest != "" {
-			parts := strings.Split(rest, "|")
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
-			}
-			if len(parts) < 2 || !protocol.ValidStatusState(parts[1]) {
+			parts := splitPipes(rest)
+			if len(parts) < 2 {
 				m.setStatus("/status task | working|blocked|done | note", true)
 				return nil, true
 			}
-			request.Action, request.Task, request.State = "status", parts[0], parts[1]
+			in.Task, in.State = parts[0], parts[1]
 			if len(parts) > 2 {
-				request.Text = strings.Join(parts[2:], " | ")
+				in.Message = strings.Join(parts[2:], " | ")
 			}
 		}
+		return build(in)
 	case "/resolve":
 		if !need(1) {
 			return nil, true
 		}
-		request.Action, request.ID = "resolve", fields[0]
-		request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
+		return build(resolveInput{ID: fields[0], Message: tail})
 	case "/op", "/deop", "/kick":
 		if b == nil || b.kind != bufChannel || !need(1) {
 			m.setStatus("Use "+name+" nick [reason] in a channel", true)
