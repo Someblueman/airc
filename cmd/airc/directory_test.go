@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -83,5 +84,20 @@ func TestChatCommandsRejectInvalidUpdatesAndOlderDaemons(t *testing.T) {
 		if _, _, err := cli(t, old, args...); err == nil || !strings.Contains(err.Error(), "DIRECTORY") && !strings.Contains(err.Error(), "SEARCH") && !strings.Contains(err.Error(), "REACTIONS") {
 			t.Fatalf("old daemon accepted %v: %v", args, err)
 		}
+	}
+}
+
+func TestLacksCapabilityNamesTheFlagOrTheUpgrade(t *testing.T) {
+	for capability, want := range map[string]string{
+		"ADMIN":     "this aircd lacks ADMIN: it runs without --admin-token-file",
+		"WAKE":      "this aircd lacks WAKE: it runs without --wake-allow (and an accounts file)",
+		"DIRECTORY": "this aircd lacks DIRECTORY; upgrade when safe",
+	} {
+		if got := lacksCapability(capability); got != want {
+			t.Errorf("lacksCapability(%s) = %q, want %q", capability, got, want)
+		}
+	}
+	if got := hints(errors.New(lacksCapability("ADMIN"))); len(got) == 0 || !strings.Contains(got[0], "airc doctor") {
+		t.Errorf("a configuration gap lost the doctor hint: %v", got)
 	}
 }

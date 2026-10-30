@@ -129,7 +129,7 @@ func (m *uiModel) helpLines() []helpLine {
 		}
 		line := helpLine{head: strings.TrimSpace(c.name + " " + c.usage), body: c.help}
 		if !m.supports(c.needs) {
-			line.body += " [unavailable: the daemon lacks " + c.needs + "; upgrade and restart it when safe]"
+			line.body += " [unavailable: " + lacksCapability(c.needs) + "]"
 		}
 		lines = append(lines, line)
 	}

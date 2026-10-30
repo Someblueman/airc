@@ -470,6 +470,10 @@ func TestHelpViewReflectsDaemonCapabilities(t *testing.T) {
 			if !strings.Contains(line, "unavailable") {
 				t.Errorf("unsupported command not marked: %s", line)
 			}
+			// ADMIN is a matter of configuration, the others of age.
+			if admin := strings.HasPrefix(line, "/mute "); admin != strings.Contains(line, "runs without --admin-token-file") || admin == strings.Contains(line, "upgrade") {
+				t.Errorf("wrong reason for an unavailable command: %s", line)
+			}
 		}
 	}
 	for _, width := range []int{120, 70, 30} {

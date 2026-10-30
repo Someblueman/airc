@@ -515,7 +515,7 @@ The UI also has:
 | `Ctrl-Y` | Insert the selected message's ID at the cursor (for example after `/pin `), and offer it to the terminal's clipboard with OSC 52 where the terminal allows that. |
 | `Alt-B`, `Alt-F`, `Alt-Backspace` | Move a word left or right, or cut the word before the cursor as `Ctrl-W` does. An Alt key the UI does not bind does nothing; only a lone `Esc` clears the draft. |
 | `Alt-Enter` | Insert a new line in the draft instead of sending it; a message may span lines within the 4096-byte limit. `Shift-Enter` does the same where the terminal reports it apart from Enter: the UI asks for xterm's `modifyOtherKeys`, and kitty's `CSI u` form is understood too; a plain Enter or Ctrl-J sends. |
-| `/help` | Open a view of every key and command, marking the commands the connected daemon does not support. `/close` returns. |
+| `/help` | Open a view of every key and command, marking the commands the connected daemon does not support and why: the flag it runs without (`/mute` needs an aircd started with `--admin-token-file`), or its age. `/close` returns. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
