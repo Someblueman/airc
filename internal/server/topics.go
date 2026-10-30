@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -130,8 +128,9 @@ type topicState struct {
 	env      *storeEnv
 }
 
-// Headers are written indented, as they always were, and read unbounded.
-var topicsSnapshot = snapshot{indent: true}
+// topicsSnapshot reads the headers bounded and writes them indented, as
+// they always were; a file that does not decode is set aside (see load).
+var topicsSnapshot = snapshot{limit: 4 << 20, tooLarge: "topics file exceeds 4 MiB", indent: true}
 
 // RestoreTopics loads channel headers from path and saves every later change
 // to it, so headers survive a restart. Call it before Serve.
@@ -145,15 +144,11 @@ func (s *Server) RestoreTopics(path string) error {
 }
 
 func (st *topicState) load(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create topics directory: %w", err)
-	}
-	data, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-	case err != nil:
+	data, found, err := topicsSnapshot.bytes(path)
+	if err != nil {
 		return fmt.Errorf("read topics file: %w", err)
-	default:
+	}
+	if found {
 		var loaded map[string]topic
 		if err := json.Unmarshal(data, &loaded); err != nil {
 			// Headers are not worth refusing to start over: keep the evidence, start empty.

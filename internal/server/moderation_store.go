@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"sort"
@@ -19,7 +18,7 @@ type moderationState struct {
 	env          *storeEnv
 }
 
-var moderationSnapshot = snapshot{limit: 4 << 20, tooLarge: "moderation file exceeds 4 MiB"}
+var moderationSnapshot = snapshot{limit: 4 << 20, tooLarge: "moderation file exceeds 4 MiB", invalid: "moderation file must contain one bounded JSON array"}
 
 func sortedRules(rules map[string]protocol.ModerationRule, now time.Time) []protocol.ModerationRule {
 	result := make([]protocol.ModerationRule, 0, len(rules))
@@ -46,29 +45,23 @@ func (s *Server) RestoreModeration(path string) error {
 }
 
 func (st *moderationState) load(path string) error {
-	data, found, err := moderationSnapshot.bytes(path)
-	if err != nil {
-		return err
+	var rules []protocol.ModerationRule // nil without a file; a bare null is refused
+	if err := moderationSnapshot.read(path, &rules); err != nil {
+		return fmt.Errorf("read moderation: %w", err)
+	}
+	if len(rules) > maxModerationRules {
+		return errors.New(moderationSnapshot.invalid)
 	}
 	loaded := make(map[string]protocol.ModerationRule)
-	if found {
-		var rules []protocol.ModerationRule
-		if err := decodeStrict(bytes.NewReader(data), &rules); err != nil {
-			return fmt.Errorf("read moderation: %w", err)
+	for _, rule := range rules {
+		if !validRule(rule) {
+			return errors.New("invalid saved moderation rule")
 		}
-		if rules == nil || len(rules) > maxModerationRules {
-			return errors.New("moderation file must contain one bounded JSON array")
+		key := ruleKey(rule.Kind, rule.Nick, rule.Scope)
+		if _, duplicate := loaded[key]; duplicate {
+			return errors.New("duplicate saved moderation rule")
 		}
-		for _, rule := range rules {
-			if !validRule(rule) {
-				return errors.New("invalid saved moderation rule")
-			}
-			key := ruleKey(rule.Kind, rule.Nick, rule.Scope)
-			if _, duplicate := loaded[key]; duplicate {
-				return errors.New("duplicate saved moderation rule")
-			}
-			loaded[key] = rule
-		}
+		loaded[key] = rule
 	}
 	st.moderation, st.moderationAt = loaded, path
 	return nil
