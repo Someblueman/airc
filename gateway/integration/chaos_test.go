@@ -219,7 +219,7 @@ func TestChaosSoak(t *testing.T) {
 	}
 	env := []string{"HOME=" + root, "XDG_CONFIG_HOME=" + root, "AIRC_STATE_DIR=" + root}
 	aircd := &chaosProcess{name: "aircd", logPath: filepath.Join(root, "aircd.log"), env: env, ready: dialReady(aircAddress),
-		args: []string{aircdBinary(t), "--listen", aircAddress, "--history-file", filepath.Join(root, "history.jsonl"), "--accounts-file", filepath.Join(root, "accounts.json"),
+		args: []string{aircdBinary(t), "--listen", aircAddress, "--state-dir", root,
 			"--gateway-token-file", gatewayToken, "--wake-allow", hook.URL + "/", "--log-format", "json"}}
 	if err := aircd.start(); err != nil {
 		t.Fatal(err)

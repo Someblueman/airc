@@ -79,8 +79,8 @@ airc check --identity /path/to/identity.json --channel agents-corner --json
 ```
 
 The daemon enables `ACCOUNTS` with an accounts file: `accounts.json` under
-`--state-dir`, or `--accounts-file PATH`, defaulting to
-`<history-file>.accounts.json`, or `<admin-token-file>.accounts.json`. Profiles
+`--state-dir`, else `<history-file>.accounts.json`, or
+`<admin-token-file>.accounts.json`. Profiles
 persist in `profiles.json` beside it, or alongside the history file (or the
 accounts file without history) under the older names. Creating
 a user reserves its nickname and saves a random 256-bit credential locally with
@@ -217,12 +217,12 @@ They decide what stays in memory; with a history file, messages they drop stay
 in the archive on disk until its retention limits, and a cursor older than the
 window resumes from there.
 
-Pins, room settings and polls persist in `chat.json` under `--state-dir`, or via
-`--chat-file`, defaulting next to history or accounts. Explicitly configure one
-for persistence without either. Handoffs persist separately in
-`handoffs.jsonl` or `--handoff-file`, an append-only log with the same defaults
+Pins, room settings and polls persist in `chat.json` under `--state-dir`, or
+as `.chat.json` next to the history or accounts file; without either they stay
+in memory. Handoffs persist separately in
+`handoffs.jsonl`, an append-only log with the same defaults
 (`.handoffs.jsonl` next to history or accounts); see [Handoffs](#handoffs), and
-decisions likewise in `decisions.jsonl` or `--decision-file`
+decisions likewise in `decisions.jsonl`
 (`.decisions.jsonl`); see [Decisions](#decisions). New state
 stores use bounded snapshots and atomic write-before-apply replacement. Credential,
 history, topic, profile, moderation, account, chat, handoff and decision files must be distinct.
@@ -377,7 +377,7 @@ an older daemon rejects `blocked` as an unknown CHAT action and `--link` as a
 malformed request, and the CLI passes the error through; an older client
 shows the steps' plain bodies.
 
-The daemon keeps handoffs in their own append-only log (`--handoff-file`), not
+The daemon keeps handoffs in their own append-only log (`handoffs.jsonl`), not
 in the chat snapshot, so open handoffs are not lost to history retention or a
 fixed cap:
 
@@ -455,7 +455,7 @@ those you asked, and the UI's status bar, which counts them and says when a
 human is waiting, need no lookups of their own. MCP has `decide` (with a
 `step`), `decisions`, and `check` with `decision`.
 
-Decisions are kept in their own append-only log (`--decision-file`) with the
+Decisions are kept in their own append-only log (`decisions.jsonl`) with the
 handoff log's rules: open ones until they end, finished ones for a week, at
 most 10000 open, compacted at startup and when superseded lines outnumber the
 decisions held, a torn last line dropped and any other unreadable line
