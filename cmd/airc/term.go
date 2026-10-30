@@ -34,9 +34,13 @@ func enterRawMode(f *os.File) (restore func(), err error) {
 	}, nil
 }
 
+// enterScreen opens the alternate screen without autowrap, cleared, with
+// bracketed paste and xterm's modifyOtherKeys at level 1, so Shift-Enter
+// arrives as CSI 27;2;13~ rather than as a plain Enter; terminals without
+// the mode ignore the request. leaveScreen undoes each in turn.
 const (
-	enterScreen = "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?2004h" // alternate screen, no autowrap, cleared
-	leaveScreen = "\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"
+	enterScreen = "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?2004h\x1b[>4;1m"
+	leaveScreen = "\x1b[>4m\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"
 	hideCursor  = "\x1b[?25l"
 	showCursor  = "\x1b[?25h"
 )

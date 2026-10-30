@@ -604,7 +604,7 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		m.complete = completion{}
 	}
 	switch k.kind {
-	case keyRune, keyPasteRune:
+	case keyRune, keyPasteRune, keyNewline:
 		if len(m.input) >= 16384 {
 			m.setStatus("Draft limit reached (16384 characters)", true)
 			return nil, false

@@ -95,6 +95,7 @@ var uiKeys = []helpLine{
 	{"Ctrl-Y", "insert the selected message's ID at the cursor, and offer it to the clipboard"},
 	{"Up, Down", "recall a line sent from this view when nothing of yours is typed; otherwise scroll one line"},
 	{"PgUp, PgDn", "scroll"},
+	{"Alt-Enter", "a new line in the draft (Shift-Enter too, where the terminal tells it from Enter)"},
 	{"Esc", "clear the draft and the reply target"},
 	{"Ctrl-A/E/U/K/W", "line editing: start, end, cut to the start, cut to the end, cut the word"},
 	{"Ctrl-C", "quit (Ctrl-D with nothing typed)"},

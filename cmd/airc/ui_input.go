@@ -28,7 +28,8 @@ const (
 	keySelectPrev
 	keySelectNext
 	keyPasteRune
-	keyCtrl // r holds the letter: 'c' for Ctrl-C
+	keyNewline // Alt-Enter or Shift-Enter: a new line in the draft, r is '\n'
+	keyCtrl    // r holds the letter: 'c' for Ctrl-C
 )
 
 type key struct {
@@ -90,6 +91,11 @@ func (d *keyDecoder) feed(data []byte) []key {
 			} else if used > 0 {
 				keys = append(keys, k)
 				n = used
+				break
+			}
+			if data[1] == '\r' || data[1] == '\n' { // Alt-Enter, from a terminal that sends Alt as Meta
+				keys = append(keys, key{keyNewline, '\n'})
+				n = 2
 				break
 			}
 			if data[1] == '[' || data[1] == 'O' {
@@ -202,7 +208,17 @@ func parseEscape(data []byte) (key, int) {
 		return key{kind: keyEnd}, n
 	case 'Z':
 		return key{kind: keyBackTab}, n
+	case 'u': // the kitty keyboard protocol: CSI code;modifiers u
+		if code, _, _ := strings.Cut(params, ";"); code == "13" {
+			if modified(params) {
+				return key{keyNewline, '\n'}, n
+			}
+			return key{kind: keyEnter}, n
+		}
 	case '~':
+		if strings.HasPrefix(params, "27;") && strings.HasSuffix(params, ";13") { // xterm modifyOtherKeys: CSI 27;modifiers;13 ~
+			return key{keyNewline, '\n'}, n
+		}
 		switch params {
 		case "1", "7":
 			return key{kind: keyHome}, n

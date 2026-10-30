@@ -51,6 +51,9 @@ func TestParseKeys(t *testing.T) {
 		{"\x1b[3~\x1b[H\x1b[F\x1b[1~\x1b[4~", []key{{kind: keyDelete}, {kind: keyHome}, {kind: keyEnd}, {kind: keyHome}, {kind: keyEnd}}},
 		{"\x03\x04\x0e\x10", []key{{keyCtrl, 'c'}, {keyCtrl, 'd'}, {keyCtrl, 'n'}, {keyCtrl, 'p'}}},
 		{"\x1b", []key{{kind: keyEsc}}},
+		{"\x1b\r", []key{{keyNewline, '\n'}}},                                                             // Alt-Enter as Meta
+		{"\x1b[27;2;13~\x1b[27;3;13~", []key{{keyNewline, '\n'}, {keyNewline, '\n'}}},                     // xterm modifyOtherKeys Shift- and Alt-Enter
+		{"\x1b[13;2u\x1b[13;3u\x1b[13u", []key{{keyNewline, '\n'}, {keyNewline, '\n'}, {kind: keyEnter}}}, // kitty
 		{"\x1b[99;99X", nil}, // an unrecognised sequence is dropped, not typed
 		{"\x00\x1b[200~", nil},
 	}
@@ -142,6 +145,16 @@ func TestTypingEditingAndSending(t *testing.T) {
 	if len(m.input) != 0 {
 		t.Fatal("escape should clear the input")
 	}
+	m.connected = true
+	m.update(keyIn{kind: keyRune, r: 'a'})
+	if cmds, _ := m.update(keyIn{keyNewline, '\n'}); len(cmds) != 0 || string(m.input) != "a\n" || m.cursor != 2 {
+		t.Fatalf("Alt-Enter sent %v and left %q at %d", cmds, string(m.input), m.cursor)
+	}
+	m.update(keyIn{kind: keyRune, r: 'b'})
+	if cmds, _ := m.update(keyIn{kind: keyEnter}); len(cmds) != 1 || cmds[0].text != "a\nb" {
+		t.Fatalf("a two-line draft sent %+v", cmds)
+	}
+	m.update(deliveryIn{cmd: *m.pending})
 	cmds, quit := typeText(m, "  hello room  ")
 	if quit || len(cmds) != 1 || cmds[0] != (uiCmd{kind: "send", target: "#alpha", text: "hello room"}) {
 		t.Fatalf("send = %#v quit=%v", cmds, quit)
