@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"io"
 	"os"
 	"os/exec"
@@ -64,6 +65,19 @@ func terminalWidth(f *os.File) int {
 func isTerminal(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// colorFlag defines --color on fs, as watch and ui share it; checkColorMode
+// validates what was given.
+func colorFlag(fs *flag.FlagSet) *string {
+	return fs.String("color", "auto", "colored output: auto, always, or never (auto also honors NO_COLOR)")
+}
+
+func checkColorMode(mode string) error {
+	if mode != "auto" && mode != "always" && mode != "never" {
+		return errors.New("--color must be auto, always, or never")
+	}
+	return nil
 }
 
 // useColor decides whether to emit ANSI styling: only for a real terminal

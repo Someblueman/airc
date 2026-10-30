@@ -148,7 +148,7 @@ func helpText(lines []helpLine) string {
 // renderHelp lays the help out in width columns: headings in bold, then a
 // column of keys and commands with their descriptions wrapped beside them, or
 // under them when the terminal is narrow.
-func renderHelp(lines []helpLine, width int) []string {
+func renderHelp(lines []helpLine, width int, color bool) []string {
 	column := 0
 	for _, l := range lines {
 		if l.body != "" {
@@ -160,11 +160,11 @@ func renderHelp(lines []helpLine, width int) []string {
 	for _, l := range lines {
 		switch {
 		case l.body == "":
-			out = append(out, "", sty("1", fitPlain(l.head, width)))
+			out = append(out, "", styled(color, "1", fitPlain(l.head, width)))
 		case l.head == "":
 			out = append(out, wrapText(l.body, width)...)
 		case utf8.RuneCountInString(l.head)+2 > column: // too wide for the column
-			out = append(out, sty("1", fitPlain(l.head, width)))
+			out = append(out, styled(color, "1", fitPlain(l.head, width)))
 			for _, body := range wrapText(l.body, max(width-4, 10)) {
 				out = append(out, "    "+body)
 			}
@@ -172,7 +172,7 @@ func renderHelp(lines []helpLine, width int) []string {
 			for i, body := range wrapText(l.body, max(width-column, 10)) {
 				lead := strings.Repeat(" ", column)
 				if i == 0 {
-					lead = sty("1", l.head) + strings.Repeat(" ", column-utf8.RuneCountInString(l.head))
+					lead = styled(color, "1", l.head) + strings.Repeat(" ", column-utf8.RuneCountInString(l.head))
 				}
 				out = append(out, lead+body)
 			}

@@ -106,12 +106,12 @@ func pasteHeader(b *uiBuffer) string {
 
 // renderPasteLines draws the shown lines of a paste view, numbered, long
 // lines wrapped under their number.
-func renderPasteLines(b *uiBuffer, width int) []string {
+func renderPasteLines(b *uiBuffer, width int, color bool) []string {
 	digits := len(strconv.Itoa(max(len(b.pasteLines), 1)))
 	body := max(width-digits-2, 10)
 	var out []string
 	for i, line := range b.pasteLines[:b.pasteShown] {
-		number := sty("2", fmt.Sprintf("%*d", digits, i+1))
+		number := styled(color, "2", fmt.Sprintf("%*d", digits, i+1))
 		wrapped := wrapCode(cleanText(line), body)
 		if len(wrapped) == 0 {
 			wrapped = []string{""}
@@ -125,7 +125,7 @@ func renderPasteLines(b *uiBuffer, width int) []string {
 		}
 	}
 	if b.pasteShown < len(b.pasteLines) {
-		out = append(out, sty("2", fmt.Sprintf(" %d more lines · /next", len(b.pasteLines)-b.pasteShown)))
+		out = append(out, styled(color, "2", fmt.Sprintf(" %d more lines · /next", len(b.pasteLines)-b.pasteShown)))
 	}
 	return out
 }

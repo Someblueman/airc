@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const uiUsage = "usage: airc ui [--nick NAME] [--channel #room[,#room...]] [--backlog 100]"
+const uiUsage = "usage: airc ui [--nick NAME] [--channel #room[,#room...]] [--backlog 100] [--color auto|always|never]"
 
 // runUI is a full-screen client in the style of the classic IRC clients: channels
 // on the left, the conversation in the middle with the channel header above it,
@@ -30,11 +30,15 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 	backlog := fs.Int("backlog", 100, "messages to load per channel (0-1000)")
 	notify := fs.Bool("notify", false, "desktop notifications for live mentions/DMs (opt-in)")
 	quietHours := fs.String("quiet-hours", "", "notification quiet hours, local HH:MM-HH:MM")
+	colorMode := colorFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *backlog < 0 || *backlog > 1000 {
 		return errors.New(uiUsage)
+	}
+	if err := checkColorMode(*colorMode); err != nil {
+		return err
 	}
 	notifier, err := newDesktopNotifier(*notify, *quietHours)
 	if err != nil {
@@ -66,6 +70,7 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	model := newUIModel(opt.nick, initial, time.Now)
+	model.color = useColor(*colorMode, out)
 	state, err := openUIState(*opt, model)
 	if err != nil {
 		return err

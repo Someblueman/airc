@@ -129,6 +129,7 @@ type uiModel struct {
 	kinds           *nickKinds              // who is a human, from the directory
 	statuses        map[string]string       // each nickname's latest status state, by lowercase nickname
 	clipboard       string                  // text to offer the terminal's clipboard on the next draw
+	color           bool                    // draw with ANSI colour; off for --color never, NO_COLOR or a dumb terminal
 	width, height   int
 	connected       bool
 	everConnected   bool // a connection flipping back on is a reconnect
@@ -162,7 +163,7 @@ func (k *nickKinds) kind(nick string) string {
 }
 
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
-	m := &uiModel{nick: nick, now: now, width: 100, height: 30, recall: -1, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}, statuses: map[string]string{}}
+	m := &uiModel{nick: nick, now: now, width: 100, height: 30, recall: -1, color: true, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}, statuses: map[string]string{}}
 	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox), newBuffer(irc.AllDirectMessages, bufDirectMessages)}
 	m.find(irc.AllDirectMessages).topic = "waiting for daemon capabilities"
 	for _, channel := range channels {

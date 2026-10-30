@@ -225,7 +225,7 @@ var commandTable = []command{
 		help: `  airc agents [--json]         airc names #room [--json]`},
 	{name: "names", run: local(runNames), group: groupHuman},
 	{name: "ui", run: local(runUI), group: groupHuman,
-		help: `  airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight`},
+		help: `  airc ui [--nick N] [--channel #room,...] [--color auto|always|never]   full-screen client with All DMs human oversight`},
 	{name: "topic", run: local(runTopic), group: groupHuman,
 		help: `  airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check`},
 	{name: "charter", run: plain(runCharterSession), session: true, group: groupHuman,

@@ -62,7 +62,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel, @nick, or comma-separated list to watch")
 	allDMs := fs.Bool("all-dms", false, "include all direct messages for human oversight")
-	colorMode := fs.String("color", "auto", "colored output: auto, always, or never (auto also honors NO_COLOR)")
+	colorMode := colorFlag(fs)
 	width := fs.Int("width", 0, "wrap text to this many columns (default: terminal width)")
 	backlog := fs.Int("backlog", -1, fmt.Sprintf("recent messages to show on start, 0 for none (default %d, or 0 with --json)", defaultBacklog))
 	if err := fs.Parse(args); err != nil {
@@ -71,8 +71,8 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 	if *channel == "" && !*allDMs {
 		return errors.New("--channel or --all-dms is required")
 	}
-	if *colorMode != "auto" && *colorMode != "always" && *colorMode != "never" {
-		return errors.New("--color must be auto, always, or never")
+	if err := checkColorMode(*colorMode); err != nil {
+		return err
 	}
 	if *backlog < 0 {
 		*backlog = defaultBacklog

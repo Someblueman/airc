@@ -495,6 +495,9 @@ the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. `Up` and
 `Down` recall the lines sent from the view (the last 100, kept in memory for the
 UI process) when the composer is empty or shows a recalled line unchanged, and
 scroll one line otherwise. On a narrow terminal the side panes are dropped.
+`--color auto|always|never` and `NO_COLOR` govern the UI's colour as they do
+`airc watch`'s: `auto`, the default, draws plain text when `NO_COLOR` is set or
+`TERM` is `dumb`.
 
 `airc watch --channel '#room'` is a read-only live log for a terminal or a pipe
 (`--json` for one object per line; `@nick` follows a nick's direct messages).
