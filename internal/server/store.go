@@ -15,11 +15,30 @@ import (
 
 // storeEnv is what a store needs from the server: the clock (live, so tests
 // that set cfg.Now keep working), the two durability policies and the log.
+// It is also where a store reports how its saves went, so STATUS can.
 type storeEnv struct {
 	now    func() time.Time
 	sync   atomicfile.Sync // credentials, chat, moderation, handoffs, decisions: as configured
 	soft   atomicfile.Sync // headers, profiles, wakes: never a device flush (see softSync)
 	logger *slog.Logger
+	// failed is the latest save that failed, as "store: error", and
+	// failedStore which store's; it clears when that store saves again. A
+	// store whose failed save is only logged (topics, wakes, the paste
+	// index) is otherwise invisible to airc doctor.
+	failed      string
+	failedStore string
+}
+
+// saved notes the outcome of store's save and returns err as it is, so a
+// store wraps its write in it.
+func (env *storeEnv) saved(store string, err error) error {
+	switch {
+	case err != nil:
+		env.failedStore, env.failed = store, store+": "+err.Error()
+	case env.failedStore == store:
+		env.failedStore, env.failed = "", ""
+	}
+	return err
 }
 
 // persisted is a feature's file-backed state: loaded once before Serve and

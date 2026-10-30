@@ -75,7 +75,7 @@ func validRule(rule protocol.ModerationRule) bool {
 func (st *moderationState) close() error { return nil }
 
 func (st *moderationState) saveModerationLocked(next map[string]protocol.ModerationRule) error {
-	return moderationSnapshot.write(st.moderationAt, sortedRules(next, st.env.now()), st.env.sync)
+	return st.env.saved("moderation", moderationSnapshot.write(st.moderationAt, sortedRules(next, st.env.now()), st.env.sync))
 }
 
 func (st *moderationState) restrictionLocked(kind, nick, scope string) (protocol.ModerationRule, bool) {

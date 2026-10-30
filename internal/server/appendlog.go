@@ -216,22 +216,28 @@ func (st *ledgerStore[T]) compactLocked() error {
 // logged. A nil log keeps the records in memory.
 func (st *ledgerStore[T]) save(r T) error {
 	if st.log != nil {
-		if st.log.dirty {
-			if err := st.compactLocked(); err != nil {
-				return err
-			}
-		}
-		if err := st.log.append(r, st.env.sync); err != nil {
+		if err := st.env.saved(st.name, st.appendLocked(r)); err != nil {
 			return err
 		}
 	}
 	st.all[r.id()] = r
 	if st.log != nil && st.log.crowded(len(st.all)) {
-		if err := st.compactLocked(); err != nil {
+		if err := st.env.saved(st.name, st.compactLocked()); err != nil {
 			st.env.logger.Warn(st.event, "error", err)
 		}
 	}
 	return nil
+}
+
+// appendLocked appends r's line, after rewriting a log a failed append
+// left dirty.
+func (st *ledgerStore[T]) appendLocked(r T) error {
+	if st.log.dirty {
+		if err := st.compactLocked(); err != nil {
+			return err
+		}
+	}
+	return st.log.append(r, st.env.sync)
 }
 
 // liveRecords counts the records not yet finished.

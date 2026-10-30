@@ -121,7 +121,8 @@ func (s *Server) channelsLocked(client *session) {
 
 // topicState is the channel headers and the file they are saved to. Every
 // field is read and written with s.mu held; saves run under s.mu with
-// env.soft, and a failed save is logged, not returned.
+// env.soft, and a failed save is logged and reported by STATUS, not
+// returned.
 type topicState struct {
 	topics   map[string]topic // channel headers; independent of who is connected
 	topicsAt string           // file the topics are saved to, if any
@@ -172,7 +173,7 @@ func (st *topicState) load(path string) error {
 func (st *topicState) close() error { return nil }
 
 func (st *topicState) saveTopicsLocked() {
-	if err := topicsSnapshot.write(st.topicsAt, st.topics, st.env.soft); err != nil {
+	if err := st.env.saved("topics", topicsSnapshot.write(st.topicsAt, st.topics, st.env.soft)); err != nil {
 		st.env.logger.Error("topics_write_failed", "error", err.Error())
 	}
 }

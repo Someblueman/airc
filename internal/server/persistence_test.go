@@ -7,10 +7,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -124,5 +127,62 @@ func TestBlockedHistoryAppendAllowsQueriesButWithholdsSendReceipt(t *testing.T) 
 		case <-ctx.Done():
 			t.Fatal("send did not resume after history I/O recovered")
 		}
+	}
+}
+
+// A store whose failed save is only logged (topics here) still shows in
+// STATUS, named, until it saves again; another store's success does not
+// clear it.
+func TestStatusReportsAStoreThatCannotSave(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "topics.json")
+	address, srv := startServer(t, Config{HistoryLimit: 8, PingInterval: time.Hour, ReadTimeout: time.Hour}, func(s *Server) error { return s.RestoreTopics(path) })
+	conn, reader := rawConn(t, address)
+	io.WriteString(conn, "NICK setter\r\nUSER u 0 * :u\r\nJOIN #hq\r\n")
+	expectLine(t, reader, conn, " 366 ")
+	status := func() string {
+		io.WriteString(conn, "STATUS\r\n")
+		line := expectLine(t, reader, conn, " 770 ")
+		_, payload, _ := strings.Cut(strings.TrimRight(line, "\r\n"), " :")
+		var status protocol.ServerStatus
+		if err := json.Unmarshal([]byte(payload), &status); err != nil {
+			t.Fatal(err, line)
+		}
+		return status.PersistenceError
+	}
+	setTopic := func(text string) {
+		io.WriteString(conn, "TOPIC #hq :"+text+"\r\n")
+		expectLine(t, reader, conn, " 332 ")
+	}
+	setTopic("saved")
+	if failed := status(); failed != "" {
+		t.Fatalf("persistence error before any failure: %q", failed)
+	}
+
+	// The headers' directory goes away, as a mount might.
+	srv.mu.Lock()
+	srv.topicsAt = filepath.Join(dir, "gone", "topics.json")
+	srv.mu.Unlock()
+	setTopic("unsaved")
+	failed := status()
+	if !strings.HasPrefix(failed, "topics: ") || !strings.Contains(failed, "gone") {
+		t.Fatalf("persistence error after a failed topics save: %q", failed)
+	}
+	srv.mu.Lock()
+	srv.env.saved("profiles", nil)
+	srv.mu.Unlock()
+	if again := status(); again != failed {
+		t.Fatalf("another store's save cleared the topics failure: %q", again)
+	}
+
+	srv.mu.Lock()
+	srv.topicsAt = path
+	srv.mu.Unlock()
+	setTopic("saved again")
+	if failed := status(); failed != "" {
+		t.Fatalf("persistence error after topics saved again: %q", failed)
+	}
+	if data, err := os.ReadFile(path); err != nil || !strings.Contains(string(data), "saved again") {
+		t.Fatalf("topics file %q: %v", data, err)
 	}
 }
