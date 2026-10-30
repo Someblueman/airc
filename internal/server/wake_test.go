@@ -130,8 +130,16 @@ func TestWakeNotices(t *testing.T) {
 	// frank's hook refuses: the failure is kept for WAKE STATUS.
 	_, _ = io.WriteString(bob, "PRIVMSG frank :your hook is down\r\n")
 	testwait.Until(t, 5*time.Second, "frank's refused notice", func() bool { return receiver.refused.Load() == 1 })
-	frank, frankReader = connect("AUTH frank :" + testAdminToken + "\r\nNICK frank\r\nUSER u 0 * :u\r\nWAKE\r\n")
-	if line := expectLine(t, frankReader, frank, " 787 "); !strings.Contains(line, "HTTP 503") || !strings.Contains(line, `"pending":1`) {
+	// The receiver counts the refusal before the daemon has recorded it, so
+	// ask for the status until it shows the error.
+	frank, frankReader = connect("AUTH frank :" + testAdminToken + "\r\nNICK frank\r\nUSER u 0 * :u\r\n")
+	var line string
+	testwait.Every(t, 5*time.Second, 20*time.Millisecond, "frank's refused notice in WAKE STATUS", func() bool {
+		_, _ = io.WriteString(frank, "WAKE\r\n")
+		line = expectLine(t, frankReader, frank, " 787 ")
+		return strings.Contains(line, "HTTP 503")
+	})
+	if !strings.Contains(line, `"pending":1`) {
 		t.Fatalf("status after a refused notice %q", line)
 	}
 	receiver.none(t, 2*time.Second)
