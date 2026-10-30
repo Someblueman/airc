@@ -142,7 +142,7 @@ var commandTable = []command{
 	{name: "unread", run: plain(runUnreadSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc unread [--nick N] [--channel #room]... [--mentions] [--json]   counts only; marks nothing read; silent when empty`},
 	{name: "digest", run: plain(runDigestSession), session: true, mcp: true, group: groupAgent,
-		help: `  airc digest [--nick N] [--channel #room]... [--mark-read] [--json]   who said how much where, what waits on you; no bodies`},
+		help: `  airc digest [--nick N] [--channel #room]... [--mark-read] [--json]   who said how much where, what waits on you, your uncertain sends; no bodies`},
 	{name: "channels", run: plain(runChannelsSession), session: true, mcp: true, group: groupAgent,
 		help:  `  airc channels [--json]                         rooms the server knows, with headers and activity`,
 		notes: `  airc check ... [--compact] [--from-now]        smaller JSON rows; skip the retained backlog once`},

@@ -25,6 +25,9 @@ type outboundMessage struct {
 	ReplyTo   string      `json:"reply_to,omitempty"`
 	Body      string      `json:"body"`
 	Result    *sendResult `json:"result,omitempty"`
+	// Created is when the send was recorded, before its first wire write;
+	// entries from older builds have none.
+	Created time.Time `json:"created,omitzero"`
 	// Paste is the paste the message shares; such a send is only recovered
 	// over native IRC, never reposted through another carrier.
 	Paste string `json:"paste,omitempty"`
@@ -43,12 +46,20 @@ type outbox struct {
 	Entries []outboundMessage `json:"entries"`
 }
 
-func openOutbox(opt options) (*outbox, error) {
+// outboxPath is where opt's nickname keeps its sends to opt's endpoint.
+func outboxPath(opt options) (string, error) {
 	path, _, err := cursorPath(opt, opt.nick)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(path), "outbox-"+filepath.Base(path)), nil
+}
+
+func openOutbox(opt options) (*outbox, error) {
+	path, err := outboxPath(opt)
 	if err != nil {
 		return nil, err
 	}
-	path = filepath.Join(filepath.Dir(path), "outbox-"+filepath.Base(path))
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
@@ -73,20 +84,7 @@ func openOutbox(opt options) (*outbox, error) {
 		return nil, err
 	}
 	if err == nil {
-		err = json.Unmarshal(data, b)
-	}
-	if err == nil && len(b.Entries) > maxOutboxEntries {
-		err = errors.New("outbox exceeds 128 entries")
-	}
-	if err == nil {
-		seen := map[string]bool{}
-		for _, e := range b.Entries {
-			if !protocol.ValidRequestID(e.RequestID) || seen[e.RequestID] || len(e.Body) > 4096 || e.Result != nil && e.Result.MessageEvent == nil {
-				err = errors.New("invalid outbox entry")
-				break
-			}
-			seen[e.RequestID] = true
-		}
+		b.Entries, err = decodeOutbox(data)
 	}
 	if err != nil {
 		// A damaged outbox must not block every later send. Keep it for
@@ -100,6 +98,52 @@ func openOutbox(opt options) (*outbox, error) {
 		b.Entries = nil
 	}
 	return b, nil
+}
+
+// decodeOutbox parses an outbox file, checking every entry.
+func decodeOutbox(data []byte) ([]outboundMessage, error) {
+	var b outbox
+	if err := json.Unmarshal(data, &b); err != nil {
+		return nil, err
+	}
+	if len(b.Entries) > maxOutboxEntries {
+		return nil, errors.New("outbox exceeds 128 entries")
+	}
+	seen := map[string]bool{}
+	for _, e := range b.Entries {
+		if !protocol.ValidRequestID(e.RequestID) || seen[e.RequestID] || len(e.Body) > 4096 || e.Result != nil && e.Result.MessageEvent == nil {
+			return nil, errors.New("invalid outbox entry")
+		}
+		seen[e.RequestID] = true
+	}
+	return b.Entries, nil
+}
+
+// pendingOutbox lists the sends in opt's outbox whose outcome is unknown,
+// what send --pending lists, without taking the outbox lock or moving a
+// damaged outbox aside: the file is replaced atomically, so an unlocked read
+// sees a whole one, and a reader changes nothing. A send in flight is pending
+// until its receipt is saved. A missing outbox is empty.
+func pendingOutbox(opt options) ([]outboundMessage, error) {
+	path, err := outboxPath(opt)
+	if err != nil {
+		return nil, err
+	}
+	data, err := atomicfile.ReadBounded(path, maxOutboxBytes)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if errors.Is(err, atomicfile.ErrTooLarge) {
+		return nil, errors.New("outbox exceeds 8 MiB")
+	}
+	if err != nil {
+		return nil, err
+	}
+	entries, err := decodeOutbox(data)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(entries, func(e outboundMessage) bool { return e.Result != nil }), nil
 }
 
 func (b *outbox) close() {
@@ -142,7 +186,7 @@ func (b *outbox) add(target, reply, body, id string) (*outboundMessage, error) {
 		}
 		b.Entries = append(b.Entries[:index], b.Entries[index+1:]...)
 	}
-	b.Entries = append(b.Entries, outboundMessage{RequestID: id, Target: target, ReplyTo: reply, Body: body})
+	b.Entries = append(b.Entries, outboundMessage{RequestID: id, Target: target, ReplyTo: reply, Body: body, Created: time.Now().UTC()})
 	if err := b.save(); err != nil {
 		return nil, err
 	}
