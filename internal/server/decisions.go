@@ -187,7 +187,7 @@ func (s *Server) openDecisionLocked(client *session, r decisionRequest) error {
 	if err != nil {
 		return err
 	}
-	body, err := s.handoffBody(r.Text, "")
+	body, err := s.chatBody(r.Text, "")
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
 	default:
 		return errors.New("unknown CHAT action")
 	}
-	body, err := s.handoffBody(body, "")
+	body, err := s.chatBody(body, "")
 	if err != nil {
 		return err
 	}
@@ -298,9 +298,7 @@ func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
 // postDecisionLocked posts a step's message and answers with the state the
 // step produced: a later step may land while this one waits for its sync.
 func (s *Server) postDecisionLocked(client *session, m Message, d decision) {
-	mentions := s.recordLocked(&m)
-	s.broadcastMessageLocked(m, client.client.Username, mentions)
-	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.postStructuredLocked(client, m)
 	s.chatEntryLocked(client, s.decisionEntryLocked(d))
 }
 

@@ -54,7 +54,7 @@ func statusEntry(nick string, status protocol.AgentStatus, meta *protocol.Messag
 // postStatusLocked posts a status and keeps it as the poster's latest.
 func (s *Server) postStatusLocked(client *session, r statusRequest) error {
 	note := strings.TrimSpace(protocol.NormalizeNewlines(r.Text))
-	body, err := s.handoffBody(protocol.StatusText(r.State, r.Task, note), "")
+	body, err := s.chatBody(protocol.StatusText(r.State, r.Task, note), "")
 	if err != nil {
 		return err
 	}
@@ -67,9 +67,7 @@ func (s *Server) postStatusLocked(client *session, r statusRequest) error {
 	}
 	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.Task, m.State, m.Link = "status", client.accountID, r.Task, r.State, r.Link
-	mentions := s.recordLocked(&m)
-	s.broadcastMessageLocked(m, client.client.Username, mentions)
-	s.receiptLocked(client, m, false)
+	s.postStructuredLocked(client, m)
 	status := protocol.AgentStatus{Task: r.Task, State: r.State, Target: target, Link: r.Link, At: m.Timestamp}
 	s.noteStatusLocked(client.client.Nick, status)
 	meta := messageMetadata(m)

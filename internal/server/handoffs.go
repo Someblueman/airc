@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -190,42 +189,6 @@ func decodeHandoffRequest(_ Config, r protocol.ChatRequest) (handoffRequest, err
 	return request, nil
 }
 
-func (s *Server) handoffBody(text, fallback string) (string, error) {
-	body := protocol.NormalizeNewlines(text)
-	if strings.TrimSpace(body) == "" {
-		body = fallback
-	}
-	if strings.TrimSpace(body) == "" || len(body) > s.cfg.MaxMessageSize || !utf8.ValidString(body) || strings.ContainsRune(body, 0) {
-		return "", errors.New("message must be nonempty valid UTF-8 within the message limit")
-	}
-	return body, nil
-}
-
-// chatTargetLocked checks that client may post a handoff or decision step
-// (what names which) to target and returns the target as the step's message
-// names it.
-func (s *Server) chatTargetLocked(client *session, target, what string) (string, error) {
-	if !validChannel(target) && !protocol.ValidNick(target) {
-		return "", errors.New("a " + what + " needs a room or a nickname")
-	}
-	if !s.postAllowedLocked(client, target) {
-		return "", errChatDenied
-	}
-	if protocol.IsChannel(target) {
-		if _, joined := client.channels[target]; !joined && !client.ephemeral {
-			return "", errors.New("join the room before posting")
-		}
-		return target, nil
-	}
-	if recipient := s.liveNickLocked(target); recipient != nil && !recipient.observer {
-		return recipient.client.Nick, nil
-	}
-	if s.cfg.HistoryLimit == 0 {
-		return "", errors.New("offline direct messages require history")
-	}
-	return target, nil
-}
-
 // offerHandoffLocked is the table's handler for an offer; the handoff tests
 // drive it with the wire request.
 func (s *Server) offerHandoffLocked(client *session, r protocol.ChatRequest) error {
@@ -241,7 +204,7 @@ func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 	if forNick != "" && strings.EqualFold(forNick, client.client.Nick) {
 		return errors.New("hand off to someone else")
 	}
-	body, err := s.handoffBody(r.Text, "")
+	body, err := s.chatBody(r.Text, "")
 	if err != nil {
 		return err
 	}
@@ -351,7 +314,7 @@ func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 	if r.Action == "handoff-blocked" {
 		note = ""
 	}
-	body, err := s.handoffBody(note, protocol.HandoffStepText(kind, h.Offer.ID, detail))
+	body, err := s.chatBody(note, protocol.HandoffStepText(kind, h.Offer.ID, detail))
 	if err != nil {
 		return err
 	}
@@ -382,9 +345,7 @@ func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 // postHandoffLocked posts a step's message and answers with the state the
 // step produced: a later step may land while this one waits for its sync.
 func (s *Server) postHandoffLocked(client *session, m Message, h handoff) {
-	mentions := s.recordLocked(&m)
-	s.broadcastMessageLocked(m, client.client.Username, mentions)
-	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.postStructuredLocked(client, m)
 	s.chatEntryLocked(client, handoffEntry(h))
 }
 
