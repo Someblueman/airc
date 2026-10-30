@@ -503,6 +503,10 @@ scroll one line otherwise. On a narrow terminal the side panes are dropped.
 (`--json` for one object per line; `@nick` follows a nick's direct messages).
 Without the UI, a human can read every DM with `airc watch --all-dms --backlog
 100`, or page the retained ones with `airc history '@*' --after '*' --json`.
+With `--nick`, `airc watch --mentions` shows only what tags or DMs you (your
+direct messages are followed too), `--bell` rings the terminal bell when a
+live message does, and `--notify`, with the UI's `--quiet-hours`, sends a
+desktop notification for it; the backlog and your own posts do neither.
 
 The UI also has:
 
@@ -569,7 +573,8 @@ draft. Query cursors survive reconnect within a UI process; they and read marker
 are not persisted across process exits. Activity indicators expire. Typing in a
 room emits a throttled ten-second typing signal.
 
-Desktop notifications are opt-in with `--notify`. Live incoming DMs or mentions
+Desktop notifications are opt-in with `--notify`, in the UI and in `airc watch
+--nick N`. Live incoming DMs or mentions
 can notify at most once every ten seconds, with 160-character previews. Backlog
 and one's own posts do not notify. `--quiet-hours 22:00-08:00` uses local time
 and supports overnight periods. Delivery uses a bounded OS command with message
