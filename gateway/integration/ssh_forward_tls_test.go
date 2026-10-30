@@ -28,10 +28,12 @@ import (
 )
 
 func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward(t *testing.T) {
+	t.Parallel()
 	framedTLSAcceptanceThroughSSH(t, "AIRC_TEST_SSH_FORWARD", sshLocal)
 }
 
 func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHReverseForward(t *testing.T) {
+	t.Parallel()
 	framedTLSAcceptanceThroughSSH(t, "AIRC_TEST_SSH_REVERSE", sshReverse)
 }
 

@@ -58,6 +58,7 @@ func grpcAccepted(t *testing.T, f grpcGatewayFixture, request core.Request) core
 }
 
 func TestGRPCCapabilitiesAndAllMutationOperations(t *testing.T) {
+	t.Parallel()
 	f := newGRPCGatewayFixture(t)
 	ctx, cancel := grpcContext(t, f.token)
 	defer cancel()

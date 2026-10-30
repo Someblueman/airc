@@ -169,6 +169,7 @@ var suiteScenarios = []struct {
 }
 
 func TestCarrierSuite(t *testing.T) {
+	t.Parallel()
 	for _, c := range suiteCarriers {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

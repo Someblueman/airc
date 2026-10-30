@@ -17,6 +17,7 @@ import (
 // TestPinsReadReturnsNativePinsAndEmptyArray maps pins.read to the room's
 // native pin list with whole pinned bodies, and an empty array once unpinned.
 func TestPinsReadReturnsNativePinsAndEmptyArray(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	root := seedPinnedRoot(t, f)
 	seedNativePin(t, f, root.ID)
@@ -39,6 +40,7 @@ func TestPinsReadReturnsNativePinsAndEmptyArray(t *testing.T) {
 }
 
 func TestPinnedRecordSurvivesHistoryEvictionWithCorrectionAnnotation(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	root := seedReactionParent(t, f)
 	seedNativePin(t, f, root.ID)

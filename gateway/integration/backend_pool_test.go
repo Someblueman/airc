@@ -42,6 +42,7 @@ func runSend(t *testing.T, s *store.Store, b *backend.Backend, sub store.Submiss
 // proxy that accepts a single connection: each is accepted, so all three
 // ran on the session the first one logged in.
 func TestBackendReusesAuthorSession(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", token, true, true)
@@ -79,6 +80,7 @@ func TestBackendReusesAuthorSession(t *testing.T) {
 // connected client takes the nickname: the next send must not reuse the
 // session to speak as it, and fails as a fresh guest login would.
 func TestBackendGuestReuseYieldsNickname(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	guest := store.Submission{Author: core.Author{Nick: "pool-guest"}}

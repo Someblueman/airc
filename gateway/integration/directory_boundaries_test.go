@@ -12,6 +12,7 @@ import (
 )
 
 func TestDirectoryNativeFeatureMalformedDuplicateAndJoinedTimeout(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		mode   string
 		status int
@@ -35,6 +36,7 @@ func TestDirectoryNativeFeatureMalformedDuplicateAndJoinedTimeout(t *testing.T) 
 }
 
 func TestDirectoryNativeByteOverflowReturnsNoPartialCards(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	for i := 0; i < 40; i++ {
 		nick := "large-profile-" + string(rune('a'+i/26)) + string(rune('a'+i%26))

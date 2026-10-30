@@ -158,6 +158,8 @@ type chaosClient struct {
 	Gaps       int    `json:"gaps"`
 }
 
+// The soak measures latency under injected faults, so it runs alone: not
+// in parallel with the rest of the package.
 func TestChaosSoak(t *testing.T) {
 	duration, err := time.ParseDuration(os.Getenv("AIRC_CHAOS_DURATION"))
 	if err != nil || duration <= 0 {

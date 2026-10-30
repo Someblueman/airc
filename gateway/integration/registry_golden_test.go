@@ -34,6 +34,7 @@ var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 // ready record must list the listeners in configuration order. Entries for
 // carriers this host cannot run are kept in the golden file and skipped.
 func TestEveryCarrierGolden(t *testing.T) {
+	t.Parallel()
 	root := fixtureRoot(t)
 	discovery := installDiscovery(t)
 	gatewayToken := filepath.Join(root, "gateway.token")

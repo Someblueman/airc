@@ -12,6 +12,7 @@ import (
 )
 
 func TestDirectoryMailboxNativeModeRefusals(t *testing.T) {
+	t.Parallel()
 	f := newDirectoryMailboxFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, kind := range []string{"stream", "name", "profile", "version"} {

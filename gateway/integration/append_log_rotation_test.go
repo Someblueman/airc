@@ -16,6 +16,7 @@ import (
 )
 
 func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
+	t.Parallel()
 	f := newAppendLogFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "append-log-partial", Operation: core.Send, Target: room, Message: "partial log completes across restart 🙂"}

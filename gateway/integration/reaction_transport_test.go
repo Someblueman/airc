@@ -55,6 +55,7 @@ type reactionReady struct {
 // repeated request, the receipt names the native reaction once, and history
 // and a live watch both return its reaction facts.
 func TestReactionAddHTTPHistoryAndLiveWatch(t *testing.T) {
+	t.Parallel()
 	f := newReactionTransportFixture(t)
 	root := seedReactionParent(t, f)
 	startReactionWatch(t, f, root.ID)

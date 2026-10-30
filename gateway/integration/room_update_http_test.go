@@ -36,6 +36,7 @@ func waitHTTPRoomResult(t *testing.T, f *reactionTransportFixture, id string, st
 // partial patch keeps the other setting, room.read reflects it, and native
 // ceiling and operator refusals are classified without changing the room.
 func TestRoomUpdateHTTPPartialAndNativeDenials(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, nil, true)
 	promoteRoomOperator(t, f.socket)
 	target := contractRoom()

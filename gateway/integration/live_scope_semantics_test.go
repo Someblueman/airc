@@ -12,6 +12,7 @@ import (
 )
 
 func TestEventsWatchNativeConversationSignalsProveSelectedParent(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"thread", "replies"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newReactionTransportFixture(t)

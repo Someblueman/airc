@@ -13,6 +13,7 @@ import (
 )
 
 func TestRPCQuietBatchOutlivesOrdinaryHTTPWriteDeadline(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	var entries []json.RawMessage
 	for _, id := range []string{"first", "second", "third"} {

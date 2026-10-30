@@ -12,6 +12,7 @@ import (
 )
 
 func TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newRawQUICFixture(t, true)
 	socket := f.config.Upstream.Address

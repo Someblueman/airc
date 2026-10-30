@@ -34,6 +34,7 @@ type coapResetControl struct {
 
 // A Reset of a notification ends its watch and releases its native lease.
 func TestCoAPUDPResetDropsNotificationAndReleasesLease(t *testing.T) {
+	t.Parallel()
 	p := newPacketFixture(t, "coap_udp", nil)
 	monitor, reset, done := coapResetMonitor()
 	// Blockwise rewrites outgoing Reset messages as fresh CON requests. Keep it

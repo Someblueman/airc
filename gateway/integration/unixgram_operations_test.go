@@ -10,6 +10,7 @@ import (
 )
 
 func TestUnixgramNativeSendAndReads(t *testing.T) {
+	t.Parallel()
 	f := newUnixgramFixture(t)
 	checkDatagramReadOnlyCLI(t, f.process, f.config, "unixgram")
 	call := func(request core.Request, encrypted bool) adapter.FrameResponse {

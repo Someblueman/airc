@@ -11,6 +11,7 @@ import (
 )
 
 func TestRoomUpdateAppliesRetentionQuota(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, nil, true)
 	promoteRoomOperator(t, f.socket)
 	zero, unlimited := int64(0), 0

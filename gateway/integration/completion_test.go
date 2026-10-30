@@ -14,6 +14,7 @@ import (
 
 // This drives the primitives explicitly; it does not claim an automatic worker.
 func TestWireUnknownReceiptCompletionThenSend(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

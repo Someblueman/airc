@@ -78,6 +78,7 @@ func isolatedCall(t *testing.T, g isolatedGateway, method, id, token string, req
 }
 
 func TestCurrentGatewayBinaryKeepsFixturesIsolated(t *testing.T) {
+	t.Parallel()
 	binary := currentGatewayBinary(t)
 	info, err := buildinfo.ReadFile(binary)
 	if err != nil {

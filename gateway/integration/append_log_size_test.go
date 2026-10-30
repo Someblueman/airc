@@ -17,6 +17,7 @@ import (
 )
 
 func TestAppendLogNativeExactSizeAndOverflowRecovery(t *testing.T) {
+	t.Parallel()
 	f := newAppendLogFixture(t)
 	request := core.Request{Version: 1, RequestID: "append-log-size-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "exact append-log input bound recovers after overflow 🙂"}
 	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})

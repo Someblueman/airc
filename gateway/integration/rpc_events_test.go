@@ -71,6 +71,7 @@ func rpcSSEPage(t *testing.T, event rpcSSE) (string, backend.HistoryPage) {
 }
 
 func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
+	t.Parallel()
 	f := newRPCHTTPFixture(t, false)
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baselineObservers := nativeObserverCount(t, statusClient)

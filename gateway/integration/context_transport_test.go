@@ -27,6 +27,7 @@ type contextWire struct {
 // their metadata, the room's pins and the participants' profiles, identical
 // through both HTTP routes.
 func TestContextReadThreadFactsPinsAndProfiles(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	root, reply, reaction := seedContextConversation(t, f)
 	correction := seedContextCorrection(t, f, root.ID)
@@ -49,6 +50,7 @@ func TestContextReadThreadFactsPinsAndProfiles(t *testing.T) {
 }
 
 func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 
 	root, _, _ := seedContextConversation(t, f)
@@ -79,6 +81,7 @@ func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
 }
 
 func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 
 	root, _, _ := seedContextConversation(t, f)
@@ -119,6 +122,7 @@ func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
 // A retained reply remains addressable after the root falls out of the native
 // FIFO; the context must report the missing root rather than inventing one.
 func TestContextReadRetainedReplyReportsEvictedRoot(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 
 	root, reply, _ := seedContextConversation(t, f)

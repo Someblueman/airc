@@ -14,6 +14,7 @@ import (
 )
 
 func TestHTTPPUTStableRequestResourceAndCrossMethodCoalescing(t *testing.T) {
+	t.Parallel()
 	for _, version := range []int{1, 2} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, version == 2)
@@ -62,6 +63,7 @@ func TestHTTPPUTStableRequestResourceAndCrossMethodCoalescing(t *testing.T) {
 }
 
 func TestHTTPPUTRejectsIdentityAndPermissionChanges(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	r := core.Request{Version: 1, RequestID: "put-owned", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "PUT identity boundary"}
 	for _, tc := range []struct {

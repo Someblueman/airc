@@ -73,7 +73,8 @@ func buildGateway(binary, ldflags string) error {
 // gatewayTimer is a production lease or idle bound that a test may shorten,
 // so that it waits out the same expiry path in seconds. The short value is
 // linked into a separate gateway build (see core.LinkedDuration) and, where
-// the timer is exported, also set for gateway parts running in the test.
+// the timer is exported, can also be set for gateway parts running in the
+// test process (shortInProcessTimer).
 type gatewayTimer struct {
 	symbol         string
 	short, release time.Duration
@@ -97,8 +98,10 @@ type shortTimerBuild struct {
 	err    error
 }
 
-// shortGatewayTimer makes every gateway that t (and its subtests) starts link
-// the short value of timer, and returns that value.
+// shortGatewayTimer makes every gateway process that t (and its subtests)
+// starts link the short value of timer, and returns that value. Gateway
+// parts running in the test process keep the release value: a test that
+// runs them calls shortInProcessTimer.
 func shortGatewayTimer(t *testing.T, timer gatewayTimer) time.Duration {
 	t.Helper()
 	shortTimers.Lock()
@@ -115,12 +118,22 @@ func shortGatewayTimer(t *testing.T, timer gatewayTimer) time.Duration {
 		})
 	}
 	shortTimers.flags[name] = append(shortTimers.flags[name], fmt.Sprintf("-X=%s=%s", timer.symbol, timer.short))
-	if timer.inProcess != nil {
-		released := *timer.inProcess
-		*timer.inProcess = timer.short
-		t.Cleanup(func() { *timer.inProcess = released })
-	}
 	return timer.short
+}
+
+// shortInProcessTimer is shortGatewayTimer for a test whose gateway parts
+// run in the test process: it also sets the package variable they read,
+// which every in-process gateway in the package shares, so the test must
+// not run in parallel.
+func shortInProcessTimer(t *testing.T, timer gatewayTimer) time.Duration {
+	t.Helper()
+	if timer.inProcess == nil {
+		t.Fatalf("%s is not set in process", timer.symbol)
+	}
+	released := *timer.inProcess
+	*timer.inProcess = timer.short
+	t.Cleanup(func() { *timer.inProcess = released })
+	return shortGatewayTimer(t, timer)
 }
 
 func shortTimerFlags(t *testing.T) string {

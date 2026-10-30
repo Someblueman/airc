@@ -68,6 +68,7 @@ func startCoAPObserve(t *testing.T, f coapFixture, request core.Request) (coapCl
 // its position, Observe 1 cancels it and releases its lease, and the heartbeat
 // cursor resumes the watch as a plain request.
 func TestCoAPUDPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
+	t.Parallel()
 	f := newCoAPFixture(t)
 	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "coap-quiet-retained")

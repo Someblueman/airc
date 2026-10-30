@@ -57,6 +57,7 @@ func tunnelTo(t *testing.T, name, upstream string) fallback.Endpoint {
 // history read and discovery all run as they do on aircd's own port, and
 // the answering endpoint is the tunnel.
 func TestNativeTunnelsCarryNativeIRC(t *testing.T) {
+	t.Parallel()
 	advertised := []protocol.Carrier{{Name: "irc", Port: 6667}, {Name: "irc_websocket", Port: 6689}}
 	addr := testserver.Start(t, server.Config{HistoryLimit: 100, Carriers: advertised}, nil)
 	for _, name := range []string{"irc_websocket", "irc_connect"} {

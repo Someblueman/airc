@@ -12,6 +12,7 @@ import (
 )
 
 func TestHTTP2HistoryPagesRecent(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	post := func(id, body, parent string) *irc.MessageEvent {
 		t.Helper()

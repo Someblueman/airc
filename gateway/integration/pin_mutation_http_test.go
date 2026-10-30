@@ -12,6 +12,7 @@ import (
 // TestPinMutationHTTP maps pins.add and pins.remove to the native room pin
 // list; the saved acknowledgement is exactly the requested pin change.
 func TestPinMutationHTTP(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-http-parent")
 	request := core.Request{Version: 1, RequestID: "pin-http-add", Operation: core.PinsAdd, Target: contractRoom(), ParentID: parent}

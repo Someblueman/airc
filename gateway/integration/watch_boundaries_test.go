@@ -11,6 +11,7 @@ import (
 )
 
 func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"watch-noise", "watch-no-check"} {
 		t.Run(mode, func(t *testing.T) {
 			socket := fixture(t)

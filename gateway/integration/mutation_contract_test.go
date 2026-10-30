@@ -255,6 +255,7 @@ func headerPost(t *testing.T, f *reactionTransportFixture, r core.Request) core.
 // without dispatching again, and a changed intent under the same request ID
 // conflicts.
 func TestMutationsReplayDurablyAcrossRestart(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, nil, true)
 	observer := newReplySignalObserver(t, f.socket, *contractRoom())
 	cases := mutationContractCases()
@@ -365,6 +366,7 @@ func assertNoNativeMutation(t *testing.T, observer *irc.Client) {
 // TestMutationRefusalsCreateNoJob sends invalid intent and unauthorized
 // targets for every mutation: each is refused at admission and leaves no job.
 func TestMutationRefusalsCreateNoJob(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, false, nil, true)
 	room := *contractRoom()
 	parent := strings.Repeat("a", 32)
@@ -541,6 +543,7 @@ func TestMutationRefusalsCreateNoJob(t *testing.T) {
 // write the native server refuses is classified Blocked/Forbidden with its
 // numeric, changes nothing, and succeeds again once unmuted.
 func TestMutationNativeMuteIsBlockedWithoutEffect(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, nil, true)
 	observer := newReplySignalObserver(t, f.socket, *contractRoom())
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "mute-parent")

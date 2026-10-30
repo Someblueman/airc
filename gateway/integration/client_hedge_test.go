@@ -138,6 +138,7 @@ func observers(t *testing.T, addr string) func() int {
 // the link it preferred stalls silently, and does not wait out the
 // stalled link's idle time to do it.
 func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
+	t.Parallel()
 	addr := testserver.Start(t, server.Config{HistoryLimit: 1000}, nil)
 	endpoints := followGateway(t, addr, 2, 1)
 	proxy := newStallProxy(t, "127.0.0.1:"+strconv.Itoa(endpoints["framed"].Port))
@@ -213,6 +214,7 @@ func TestFollowHedgedRidesOutAStalledLink(t *testing.T) {
 // connection can follow; a client with Hedge set follows this way through
 // a RoomReader.
 func TestFollowHedgedEnds(t *testing.T) {
+	t.Parallel()
 	addr := testserver.Start(t, server.Config{HistoryLimit: 100}, nil)
 	endpoints := followGateway(t, addr, 30, 1)
 	poster, err := irc.Dial(irc.Config{Nick: "hedge-ends", Addr: addr, Ephemeral: true})

@@ -13,6 +13,7 @@ import (
 )
 
 func TestHTTPEventsAbandonedHTTP2BodyReleasesLease(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true, "watch")
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, f.socket, "fixture-author", account, false, true)

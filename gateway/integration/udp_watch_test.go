@@ -17,6 +17,7 @@ func writeUDPWatch(t *testing.T, f udpFixture, id string) {
 }
 
 func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newUDPFixture(t)
 	socket := f.config.Upstream.Address

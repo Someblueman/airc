@@ -18,10 +18,12 @@ import (
 )
 
 func TestSocketPairPendingTerminationAndFreshChildRecovery(t *testing.T) {
+	t.Parallel()
 	localStreamPendingTerminationAndFreshChildRecovery(t, "socketpair")
 }
 
 func TestInheritedUnixPendingTerminationAndFreshChildRecovery(t *testing.T) {
+	t.Parallel()
 	localStreamPendingTerminationAndFreshChildRecovery(t, "inherited")
 }
 

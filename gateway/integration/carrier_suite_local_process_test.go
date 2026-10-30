@@ -37,6 +37,7 @@ import (
 // one carrier (signals, crash recovery, partial frames, file modes) keeps
 // its focused test in the carrier's own files.
 func TestLocalProcessCarriers(t *testing.T) {
+	t.Parallel()
 	for _, c := range localProcessCarriers {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

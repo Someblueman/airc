@@ -23,6 +23,7 @@ import (
 // unless the session resumes first, and never after a normal DISCONNECT.
 // A native observer sees what the wills post.
 func TestMQTT5Wills(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"})
 	g := startAuthorGateway(t, c)
@@ -134,6 +135,7 @@ func TestMQTT5Wills(t *testing.T) {
 // MQTT over WebSocket: the subprotocol "mqtt" at /mqtt carries the same
 // MQTT 5 sessions, subscriptions and requests as the TCP listener.
 func TestMQTTOverWebSocket(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqttws", Protocol: "mqtt_websocket"})
 	g := startAuthorGateway(t, c)
