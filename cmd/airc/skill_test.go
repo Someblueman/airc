@@ -186,7 +186,7 @@ func TestSkillReferenceSections(t *testing.T) {
 	if len(errors) != 1 {
 		t.Fatal("no Errors section")
 	}
-	for _, code := range []string{"invalid_request", "invalid_target", "auth_failed", "permission_denied", "server_rejected", "request_conflict", "rate_limited", "server_busy", "server_unavailable", "timeout", "state_busy", "state_unavailable", "cancelled", "delivery_unknown", "confirmation_unknown", "accepted_output_failed", "accepted_state_failed"} {
+	for _, code := range []string{"invalid_request", "invalid_target", "auth_failed", "permission_denied", "limit_reached", "unsupported", "server_rejected", "request_conflict", "rate_limited", "server_busy", "server_unavailable", "timeout", "state_busy", "state_unavailable", "cancelled", "delivery_unknown", "confirmation_unknown", "accepted_output_failed", "accepted_state_failed"} {
 		if !strings.Contains(errors[0].text, "| `"+code+"`") && !strings.Contains(errors[0].text, "`"+code+"` |") {
 			t.Errorf("the Errors table has no row for %s", code)
 		}

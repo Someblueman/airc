@@ -97,7 +97,7 @@ func (s *Server) presenceLocked(client *session, command protocol.Command) {
 	}
 	now, key := s.now().UTC(), nickKey(client.client.Nick)
 	if !s.roomForCardLocked(key, now) {
-		s.numericLocked(client, "437", nil, "Directory is full; clear unused profiles")
+		s.numericLocked(client, "405", nil, "Directory is full; clear unused profiles")
 		return
 	}
 	card := s.directoryCard(client.client.Nick, now)
@@ -154,7 +154,7 @@ func (s *Server) profileLocked(client *session, command protocol.Command) {
 		}
 	}
 	if !s.roomForCardLocked(key, now) {
-		s.numericLocked(client, "437", nil, "Directory is full; clear unused profiles")
+		s.numericLocked(client, "405", nil, "Directory is full; clear unused profiles")
 		return
 	}
 	card.Nick, card.LastSeen = client.client.Nick, now

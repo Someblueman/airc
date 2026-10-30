@@ -295,7 +295,7 @@ func (w *wakes) flushWakesLocked() {
 func (s *Server) wakeLocked(client *session, command protocol.Command) {
 	w := s.wake
 	if w == nil {
-		s.numericLocked(client, "437", nil, "Wake notices are not enabled on this daemon")
+		s.numericLocked(client, "421", []string{"WAKE"}, "Wake notices are not enabled on this daemon")
 		return
 	}
 	if a, ok := s.accounts[client.authNick]; client.accountID == "" || !ok || a.ID != client.accountID {
@@ -351,7 +351,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 		}
 		old := w.byAccount[client.accountID]
 		if old == nil && len(w.byAccount) >= maxWakes {
-			s.numericLocked(client, "437", nil, "Wake registration limit reached")
+			s.numericLocked(client, "405", nil, "Wake registration limit reached")
 			return
 		}
 		state := &wakeState{reg: wakeRegistration{Account: client.accountID, Nick: client.authNick, URL: target, Secret: secret, QuietSeconds: int(quiet / time.Second), ExpiresAt: s.now().Add(wakeTTL), MentionsOnly: mentionsOnly, QuietHours: quietHours}}

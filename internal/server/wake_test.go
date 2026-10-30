@@ -175,7 +175,7 @@ func TestWakeRegistrationsPersist(t *testing.T) {
 	plain := rawServer(t)
 	conn, reader = rawConn(t, plain)
 	_, _ = io.WriteString(conn, "NICK erin\r\nUSER u 0 * :u\r\nWAKE\r\n")
-	expectLine(t, reader, conn, " 437 ")
+	expectLine(t, reader, conn, " 421 ")
 }
 
 // What an account registered never stops the daemon starting: a deleted

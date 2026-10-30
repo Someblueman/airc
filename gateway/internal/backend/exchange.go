@@ -220,7 +220,11 @@ func numericFailure(a store.Attempt, e *irc.RawEvent) (Outcome, bool) {
 		o = failed(a, core.CapacityExceeded, true, false)
 		o.Completion.RetryAfterSeconds = seconds
 	case 437:
+		// AIRC's transient refusals: a write failed or state is full for now.
 		o = failed(a, core.CapacityExceeded, true, false)
+	case 405:
+		// A limit a retry cannot clear.
+		o = failed(a, core.CapacityExceeded, false, false)
 	case 404, 481, 482, 484, 485:
 		o = failed(a, core.Forbidden, false, false)
 	case 401, 403, 407, 412, 417, 430, 461:

@@ -62,8 +62,20 @@ func failure(err error, phase string) *commandFailure {
 			e.Code = "invalid_target"
 		case "404", "484", "485", "465", "474", "481", "482":
 			e.Code = "permission_denied"
+		case "405":
+			e.Code = "limit_reached"
+		case "421":
+			e.Code = "unsupported"
 		case "437":
+			// A transient condition: a state write failed, a per-address
+			// window is in force, or transient state is full. REGISTER keeps
+			// 437 for its account limit too, since clients abort their
+			// registration on a pinned set of numerics; that one is told
+			// apart by its text, which no window shares.
 			e.Code, e.Retryable = "server_busy", true
+			if strings.Contains(rejection.Message, "limit reached") && !strings.Contains(rejection.Message, "try again later") {
+				e.Code, e.Retryable = "limit_reached", false
+			}
 		case "486":
 			e.Code, e.Retryable = "rate_limited", true
 			e.RetryAfterSeconds = slowModeDelay(rejection.Message)
@@ -78,6 +90,8 @@ func failure(err error, phase string) *commandFailure {
 			e.Code = "permission_denied"
 		case "id_conflict":
 			e.Code = "request_conflict"
+		case "unsupported_operation":
+			e.Code = "unsupported"
 		}
 	case errors.As(err, &unavailable):
 		e.Code, e.Retryable = "server_unavailable", true

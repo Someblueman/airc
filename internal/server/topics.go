@@ -57,7 +57,7 @@ func (s *Server) topicLocked(client *session, command protocol.Command) {
 		delete(s.topics, channel)
 	} else {
 		if _, exists := s.topics[channel]; !exists && len(s.topics) >= maxTotalChannels {
-			s.numericLocked(client, "437", []string{channel}, "Server topic limit reached")
+			s.numericLocked(client, "405", []string{channel}, "Server topic limit reached")
 			return
 		}
 		s.topics[channel] = topic{Text: text, SetBy: client.client.Nick, SetAt: s.now().UTC()}

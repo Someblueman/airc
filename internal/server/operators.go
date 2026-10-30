@@ -52,7 +52,7 @@ func (s *Server) modeLocked(c *session, cmd protocol.Command) {
 	index := slices.Index(ids, a.ID)
 	if mode == "+o" && index < 0 {
 		if len(ids) >= 64 || len(ids) == 0 && len(next.Operators) >= 128 {
-			s.numericLocked(c, "437", nil, "Channel operator limit reached")
+			s.numericLocked(c, "405", nil, "Channel operator limit reached")
 			return
 		}
 		ids = append(ids, a.ID)

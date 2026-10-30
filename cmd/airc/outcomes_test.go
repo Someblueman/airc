@@ -92,6 +92,32 @@ func TestJSONErrorsAreClassifiedWithoutParsingProse(t *testing.T) {
 	}
 }
 
+func TestLimitsAndDisabledFeaturesAreNotRetryable(t *testing.T) {
+	for _, c := range []struct {
+		code, text, want string
+		retryable        bool
+	}{
+		{"405", "Server channel limit reached", "limit_reached", false},
+		{"405", "You have joined too many channels", "limit_reached", false},
+		{"421", "Wake notices are not enabled on this daemon", "unsupported", false},
+		{"421", "Unknown command", "unsupported", false},
+		{"437", "Slow-mode state full; retry later", "server_busy", true},
+		{"437", "Unable to save moderation; no change applied", "server_busy", true},
+		// REGISTER refusals are all 437 (pkg/irc aborts registration on a
+		// pinned set of numerics), so the account limit is told by its text.
+		{"437", "registration rejected: Account creation limit for this address reached; try again later", "server_busy", true},
+		{"437", "registration rejected: Account limit reached", "limit_reached", false},
+	} {
+		e := failure(&irc.RejectedError{Code: c.code, Message: c.text}, "request")
+		if e.Code != c.want || e.Retryable != c.retryable {
+			t.Errorf("%s %q: %s retryable %v, want %s %v", c.code, c.text, e.Code, e.Retryable, c.want, c.retryable)
+		}
+	}
+	if e := failure(&fallback.Refusal{Code: "unsupported_operation"}, "request"); e.Code != "unsupported" || e.Retryable {
+		t.Fatalf("%+v", e)
+	}
+}
+
 func TestRateLimitCarriesTheServersDelay(t *testing.T) {
 	// Native IRC hands the numeric over directly; a fallback carrier wraps
 	// it in a refusal. Both carry the stated delay as a number.

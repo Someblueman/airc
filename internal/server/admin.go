@@ -105,7 +105,7 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 		return
 	}
 	if strings.HasPrefix(request.Action, "account-") && s.accountsAt == "" {
-		s.numericLocked(client, "437", nil, "Accounts are not enabled on this daemon")
+		s.numericLocked(client, "421", []string{request.Action}, "Accounts are not enabled on this daemon")
 		return
 	}
 	if request.Action == "account-list" {
@@ -146,7 +146,7 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 			delete(next, key)
 		} else {
 			if _, exists := next[key]; !exists && len(next) >= maxModerationRules {
-				s.numericLocked(client, "437", nil, "Moderation rule limit reached")
+				s.numericLocked(client, "405", nil, "Moderation rule limit reached")
 				return
 			}
 			rule := protocol.ModerationRule{Kind: kind, Nick: request.Nick, Scope: request.Scope, Reason: request.Reason, SetBy: client.client.Nick, SetAt: now}

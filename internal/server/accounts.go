@@ -107,6 +107,11 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 	a, exists := s.accounts[key]
 	hash := sha256.Sum256([]byte(command.Trailing))
 	if !exists && command.Name == "REGISTER" {
+		// Every REGISTER refusal is 437, the account limit included: a
+		// client aborts its registration on a pinned set of numerics, and
+		// any other would let an older one fall through to a guest session
+		// under the name it meant to create. Clients tell the permanent
+		// limit from the transient windows by its text.
 		if client.accountsMade >= maxRegistrationsPerConnection {
 			s.numericLocked(client, "437", nil, "Account creation limit for this connection reached")
 			return
