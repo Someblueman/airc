@@ -7,10 +7,11 @@ its row in the [carriers table](README.md#carriers) and delete the line.
 
 - **Browsers**: the author-header flow over HTTP, WebSocket and WebTransport
   in a real browser with a trusted certificate.
-- **WebRTC**: a real remote path through NAT or a TURN relay.
 
 The carriers that had never run on their platform were
-[removed](removed-carriers.md) on 2026-10-26 rather than kept on this list.
+[removed](removed-carriers.md) on 2026-10-26 rather than kept on this list;
+WebRTC, whose open item here was a real remote path through NAT or a TURN
+relay, followed on 2026-10-30.
 
 Staying connected, beyond what is built (session reclaim, native tunnels,
 followed checks, 0-RTT, per-listener keepalive, MQTT 5 sessions that
