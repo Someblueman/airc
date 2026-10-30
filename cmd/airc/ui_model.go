@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ type uiBuffer struct {
 	returnTo   string      // query views return to the view they opened from
 	items      []irc.Event // messages and notices, oldest first
 	help       []helpLine  // the content of a help view
+	history    []string    // lines sent from this view, oldest first, for Up and Down in the composer
 	seen       map[string]struct{}
 	unread     int
 	mention    bool // an unread item is addressed to this user
@@ -119,6 +121,7 @@ type uiModel struct {
 	replyTo         string
 	input           []rune
 	cursor          int
+	recall          int // the index into the view's history the composer shows, or -1 for the user's own draft
 	complete        completion
 	features        map[string]string       // nil until the daemon has advertised its capabilities
 	decisions       map[string]openDecision // open decisions that concern this user, by ID
@@ -158,7 +161,7 @@ func (k *nickKinds) kind(nick string) string {
 }
 
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
-	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}, statuses: map[string]string{}}
+	m := &uiModel{nick: nick, now: now, width: 100, height: 30, recall: -1, lastRefresh: now(), decisions: map[string]openDecision{}, kinds: &nickKinds{kinds: map[string]string{}}, statuses: map[string]string{}}
 	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox), newBuffer(irc.AllDirectMessages, bufDirectMessages)}
 	m.find(irc.AllDirectMessages).topic = "waiting for daemon capabilities"
 	for _, channel := range channels {
@@ -393,7 +396,7 @@ func (m *uiModel) switchTo(name string) []uiCmd {
 		return nil
 	}
 	m.rememberDraft()
-	m.current, m.chosen = name, true
+	m.current, m.chosen, m.recall = name, true, -1
 	m.restoreDraft(name)
 	b.unread, b.mention, b.scroll = 0, false, 0
 	if b.kind == bufChannel {
@@ -643,9 +646,13 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 	case keySelectNext:
 		m.selectMessage(1)
 	case keyUp:
-		m.scrollBy(1)
+		if !m.recallLine(-1) {
+			m.scrollBy(1)
+		}
 	case keyDown:
-		m.scrollBy(-1)
+		if !m.recallLine(1) {
+			m.scrollBy(-1)
+		}
 	case keyPgUp:
 		m.scrollBy(page / 2)
 	case keyPgDn:
@@ -712,6 +719,60 @@ func (m *uiModel) scrollBy(lines int) {
 	if b := m.cur(); b != nil {
 		b.scroll = max(b.scroll+lines, 0)
 	}
+}
+
+// historyLimit bounds the lines a view remembers for Up and Down.
+const historyLimit = 100
+
+// recordLine remembers a submitted line in the view's history, skipping a
+// repeat of the newest, and makes the composer the user's own again.
+func (m *uiModel) recordLine(text string) {
+	m.recall = -1
+	b := m.cur()
+	if b == nil || (len(b.history) > 0 && b.history[len(b.history)-1] == text) {
+		return
+	}
+	b.history = append(b.history, text)
+	if len(b.history) > historyLimit {
+		b.history = b.history[len(b.history)-historyLimit:]
+	}
+}
+
+// recallLine moves through the view's sent lines, Up (delta -1) towards the
+// oldest and Down towards the newest and then an empty composer, when the
+// composer holds nothing of the user's own: it is empty, or shows a recalled
+// line unchanged, with the cursor on its first (Up) or last (Down) line. It
+// reports whether it took the key; otherwise Up and Down scroll the log.
+func (m *uiModel) recallLine(delta int) bool {
+	b := m.cur()
+	if b == nil || len(b.history) == 0 {
+		return false
+	}
+	switch {
+	case len(m.input) == 0:
+		if delta > 0 {
+			return false
+		}
+		m.recall = len(b.history)
+	case m.recall < 0 || m.recall >= len(b.history) || string(m.input) != b.history[m.recall]:
+		return false
+	case delta < 0 && slices.Contains(m.input[:m.cursor], '\n'):
+		return false
+	case delta > 0 && slices.Contains(m.input[m.cursor:], '\n'):
+		return false
+	}
+	i := m.recall + delta
+	switch {
+	case i < 0:
+		return true // the oldest line is already shown
+	case i >= len(b.history):
+		m.recall, m.input, m.cursor = -1, nil, 0
+	default:
+		m.recall = i
+		m.input = []rune(b.history[i])
+		m.cursor = len(m.input)
+	}
+	return true
 }
 
 // submit runs the input line: a slash command, or a message to the current channel.

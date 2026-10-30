@@ -491,8 +491,10 @@ completes what you are typing (a nickname, most recent speaker first; a
 takes one) and cycles through the matches, `Shift-Tab` cycles back; with nothing
 typed, `Tab` and `Shift-Tab` switch views, as `Ctrl-N` and `Ctrl-P` always do.
 A nickname completed at the start of a line becomes `nick: `, after `@` it keeps
-the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. On a narrow
-terminal the side panes are dropped.
+the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. `Up` and
+`Down` recall the lines sent from the view (the last 100, kept in memory for the
+UI process) when the composer is empty or shows a recalled line unchanged, and
+scroll one line otherwise. On a narrow terminal the side panes are dropped.
 
 `airc watch --channel '#room'` is a read-only live log for a terminal or a pipe
 (`--json` for one object per line; `@nick` follows a nick's direct messages).
