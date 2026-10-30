@@ -12,7 +12,7 @@ const RemovedIdentityDoc = "docs/gateway/removed-identity.md"
 // RemovedModesDoc lists removed connection modes.
 const RemovedModesDoc = "docs/gateway/removed-modes.md"
 
-// RemovedCarriersDoc lists the carriers removed on 2026-10-26.
+// RemovedCarriersDoc lists the carriers removed on 2026-10-26 and 2026-10-30.
 const RemovedCarriersDoc = "docs/gateway/removed-carriers.md"
 
 // removedModes are the configuration keys (and listener protocols) of the
@@ -23,9 +23,9 @@ var (
 )
 
 // removedCarrierTop are the top-level sections of the removed bridges,
-// removedCarrierProtocols the removed listener protocols and
-// removedCarrierOptions the listener option objects (and reply_to) that only
-// a removed carrier had.
+// removedCarrierProtocols the removed listener protocols (the 2026-10-26
+// cut, then webrtc, dtls and coaps on 2026-10-30) and removedCarrierOptions
+// the listener option objects (and reply_to) that only a removed carrier had.
 var (
 	removedCarrierTop       = []string{"redis_pubsub", "redis_streams", "irc_bridges", "xmpp_bridges", "sftp", "postgres_notify"}
 	removedCarrierProtocols = []string{
@@ -33,11 +33,12 @@ var (
 		"udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6",
 		"sctp", "sctp_unordered", "sctp_pr_ttl", "coap_tcp", "coaps_tcp", "coap_oscore", "mqtt_sn",
 		"amqp", "stomp", "scp_inbox", "offline_bundle", "bpv7", "syslog_tls", "syslog_signed", "snmp_v3",
+		"webrtc", "dtls", "coaps",
 	}
 	removedCarrierOptions = []string{
 		"fifo", "udp_lite", "ipv4_broadcast", "ipv6_multicast", "icmp_v6", "ipv4_multicast",
 		"snmp", "signed_syslog", "syslog", "stomp", "amqp", "mqtt_sn", "bundle_protocol",
-		"posix_queue", "shared_memory", "mach_ipc", "oscore", "scp_inbox", "reply_to",
+		"posix_queue", "shared_memory", "mach_ipc", "oscore", "scp_inbox", "reply_to", "webrtc",
 	}
 )
 
@@ -155,7 +156,7 @@ func removedMode(path string) error {
 }
 
 // removedCarrier names a field (a bridge section, a listener protocol or a
-// listener option) of a carrier removed on 2026-10-26.
+// listener option) of a removed carrier.
 func removedCarrier(path, name string) error {
 	return fmt.Errorf("configuration uses removed field %q: the %s carrier was removed from the gateway; see %s", path, name, RemovedCarriersDoc)
 }
