@@ -37,7 +37,7 @@ func exerciseCarrierSendAndReads(t *testing.T, call nativeOperationCall, accepte
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	caps := call(core.Request{Version: 1, RequestID: label + "-capabilities", Operation: core.CapabilitiesGet}, false)
 	assertNativeCapabilities(t, caps, adapter.MaxResponseFrameBytes)
-	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams", "webrtc-reliable_ordered": "webrtc_reliable_ordered", "webrtc-reliable_unordered": "webrtc_reliable_unordered", "webrtc-unreliable_ordered": "webrtc_unreliable_ordered", "webrtc-unreliable_unordered": "webrtc_unreliable_unordered", "coaps-signed": "coaps_observe_fragments", "coaps-encrypted": "coaps_observe_fragments", "coaps-non-signed": "coaps_observe_fragments", "coaps-non-encrypted": "coaps_observe_fragments"}[label]
+	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams", "coaps-signed": "coaps_observe_fragments", "coaps-encrypted": "coaps_observe_fragments", "coaps-non-signed": "coaps_observe_fragments", "coaps-non-encrypted": "coaps_observe_fragments"}[label]
 	if label == "unixgram" {
 		expectedMode = "unixgram_mailbox_datagrams"
 	}

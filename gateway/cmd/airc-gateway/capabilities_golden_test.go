@@ -23,7 +23,7 @@ var goldenProtocols = []string{
 	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect", "mqtt_websocket",
 	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited",
 	"udp", "rawquic", "rawquic_datagrams", "dtls",
-	"coap_udp", "coaps", "webrtc", "zeromq", "nng", "mqtt",
+	"coap_udp", "coaps", "zeromq", "nng", "mqtt",
 	"file_mailbox", "directory_mailbox", "append_log",
 	"gopher",
 }

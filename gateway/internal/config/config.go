@@ -52,7 +52,6 @@ type Listener struct {
 	TLSCertFile    string           `json:"tls_cert_file,omitempty"`
 	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
 	Operations     []core.Operation `json:"operations"`
-	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
 	// Author access policy (see ListenerAccess). Operations above also bound
 	// author requests; when empty, authors get every available operation.
 	Targets      []core.Target   `json:"targets,omitempty"`
@@ -186,7 +185,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if len(l.AllowedOrigins) > 0 && !t.Origins {
-			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, MQTT over WebSocket, or WebRTC listener")
+			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP or MQTT over WebSocket listener")
 		}
 		if err := validateKeepalive(*l); err != nil {
 			return err
@@ -295,9 +294,6 @@ func (c *Config) Validate() error {
 				if (op == core.HistoryRead || op == core.Check || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
 					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting/poll/topic/members/channels/agents requires at least two global and per-author sessions")
 				}
-			}
-			if l.Protocol == "webrtc" && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
-				return errors.New("enabled WebRTC requires at least two global and per-author sessions")
 			}
 		}
 	}

@@ -57,7 +57,6 @@ var owners = map[string]owner{
 	"websocket":         stream{http: httpServer(webSocketServer)}.start,
 	"grpc":              stream{http: httpServer(grpcServer)}.start,
 	"mcp_http":          stream{http: mcpServer}.start,
-	"webrtc":            stream{http: webRTCServer}.start,
 	"http3":             quicListener(http3Owner),
 	"webtransport":      quicListener(webTransportOwner),
 	"rawquic":           quicListener(rawQUICOwner(false)),
@@ -178,8 +177,8 @@ const (
 // the transport's network), optionally under TLS, serving each connection
 // with serve or an HTTP server.
 type stream struct {
-	// http builds the HTTP server, and closes the MCP or WebRTC sessions it
-	// owns (nil if none).
+	// http builds the HTTP server, and closes the MCP sessions it owns (nil
+	// if none).
 	http  func(*startup, config.Listener, *dispatch.Dispatcher) (*http.Server, func(), error)
 	serve func(context.Context, served) error
 	alpn  alpn
@@ -294,24 +293,6 @@ func mcpServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Ser
 		return nil, nil, err
 	}
 	return server, mcp.Close, nil
-}
-
-func webRTCServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, func(), error) {
-	options := config.WebRTC{}
-	if l.WebRTC != nil {
-		options = *l.WebRTC
-	}
-	if options.ICETransportPolicy == "" {
-		options.ICETransportPolicy = "all"
-	}
-	server, webrtc, err := adapter.WebRTCServer(d, o.slots, o.requests, o.c.Limits.SessionsPerAuthor, options, l.AllowedOrigins)
-	if err != nil {
-		return nil, nil, err
-	}
-	if server.TLSConfig == nil {
-		server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13}
-	}
-	return server, func() { _ = webrtc.Close() }, nil
 }
 
 // listen binds a connection listener on the transport's network.

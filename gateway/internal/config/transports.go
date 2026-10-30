@@ -145,7 +145,6 @@ var transports = []Transport{
 	{Name: "dtls", Kind: Packet, Network: "udp", Address: HostPort, TLS: TLSRequired, Authors: RequestAuthors},
 	{Name: "coap_udp", Kind: Packet, Network: "udp", Address: DatagramPort, TLS: TLSForbidden, Authors: RequestAuthors},
 	{Name: "coaps", Kind: Packet, Network: "udp", Address: HostPort, TLS: TLSRequired, Authors: RequestAuthors},
-	{Name: "webrtc", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSRequired, Origins: true, Authors: RequestAuthors, blocks: []block{webRTCBlock}},
 	{Name: "zeromq", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSForbidden, Authors: RequestAuthors, blocks: []block{localREPBlock}},
 	{Name: "nng", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSForbidden, Authors: RequestAuthors, blocks: []block{localREPBlock}},
 	{Name: "mqtt", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors, blocks: []block{mqttBlock}, defaults: mqttDefaults},

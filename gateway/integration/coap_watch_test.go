@@ -122,47 +122,24 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	}
 }
 
+// coapObserveFrame reassembles the next notified frame from its AGD1
+// fragments.
 func coapObserveFrame(t *testing.T, notifications <-chan coapNotification, done <-chan time.Time) adapter.FrameResponse {
 	t.Helper()
-	var id [16]byte
-	var total, count int
-	var parts [][]byte
+	var assembly agd1Assembly
 	for {
 		select {
 		case notification := <-notifications:
 			if notification.format != message.AppOctets || !notification.hasObserve {
 				t.Fatalf("CoAPS notification format=%v observe=%v", notification.format, notification.hasObserve)
 			}
-			fragmentID, fragmentTotal, index, fragmentCount, payload, err := webRTCResponseFragment(notification.body)
-			if err != nil {
+			body := assembly.add(t, notification.body)
+			if body == nil {
 				continue
-			}
-			if count == 0 {
-				id, total, count = fragmentID, fragmentTotal, fragmentCount
-				parts = make([][]byte, count)
-			} else if fragmentID != id || fragmentTotal != total || fragmentCount != count {
-				t.Fatalf("CoAPS notification assembly header mismatch")
-			}
-			if parts[index] == nil {
-				parts[index] = append([]byte(nil), payload...)
-			}
-			complete := true
-			for _, part := range parts {
-				if part == nil {
-					complete = false
-					break
-				}
-			}
-			if !complete {
-				continue
-			}
-			body := make([]byte, 0, total)
-			for _, part := range parts {
-				body = append(body, part...)
 			}
 			var response adapter.FrameResponse
-			if len(body) != total || json.Unmarshal(body, &response) != nil {
-				t.Fatalf("CoAPS notification frame bytes=%d want=%d", len(body), total)
+			if err := json.Unmarshal(body, &response); err != nil {
+				t.Fatalf("CoAPS notification frame: %v", err)
 			}
 			return response
 		case <-done:
