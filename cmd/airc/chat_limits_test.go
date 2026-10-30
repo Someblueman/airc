@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,15 @@ func TestRoomSlowModeAcrossReconnectsAllowsRetriesAndReactions(t *testing.T) {
 	mustCLI(t, address, args...)
 	mustCLI(t, address, args...)
 	deniedCLI(t, address, "retry after", "send", "--nick", "bot", "--channel", "room", "--message", "second")
+	// With --json the delay is a number an agent waits for, not prose it parses.
+	_, stderr, err := cli(t, address, "send", "--nick", "bot", "--channel", "room", "--message", "second", "--json")
+	var limited commandFailure
+	if err == nil || json.Unmarshal([]byte(stderr), &limited) != nil {
+		t.Fatal(err, stderr)
+	}
+	if limited.Code != "rate_limited" || !limited.Retryable || limited.RetryAfterSeconds != 1 || limited.Phase != "send" {
+		t.Fatalf("%+v", limited)
+	}
 	root := send(t, address, "other", "#room", "question")
 	mustCLI(t, address, "react", root.ID, "seen", "--nick", "bot")
 	mustCLI(t, address, "check", "--nick", "bot", "--channel", "room")

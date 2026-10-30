@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -88,6 +89,34 @@ func TestJSONErrorsAreClassifiedWithoutParsingProse(t *testing.T) {
 	e := failure(&irc.RejectedError{Code: "904", Message: "arbitrary translated text"}, "login")
 	if e.Code != "auth_failed" || e.Retryable || strings.Contains(e.Code, "text") {
 		t.Fatal(e)
+	}
+}
+
+func TestRateLimitCarriesTheServersDelay(t *testing.T) {
+	// Native IRC hands the numeric over directly; a fallback carrier wraps
+	// it in a refusal. Both carry the stated delay as a number.
+	native := &irc.RejectedError{Code: "486", Message: "Slow mode: retry after 12 seconds"}
+	for _, err := range []error{native, &fallback.Refusal{Code: "486", UpstreamCode: 486, Err: native}} {
+		e := failure(err, "send")
+		if e.Code != "rate_limited" || !e.Retryable || e.RetryAfterSeconds != 12 {
+			t.Fatalf("%+v", e)
+		}
+		if data, _ := json.Marshal(e); !strings.Contains(string(data), `"retry_after_seconds":12`) {
+			t.Fatal(string(data))
+		}
+	}
+	// A delay the server did not state in its one grammar is not invented.
+	for _, text := range []string{"unknown grammar", "Slow mode: retry after 0 seconds", "Slow mode: retry after +3 seconds", "Slow mode: retry after 3 seconds later", "Slow mode: retry after many seconds"} {
+		e := failure(&irc.RejectedError{Code: "486", Message: text}, "send")
+		if e.Code != "rate_limited" || !e.Retryable || e.RetryAfterSeconds != 0 {
+			t.Fatalf("%q: %+v", text, e)
+		}
+		if data, _ := json.Marshal(e); strings.Contains(string(data), "retry_after_seconds") {
+			t.Fatal(string(data))
+		}
+	}
+	if e := failure(&irc.RejectedError{Code: "437", Message: "Slow mode: retry after 12 seconds"}, "send"); e.RetryAfterSeconds != 0 {
+		t.Fatalf("a delay on another numeric was trusted: %+v", e)
 	}
 }
 
