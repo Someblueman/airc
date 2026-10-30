@@ -171,8 +171,9 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 }
 
 // strayArgument rejects a word after the interactive flags, which the flag
-// package would otherwise ignore. A command name there is almost always
-// airc --nick N watch meant as airc watch --nick N.
+// package would otherwise ignore. dispatch runs a command preceded only by the
+// flags every command accepts, so a command name reaches here after a flag
+// only its command knows: airc --channel x watch meant as airc watch --channel x.
 func strayArgument(flags, extra []string) error {
 	word := extra[0]
 	if !slices.Contains(commands, word) {

@@ -26,7 +26,9 @@ AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE, AIRC_CARRIE
 Every command accepts -h for its flags. With --json, send and check report failures on stderr as
 {"type":"error","code":...,"phase":...,"retryable":...}; see docs/AGENT_RELIABILITY.md.
 Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH,
---carriers LIST (fallback when native IRC is unreachable; send and history fall back automatically).`
+--carriers LIST (fallback when native IRC is unreachable; send and history fall back automatically).
+They and --nick, --addr, --unix, --identity and --json may also come before the command:
+airc --addr HOST:PORT channels --json.`
 
 // printUsage prints airc -h: the preamble, then every command with help lines
 // in commandTable's order, a blank line where the group changes, then the
