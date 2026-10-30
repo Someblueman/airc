@@ -29,6 +29,7 @@ const (
 	keySelectNext
 	keyPasteRune
 	keyNewline // Alt-Enter or Shift-Enter: a new line in the draft, r is '\n'
+	keyAlt     // r holds the key: 'b' for Alt-b, 0x7f for Alt-Backspace
 	keyCtrl    // r holds the letter: 'c' for Ctrl-C
 )
 
@@ -95,6 +96,15 @@ func (d *keyDecoder) feed(data []byte) []key {
 			}
 			if data[1] == '\r' || data[1] == '\n' { // Alt-Enter, from a terminal that sends Alt as Meta
 				keys = append(keys, key{keyNewline, '\n'})
+				n = 2
+				break
+			}
+			// Alt with a printable key or Backspace, from a terminal that sends
+			// Alt as Meta: never Esc, which would clear the draft. ESC [ and
+			// ESC O open control sequences, so Alt-[ and Alt-O cannot be told
+			// from them and are not keys here.
+			if b := data[1]; b >= 0x20 && b <= 0x7f && b != '[' && b != 'O' {
+				keys = append(keys, key{keyAlt, rune(b)})
 				n = 2
 				break
 			}

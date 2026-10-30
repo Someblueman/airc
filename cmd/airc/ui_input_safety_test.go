@@ -10,7 +10,7 @@ import (
 )
 
 func TestTerminalReadBoundaries(t *testing.T) {
-	input := []byte("é🐈\x1b[1;5A\x1b[27;2;13~\x1b\r\x1b[200~one\r\ntwo\t猫\n\x03\x1b[201~\r")
+	input := []byte("é🐈\x1b[1;5A\x1b[27;2;13~\x1b\r\x1bf\x1b[200~one\r\ntwo\t猫\n\x03\x1b[201~\r")
 	whole := new(keyDecoder).feed(input)
 	for split := 0; split <= len(input); split++ {
 		var d keyDecoder

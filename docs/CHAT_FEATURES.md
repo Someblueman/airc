@@ -510,6 +510,7 @@ The UI also has:
 | `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. The status bar quotes who and what you are answering until Enter or Esc; in a thread view it shows which message a plain line will answer. |
 | `Ctrl-T` | Open the selected message's thread. |
 | `Ctrl-Y` | Insert the selected message's ID at the cursor (for example after `/pin `), and offer it to the terminal's clipboard with OSC 52 where the terminal allows that. |
+| `Alt-B`, `Alt-F`, `Alt-Backspace` | Move a word left or right, or cut the word before the cursor as `Ctrl-W` does. An Alt key the UI does not bind does nothing; only a lone `Esc` clears the draft. |
 | `Alt-Enter` | Insert a new line in the draft instead of sending it; a message may span lines within the 4096-byte limit. `Shift-Enter` does the same where the terminal reports it apart from Enter: the UI asks for xterm's `modifyOtherKeys`, and kitty's `CSI u` form is understood too; a plain Enter or Ctrl-J sends. |
 | `/help` | Open a view of every key and command, marking the commands the connected daemon does not support. `/close` returns. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |

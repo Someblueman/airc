@@ -98,6 +98,7 @@ var uiKeys = []helpLine{
 	{"Alt-Enter", "a new line in the draft (Shift-Enter too, where the terminal tells it from Enter)"},
 	{"Esc", "clear the draft and the reply target"},
 	{"Ctrl-A/E/U/K/W", "line editing: start, end, cut to the start, cut to the end, cut the word"},
+	{"Alt-B, Alt-F", "a word left or right; Alt-Backspace cuts the word. Other Alt keys do nothing"},
 	{"Ctrl-C", "quit (Ctrl-D with nothing typed)"},
 }
 

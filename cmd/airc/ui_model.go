@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -701,18 +702,52 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		case 'k':
 			m.input = m.input[:m.cursor]
 		case 'w':
-			start := m.cursor
-			for start > 0 && m.input[start-1] == ' ' {
-				start--
-			}
-			for start > 0 && m.input[start-1] != ' ' {
-				start--
-			}
-			m.input = append(m.input[:start], m.input[m.cursor:]...)
-			m.cursor = start
+			m.cutWord()
+		}
+	case keyAlt:
+		switch k.r {
+		case 'b':
+			m.cursor = m.wordStart()
+		case 'f':
+			m.cursor = m.wordEnd()
+		case 0x7f: // Alt-Backspace cuts the word, as Ctrl-W does
+			m.cutWord()
 		}
 	}
 	return nil, false
+}
+
+// wordStart is where the word before the cursor begins: back over any
+// spaces, then over the word itself.
+func (m *uiModel) wordStart() int {
+	start := m.cursor
+	for start > 0 && unicode.IsSpace(m.input[start-1]) {
+		start--
+	}
+	for start > 0 && !unicode.IsSpace(m.input[start-1]) {
+		start--
+	}
+	return start
+}
+
+// wordEnd is where the word after the cursor ends: forward over any spaces,
+// then over the word itself.
+func (m *uiModel) wordEnd() int {
+	end := m.cursor
+	for end < len(m.input) && unicode.IsSpace(m.input[end]) {
+		end++
+	}
+	for end < len(m.input) && !unicode.IsSpace(m.input[end]) {
+		end++
+	}
+	return end
+}
+
+// cutWord removes the word before the cursor and the spaces after it.
+func (m *uiModel) cutWord() {
+	start := m.wordStart()
+	m.input = append(m.input[:start], m.input[m.cursor:]...)
+	m.cursor = start
 }
 
 func (m *uiModel) scrollBy(lines int) {

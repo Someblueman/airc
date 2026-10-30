@@ -51,6 +51,9 @@ func TestParseKeys(t *testing.T) {
 		{"\x1b[3~\x1b[H\x1b[F\x1b[1~\x1b[4~", []key{{kind: keyDelete}, {kind: keyHome}, {kind: keyEnd}, {kind: keyHome}, {kind: keyEnd}}},
 		{"\x03\x04\x0e\x10", []key{{keyCtrl, 'c'}, {keyCtrl, 'd'}, {keyCtrl, 'n'}, {keyCtrl, 'p'}}},
 		{"\x1b", []key{{kind: keyEsc}}},
+		{"\x1b\x1b", []key{{kind: keyEsc}, {kind: keyEsc}}},
+		{"\x1bb\x1bf\x1b\x7f\x1b ", []key{{keyAlt, 'b'}, {keyAlt, 'f'}, {keyAlt, 0x7f}, {keyAlt, ' '}}}, // Alt as Meta is never Esc
+		{"\x1b\x01", []key{{kind: keyEsc}, {keyCtrl, 'a'}}},
 		{"\x1b\r", []key{{keyNewline, '\n'}}},                                                             // Alt-Enter as Meta
 		{"\x1b[27;2;13~\x1b[27;3;13~", []key{{keyNewline, '\n'}, {keyNewline, '\n'}}},                     // xterm modifyOtherKeys Shift- and Alt-Enter
 		{"\x1b[13;2u\x1b[13;3u\x1b[13u", []key{{keyNewline, '\n'}, {keyNewline, '\n'}, {kind: keyEnter}}}, // kitty
@@ -140,6 +143,25 @@ func TestTypingEditingAndSending(t *testing.T) {
 	m.update(keyIn{kind: keyCtrl, r: 'w'})
 	if string(m.input) != "one " {
 		t.Fatalf("ctrl-w left %q", string(m.input))
+	}
+	m.input, m.cursor = []rune("one two\nthree"), 13
+	m.update(keyIn{keyAlt, 'b'})
+	m.update(keyIn{keyAlt, 'b'})
+	if m.cursor != 4 {
+		t.Fatalf("Alt-b twice stopped at %d", m.cursor)
+	}
+	m.update(keyIn{keyAlt, 'f'})
+	if m.cursor != 7 {
+		t.Fatalf("Alt-f stopped at %d", m.cursor)
+	}
+	m.update(keyIn{keyAlt, 'x'})
+	m.update(keyIn{keyAlt, ' '})
+	if string(m.input) != "one two\nthree" || m.cursor != 7 {
+		t.Fatalf("an unbound Alt key changed the draft to %q at %d", string(m.input), m.cursor)
+	}
+	m.update(keyIn{keyAlt, 0x7f})
+	if string(m.input) != "one \nthree" || m.cursor != 4 {
+		t.Fatalf("Alt-Backspace left %q at %d", string(m.input), m.cursor)
 	}
 	m.update(keyIn{kind: keyEsc})
 	if len(m.input) != 0 {
