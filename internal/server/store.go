@@ -33,7 +33,7 @@ type persisted interface {
 // storesLocked lists the stores Shutdown closes, the ledgers before the
 // wake sender as before they were stores.
 func (s *Server) storesLocked() []persisted {
-	out := []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState, &s.chatStore, &s.handoffState, &s.decisionState, &s.pasteStore}
+	out := []persisted{&s.accountsState, &s.moderationState, &s.directoryState, &s.topicState, &s.chatStore, &s.handoffs, &s.decisions, &s.pasteStore}
 	if s.wake != nil {
 		out = append(out, s.wake)
 	}

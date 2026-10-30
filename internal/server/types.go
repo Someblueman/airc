@@ -121,8 +121,8 @@ type Server struct {
 	pending          map[string]int         // unregistered connections by remote address
 	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chatStore                               // pins, rooms, polls, operators, slow mode and signals; see chat_state.go
-	handoffState                            // handoffs and their log; see handoffs.go
-	decisionState                           // decisions and their log; see decisions.go
+	handoffs         ledgerStore[handoff]   // handoffs and their log; see handoffs.go
+	decisions        ledgerStore[decision]  // decisions and their log; see decisions.go
 	pasteStore                              // pastes, their index and files; see pastes.go
 	seq              uint64
 	histFile         *os.File

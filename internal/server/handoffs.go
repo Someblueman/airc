@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -89,14 +87,9 @@ func validHandoff(h handoff) error {
 	return nil
 }
 
-// handoffState is the open and recent handoffs and their append-only log.
-// Every field is read and written with s.mu held; appends and compactions
-// run under s.mu (and messageMu, since every step is a post) with env.sync.
-type handoffState struct {
-	handoffs   map[string]handoff  // by offer ID
-	handoffLog *appendLog[handoff] // nil keeps handoffs in memory only
-	env        *storeEnv
-}
+// handoffLedger is the handoffs' ledger: s.handoffs holds the open and
+// recent ones and their append-only log.
+var handoffLedger = ledger[handoff]{name: "handoffs", valid: validHandoff, maxLive: maxLiveHandoffs, keep: handoffKeep, maxRecord: maxHandoffRecord, event: "handoff_compaction_failed"}
 
 // RestoreHandoffs loads the handoff log at path, keeping every open and
 // accepted handoff and finished ones for a week, compacts it and appends
@@ -104,52 +97,10 @@ type handoffState struct {
 func (s *Server) RestoreHandoffs(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.listener != nil || s.handoffLog != nil {
+	if s.listener != nil || s.handoffs.log != nil {
 		return errors.New("configure handoffs once before Serve")
 	}
-	return s.handoffState.load(path)
-}
-
-func (st *handoffState) load(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	loaded, err := readHandoffs(path)
-	if err != nil {
-		return fmt.Errorf("handoffs %s: %w", path, err)
-	}
-	if liveRecords(loaded) > maxLiveHandoffs {
-		return fmt.Errorf("handoffs %s: more than %d open", path, maxLiveHandoffs)
-	}
-	st.handoffs = loaded
-	st.handoffLog = &appendLog[handoff]{path: path}
-	return st.compactHandoffsLocked()
-}
-
-// close closes the log; every save completes under s.mu.
-func (st *handoffState) close() error {
-	if st.handoffLog == nil {
-		return nil
-	}
-	err := st.handoffLog.close()
-	st.handoffLog = nil
-	return err
-}
-
-func readHandoffs(path string) (map[string]handoff, error) {
-	return readLedger(path, maxHandoffRecord, validHandoff)
-}
-
-// compactHandoffsLocked drops handoffs finished more than a week ago and
-// rewrites the log with one line per handoff, then appends to the new file.
-func (st *handoffState) compactHandoffsLocked() error {
-	return compactLedger(st.handoffLog, st.handoffs, handoffKeep, st.env.now(), st.env.sync)
-}
-
-// saveHandoffLocked records h's new state before it takes effect, and
-// compacts the log once superseded lines outnumber the handoffs held.
-func (st *handoffState) saveHandoffLocked(h handoff) error {
-	return recordLedger(st.handoffLog, st.handoffs, h, st.env.sync, st.compactHandoffsLocked, st.env.logger, "handoff_compaction_failed")
+	return s.handoffs.load(path)
 }
 
 func handoffEntry(h handoff) protocol.ChatEntry {
@@ -304,13 +255,13 @@ func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
 	}
-	if live := liveRecords(s.handoffs); live >= maxLiveHandoffs {
+	if live := liveRecords(s.handoffs.all); live >= maxLiveHandoffs {
 		return fmt.Errorf("%d handoffs are open; finish or withdraw some first", live)
 	}
 	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.For = "handoff", client.accountID, forNick
 	h := handoff{Offer: m, State: handoffOpen, Updated: m.Timestamp}
-	if err := s.saveHandoffLocked(h); err != nil {
+	if err := s.handoffs.save(h); err != nil {
 		return err
 	}
 	s.postHandoffLocked(client, m, h)
@@ -318,7 +269,7 @@ func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 }
 
 func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
-	h, found := s.handoffs[r.ID]
+	h, found := s.handoffs.all[r.ID]
 	if !found {
 		return errors.New("handoff is not retained")
 	}
@@ -421,7 +372,7 @@ func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 	h.Updated = s.now().UTC()
 	m := s.postMessage(client, target, body, &h.Offer)
 	m.Kind, m.AccountID, m.For, m.Link = r.Action, client.accountID, notify, r.Link
-	if err := s.saveHandoffLocked(h); err != nil {
+	if err := s.handoffs.save(h); err != nil {
 		return err
 	}
 	s.postHandoffLocked(client, m, h)
@@ -462,7 +413,7 @@ func (s *Server) listHandoffsLocked(client *session, r handoffRequest) error {
 	now := s.now()
 	_, recent, _ := s.recentLocked(client.client.Nick, now)
 	var out []handoff
-	for _, h := range sortedRecords(s.handoffs) {
+	for _, h := range sortedRecords(s.handoffs.all) {
 		if !h.live() && now.Sub(h.Updated) > handoffKeep {
 			continue
 		}

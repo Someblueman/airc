@@ -4,8 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -96,15 +94,9 @@ func decisionOptions(options []string) ([]string, error) {
 	return out, nil
 }
 
-// decisionState is the open and recent decisions and their append-only
-// log. Every field is read and written with s.mu held; appends and
-// compactions run under s.mu (and messageMu, since every step is a post)
-// with env.sync.
-type decisionState struct {
-	decisions   map[string]decision  // by offer ID
-	decisionLog *appendLog[decision] // nil keeps decisions in memory only
-	env         *storeEnv
-}
+// decisionLedger is the decisions' ledger: s.decisions holds the open and
+// recent ones and their append-only log.
+var decisionLedger = ledger[decision]{name: "decisions", valid: validDecision, maxLive: maxLiveDecisions, keep: decisionKeep, maxRecord: maxDecisionRecord, event: "decision_compaction_failed"}
 
 // RestoreDecisions loads the decision log at path, keeping every open
 // decision and finished ones for a week, compacts it and appends to it from
@@ -112,52 +104,10 @@ type decisionState struct {
 func (s *Server) RestoreDecisions(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.listener != nil || s.decisionLog != nil {
+	if s.listener != nil || s.decisions.log != nil {
 		return errors.New("configure decisions once before Serve")
 	}
-	return s.decisionState.load(path)
-}
-
-func (st *decisionState) load(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	loaded, err := readDecisions(path)
-	if err != nil {
-		return fmt.Errorf("decisions %s: %w", path, err)
-	}
-	if liveRecords(loaded) > maxLiveDecisions {
-		return fmt.Errorf("decisions %s: more than %d open", path, maxLiveDecisions)
-	}
-	st.decisions = loaded
-	st.decisionLog = &appendLog[decision]{path: path}
-	return st.compactDecisionsLocked()
-}
-
-// close closes the log; every save completes under s.mu.
-func (st *decisionState) close() error {
-	if st.decisionLog == nil {
-		return nil
-	}
-	err := st.decisionLog.close()
-	st.decisionLog = nil
-	return err
-}
-
-func readDecisions(path string) (map[string]decision, error) {
-	return readLedger(path, maxDecisionRecord, validDecision)
-}
-
-// compactDecisionsLocked drops decisions finished more than a week ago and
-// rewrites the log with one line per decision, then appends to the new file.
-func (st *decisionState) compactDecisionsLocked() error {
-	return compactLedger(st.decisionLog, st.decisions, decisionKeep, st.env.now(), st.env.sync)
-}
-
-// saveDecisionLocked records d's new state before it takes effect, and
-// compacts the log once superseded lines outnumber the decisions held.
-func (st *decisionState) saveDecisionLocked(d decision) error {
-	return recordLedger(st.decisionLog, st.decisions, d, st.env.sync, st.compactDecisionsLocked, st.env.logger, "decision_compaction_failed")
+	return s.decisions.load(path)
 }
 
 // decisionEntryLocked is d as a CHAT entry: the offer, the answer once there
@@ -251,13 +201,13 @@ func (s *Server) openDecisionLocked(client *session, r decisionRequest) error {
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
 	}
-	if live := liveRecords(s.decisions); live >= maxLiveDecisions {
+	if live := liveRecords(s.decisions.all); live >= maxLiveDecisions {
 		return fmt.Errorf("%d decisions are open; answer or withdraw some first", live)
 	}
 	m := s.postMessage(client, target, body, nil)
 	m.Kind, m.AccountID, m.For, m.Choices = "decision", client.accountID, decider, options
 	d := decision{Offer: m, State: decisionOpen, Updated: m.Timestamp}
-	if err := s.saveDecisionLocked(d); err != nil {
+	if err := s.decisions.save(d); err != nil {
 		return err
 	}
 	s.postDecisionLocked(client, m, d)
@@ -265,7 +215,7 @@ func (s *Server) openDecisionLocked(client *session, r decisionRequest) error {
 }
 
 func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
-	d, found := s.decisions[r.ID]
+	d, found := s.decisions.all[r.ID]
 	if !found {
 		return errors.New("decision is not retained")
 	}
@@ -338,7 +288,7 @@ func (s *Server) stepDecisionLocked(client *session, r decisionRequest) error {
 		answer := m
 		d.Answer = &answer
 	}
-	if err := s.saveDecisionLocked(d); err != nil {
+	if err := s.decisions.save(d); err != nil {
 		return err
 	}
 	s.postDecisionLocked(client, m, d)
@@ -374,7 +324,7 @@ func (s *Server) listDecisionsLocked(client *session, r decisionRequest) error {
 	now := s.now()
 	_, recent, _ := s.recentLocked(client.client.Nick, now)
 	var out []decision
-	for _, d := range sortedRecords(s.decisions) {
+	for _, d := range sortedRecords(s.decisions.all) {
 		if !d.live() && now.Sub(d.Updated) > decisionKeep {
 			continue
 		}
