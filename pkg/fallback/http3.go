@@ -32,7 +32,7 @@ func (c *Client) dialHTTP3(ctx context.Context, e Endpoint, progress func()) (*h
 }
 
 // quicSessions is the TLS session cache every QUIC connection shares, keyed
-// by server name, so a redial resumes the session and may send 0-RTT.
+// by server name, so a redial resumes the session with 0-RTT.
 var quicSessions = copiedSessions{tls.NewLRUClientSessionCache(64)}
 
 // copiedSessions hands each dial its own copy of a cached session: quic-go
@@ -75,8 +75,9 @@ func (s copiedSessions) Get(key string) (*tls.ClientSessionState, bool) {
 
 func (c *Client) sessions() tls.ClientSessionCache { return quicSessions }
 
-// Resumed0RTT reports whether the QUIC connection in use sent 0-RTT data:
-// a resumed session whose first request rode the handshake.
+// Resumed0RTT reports whether the QUIC connection in use resumed its TLS
+// session with the gateway accepting 0-RTT. Nothing is sent early (see use),
+// so this is the resumption itself.
 func (h *http3Conn) Resumed0RTT() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -107,6 +108,12 @@ func (q *quicConn) close() {
 	_ = q.transport.Conn.Close()
 }
 
+// use carries requests over q, a connection from dial: its handshake has
+// completed. The HTTP/3 client opens its control stream as soon as it is
+// built, and a stream opened on a connection still handshaking reads the
+// gateway's transport parameters as the handshake installs them, a data
+// race inside quic-go (quic-go/quic-go#4303). Nothing is lost by waiting:
+// the client sends a POST only after the handshake anyway.
 func (h *http3Conn) use(q *quicConn) {
 	h.q = q
 	h.client = &http.Client{Transport: (&http3.Transport{}).NewClientConn(q.conn)}
@@ -127,32 +134,6 @@ func (h *http3Conn) call(ctx context.Context, r request) (detached, error) {
 			return detached{}, err
 		}
 		h.use(q)
-	}
-	q := h.q
-	h.mu.Unlock()
-	if err := awaitHandshake(ctx, q.conn); err != nil {
-		return detached{}, err
-	}
-	d, err := h.httpConn.call(ctx, r)
-	if !errors.Is(err, quic.Err0RTTRejected) {
-		return d, err
-	}
-	// The gateway refused the resumed session's 0-RTT (it restarted, and
-	// its ticket keys with it): nothing sent early reached it. The
-	// connection carries on after its full handshake, under a new HTTP/3
-	// client, and the request is sent again.
-	h.mu.Lock()
-	if h.err != nil {
-		h.mu.Unlock()
-		return detached{}, h.err
-	}
-	if h.q == q {
-		next, err := q.conn.NextConnection(ctx)
-		if err != nil {
-			h.mu.Unlock()
-			return detached{}, err
-		}
-		h.use(&quicConn{conn: next, transport: q.transport})
 	}
 	h.mu.Unlock()
 	return h.httpConn.call(ctx, r)
@@ -178,10 +159,9 @@ var lookupNetIP = func(ctx context.Context, host string) ([]netip.Addr, error) {
 }
 
 // awaitHandshake waits for conn's handshake to complete, or for conn to end
-// first, with its error. The HTTP/3 client waits for the handshake too before
-// it sends a request, but watches only the request's context, so a request
-// with no deadline on a connection whose handshake never completes (its
-// address does not answer) would wait for ever.
+// first, with its error, within ctx (the dial's connect or call timeout): a
+// connection whose handshake never completes (its address does not answer)
+// fails the dial rather than carrying a request that waits for ever.
 func awaitHandshake(ctx context.Context, conn *quic.Conn) error {
 	select {
 	case <-conn.HandshakeComplete():
@@ -195,10 +175,11 @@ func awaitHandshake(ctx context.Context, conn *quic.Conn) error {
 
 // dial races a QUIC connection to each of the host's addresses, a stagger
 // apart, and keeps the first to complete its handshake. A resumed session's
-// dial returns before the handshake (0-RTT), so with several addresses a
-// candidate waits for its handshake before it can win: otherwise an address
-// that never answers would win at once. A failure is a net.OpError: nothing
-// was sent to the gateway.
+// dial returns before the handshake (its 0-RTT keys are enough to send), so
+// a candidate waits for its handshake before it is returned or can win:
+// otherwise an address that never answers would win at once, and the HTTP/3
+// client would open a stream during the handshake (see use). A failure is a
+// net.OpError: nothing was sent to the gateway.
 func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error) {
 	host := h.c.host(h.e)
 	var addrs []netip.Addr
@@ -223,11 +204,12 @@ func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error
 				return
 			}
 			q, err := h.dialAddr(ctx, netip.AddrPortFrom(addr.Unmap(), uint16(h.e.Port)), progress)
-			if err == nil && len(addrs) > 1 {
+			if err == nil {
 				if err = awaitHandshake(ctx, q.conn); err == nil {
 					// Nothing was sent early, so if the gateway rejected the
-					// resumed session's 0-RTT the connection only needs
-					// enabling for use after the rejection.
+					// resumed session's 0-RTT (it restarted, and its ticket
+					// keys with it) the connection only needs enabling for
+					// use after the rejection.
 					_, err = q.conn.NextConnection(ctx)
 				}
 				if err != nil {
@@ -270,9 +252,10 @@ func (h *http3Conn) dialAddr(ctx context.Context, addr netip.AddrPort, progress 
 	if keepAlive <= 0 {
 		keepAlive = 15 * time.Second
 	}
-	// A resumed session sends its first request in the handshake's first
-	// flight (0-RTT): the gateway's contract is replay-safe, and a redial
-	// after the gateway closed an idle connection costs no round trip.
+	// A redial after the gateway closed an idle connection resumes the TLS
+	// session, offering 0-RTT: the dial returns as soon as the session's
+	// keys are restored, with the handshake still in flight, and the race
+	// hears of progress then.
 	tlsConfig := h.c.tlsConfig(h.e, http3.NextProtoH3)
 	tlsConfig.ClientSessionCache = h.c.sessions()
 	conn, err := transport.DialEarly(ctx, net.UDPAddrFromAddrPort(addr), tlsConfig, &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
