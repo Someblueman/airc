@@ -15,6 +15,7 @@ import (
 )
 
 func TestStdioPipeRejectsPartialFramesWithoutAdmission(t *testing.T) {
+	t.Parallel()
 	_, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	binaryPath := gatewayBinary(t)

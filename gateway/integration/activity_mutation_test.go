@@ -21,6 +21,7 @@ func activityRequest(id, kind, note string, ttl int64) core.Request {
 // the native two-second throttle saves the prior signal unchanged (across
 // kinds) without broadcasting, and direct targets signal the recipient.
 func TestActivitySetHTTPThrottleAndDirectTarget(t *testing.T) {
+	t.Parallel()
 	direct := core.Target{Kind: "direct", Name: "activity-recipient"}
 	f := newReactionFixture(t, false, []core.Target{direct}, true)
 	request := activityRequest("activity-http", "typing", "first note", 15)

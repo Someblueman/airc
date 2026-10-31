@@ -12,6 +12,7 @@ import (
 )
 
 func TestAppendLogNativeModeRefusals(t *testing.T) {
+	t.Parallel()
 	f := newAppendLogFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, kind := range []string{"stream", "correlation", "profile", "version"} {

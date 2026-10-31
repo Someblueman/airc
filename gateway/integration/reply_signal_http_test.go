@@ -14,6 +14,7 @@ import (
 // broadcast and the native waiting state, and a set inside the native
 // two-second throttle saves the prior preparation without broadcasting.
 func TestReplySignalHTTPThrottleAndCancel(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := contractRoom()
 	observer := newReplySignalObserver(t, f.socket, *target)

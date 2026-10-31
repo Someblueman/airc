@@ -26,6 +26,7 @@ func (grpcRawProto) Unmarshal(data []byte, v any) error {
 }
 
 func TestGRPCRejectsMalformedProtoAndUnknownFields(t *testing.T) {
+	t.Parallel()
 	f := newGRPCGatewayFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()

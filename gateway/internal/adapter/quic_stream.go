@@ -69,7 +69,7 @@ func (q *QUIC) ServeConn(parent context.Context, conn *quic.Conn) error {
 		datagramDone = make(chan struct{})
 		go func() {
 			defer close(datagramDone)
-			if err := serveFragmentDatagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", nil, plain); err != nil {
+			if err := serveFragmentDatagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", plain); err != nil {
 				cancel()
 			}
 		}()

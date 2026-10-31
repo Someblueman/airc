@@ -15,6 +15,7 @@ import (
 )
 
 func TestFramedCLIFailsClosedAndBoundsAssembly(t *testing.T) {
+	t.Parallel()
 	conn, credentials, _, stop := framedFixture(t, false)
 	discovery := core.Request{Version: 1, RequestID: "discovery", Operation: core.CapabilitiesGet}
 	signed := credentials.token(t, discovery, false)

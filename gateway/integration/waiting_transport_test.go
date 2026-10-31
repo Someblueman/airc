@@ -18,6 +18,7 @@ import (
 // parent's native reply signals: an explicit empty list, every actor's live
 // preparation, and neither a cancelled nor an expired signal.
 func TestWaitingReadEmptyPreparedCancelledAndExpired(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	parent := seedReactionParent(t, f)
 	request := core.Request{Version: 1, RequestID: "waiting-empty", Operation: core.WaitingRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID}

@@ -18,6 +18,7 @@ import (
 )
 
 func TestSocketPairStartupRejectsBeforeJournal(t *testing.T) {
+	t.Parallel()
 	binary := currentGatewayBinary(t)
 	for _, name := range []string{"missing-descriptor", "regular-file", "ordinary-serve"} {
 		t.Run(name, func(t *testing.T) {

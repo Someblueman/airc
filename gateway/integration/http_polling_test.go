@@ -13,6 +13,7 @@ import (
 )
 
 func TestHTTPGetPollingResumesAfterCaughtUp(t *testing.T) {
+	t.Parallel()
 	for _, protocol := range []int{1, 2} {
 		t.Run(fmt.Sprint(protocol), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, protocol == 2)

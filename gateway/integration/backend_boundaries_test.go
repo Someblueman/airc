@@ -16,6 +16,7 @@ import (
 )
 
 func TestBackendWireDeadlinesAndFeatures(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"stall", "withhold", "features"} {
 		t.Run(mode, func(t *testing.T) {
 			socket := fixture(t)
@@ -79,6 +80,7 @@ func TestBackendWireDeadlinesAndFeatures(t *testing.T) {
 }
 
 func TestBackendVerifiedTLS(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", token, true, true)

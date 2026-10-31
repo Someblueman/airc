@@ -13,6 +13,7 @@ import (
 )
 
 func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	want, pollID := seedAndClosePoll(t, f, 60)
 	evictPollHistory(t, f.socket, pollID)
@@ -48,6 +49,7 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 }
 
 func TestPollResultsOpenThenVoteAndClose(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	open, pollID := seedPollOnlyAt(t, f.socket, 60)
 	query := "/v1/poll?kind=room&target=%23gateway-fixture&poll_id=" + url.QueryEscape(pollID)

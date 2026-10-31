@@ -11,6 +11,7 @@ import (
 )
 
 func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newWebTransportFixture(t)
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)

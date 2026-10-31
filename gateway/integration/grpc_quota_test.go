@@ -20,6 +20,7 @@ import (
 )
 
 func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
+	t.Parallel()
 	limits := config.Defaults().Limits
 	limits.Sessions, limits.SessionsPerAuthor = 3, 3
 	limits.Workers = 1

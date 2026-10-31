@@ -1,13 +1,45 @@
 # Removed carriers
 
-On 2026-10-26 the gateway was cut down to the carriers in the
-[carriers table](README.md#carriers): HTTP and its relatives, the framed
-and Unix streams, the parent-owned streams, the native IRC tunnels, the
-local mailboxes, MQTT, CoAP over UDP and DTLS, ZeroMQ, NNG, UDP, DTLS, raw
-QUIC and WebRTC. Everything else was removed, with its adapters, codecs,
-configuration, journal tables, process subcommands, native helpers, build
-scripts, test fixtures and documents; the commits before the one that adds
-this note keep them in git history.
+The gateway has been cut down twice, most recent first below. The commits
+before the one that adds each note keep the removed carriers in git
+history; the remaining carriers are in the
+[carriers table](README.md#carriers).
+
+## 2026-10-30: WebRTC, DTLS and CoAP over DTLS
+
+| Carrier | `protocol` | Evidence before removal |
+|---|---|---|
+| WebRTC DataChannels (four modes) | `webrtc` | In-repo, loopback only |
+| DTLS datagrams | `dtls` | In-repo |
+| CoAP over DTLS | `coaps` | In-repo |
+
+WebRTC had only ever been exercised on loopback and a real path through NAT
+or a TURN relay was still open on the roadmap; its request loop duplicated
+the correlated loop every other frame carrier shares; it cost the
+integration suite four environments; and `airc`'s fallback client never
+spoke it. It also pulled about sixteen `github.com/pion/*` modules, about
+3 MB, into `airc-gateway`
+([measurement](../research/binary-size-2026-10-12/README.md)). DTLS and
+CoAP over DTLS had run only in this repository's tests and have no known
+user. CoAP over UDP stays, with its real-client run; raw QUIC, WebTransport
+and HTTP/3 cover the encrypted UDP paths, and HTTP/3 and WebTransport the
+browser.
+
+With them went the `webrtc` listener option object (ICE servers and the
+transport policy), the `/v1/webrtc/offer` route, the watch modes
+`webrtc_*`, `dtls_datagrams` and `coaps_observe_fragments`, and the pion
+WebRTC stack (ICE, SCTP, SRTP, TURN, STUN and the rest). `pion/dtls` itself
+stays in the module graph only as a dependency of go-coap's `net` package,
+which `coap_udp` uses.
+
+## 2026-10-26: the unused carriers
+
+On 2026-10-26 the gateway was cut down to HTTP and its relatives, the
+framed and Unix streams, the parent-owned streams, the native IRC tunnels,
+the local mailboxes, MQTT, CoAP over UDP and DTLS, ZeroMQ, NNG, UDP, DTLS,
+raw QUIC and WebRTC. Everything else was removed, with its adapters,
+codecs, configuration, journal tables, process subcommands, native
+helpers, build scripts, test fixtures and documents.
 
 | Group | Removed carriers |
 |---|---|
@@ -38,17 +70,17 @@ carrier.
 
 ## Existing configuration
 
-A configuration that names a removed carrier fails to load with one error
-naming the first such field and this note, whether the listener is enabled
-or not: a listener whose `protocol` is one of the names above, a listener
-with an option object only a removed carrier had (`fifo`, `udp_lite`,
-`ipv4_multicast`, `ipv6_multicast`, `ipv4_broadcast`, `icmp_v6`, `snmp`,
-`signed_syslog`, `syslog`, `stomp`, `amqp`, `mqtt_sn`, `bundle_protocol`,
-`posix_queue`, `shared_memory`, `mach_ipc`, `oscore`, `scp_inbox`) or
-`reply_to`, or one of the top-level sections `redis_pubsub`,
-`redis_streams`, `irc_bridges`, `xmpp_bridges`, `sftp` and
-`postgres_notify`. Remove the listener or section; the remaining carriers
-take the same requests.
+A configuration that names a removed carrier, from either cut, fails to
+load with one error naming the first such field and this note, whether the
+listener is enabled or not: a listener whose `protocol` is one of the names
+above, a listener with an option object only a removed carrier had
+(`webrtc`, `fifo`, `udp_lite`, `ipv4_multicast`, `ipv6_multicast`,
+`ipv4_broadcast`, `icmp_v6`, `snmp`, `signed_syslog`, `syslog`, `stomp`,
+`amqp`, `mqtt_sn`, `bundle_protocol`, `posix_queue`, `shared_memory`,
+`mach_ipc`, `oscore`, `scp_inbox`) or `reply_to`, or one of the top-level
+sections `redis_pubsub`, `redis_streams`, `irc_bridges`, `xmpp_bridges`,
+`sftp` and `postgres_notify`. Remove the listener or section; the remaining
+carriers take the same requests.
 
 `airc service install --gateway` no longer accepts `amqp`, `stomp` or
 `coap_tcp`. The `serve-fifo`, `serve-uart`, `scp-inbox`, `import-bundle`,

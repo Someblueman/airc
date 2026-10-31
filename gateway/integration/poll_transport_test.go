@@ -16,6 +16,7 @@ import (
 // TestPollResultsMatchNativePoll maps poll.results to the native poll's
 // question, options, votes and close state.
 func TestPollResultsMatchNativePoll(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	want, pollID := seedAndClosePoll(t, f, 60)
 	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == pollID })
@@ -29,6 +30,7 @@ func TestPollResultsMatchNativePoll(t *testing.T) {
 }
 
 func TestPollResultsTargetAndMissingDenials(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	_, _ = seedAndClosePoll(t, f, 60)
 	before := contextCheckSnapshot(t, f)

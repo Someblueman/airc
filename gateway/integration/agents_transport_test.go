@@ -18,6 +18,7 @@ import (
 // joined members with their rooms, never passive observers, hidden sessions or
 // disconnected durable cards, and the same list through both HTTP routes.
 func TestAgentsReadHTTPMembership(t *testing.T) {
+	t.Parallel()
 	f := httpGatewayFixture(t, false, nil, false, true)
 	member := joinAgentsMember(t, f.socket)
 	passive := dial(t, f.socket, "agents-passive", "", false, false)

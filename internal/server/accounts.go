@@ -77,7 +77,7 @@ func (st *accountsState) close() error { return nil }
 // saveAccountsLocked writes next, the accounts as they will be, before the
 // caller applies it.
 func (st *accountsState) saveAccountsLocked(next map[string]account) error {
-	return writeState(st.accountsAt, next, st.env.sync)
+	return st.env.saved("accounts", writeState(st.accountsAt, next, st.env.sync))
 }
 
 // accountExistsLocked is false once an admin has deleted the account, which

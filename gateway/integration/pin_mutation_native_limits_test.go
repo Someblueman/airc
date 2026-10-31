@@ -12,6 +12,7 @@ import (
 // TestPinMutationNativeQuota maps the native five-pin limit to a permanent
 // rejection that changes nothing.
 func TestPinMutationNativeQuota(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	request := core.Request{Version: 1, Operation: core.PinsAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}
 	for i := 0; i < 6; i++ {

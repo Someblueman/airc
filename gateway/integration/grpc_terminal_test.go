@@ -15,6 +15,7 @@ import (
 )
 
 func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newGRPCGatewayFixture(t)
 	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "grpc-terminal-parent")

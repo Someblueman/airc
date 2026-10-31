@@ -103,7 +103,7 @@ func (st *directoryState) saveProfileLocked(key string, next protocol.AgentCard)
 		next.State, next.Note, next.ExpiresAt, next.Connected = "unknown", "", time.Time{}, false
 		profiles[key] = next
 	}
-	return profilesSnapshot.write(st.profilesAt, profiles, st.env.soft)
+	return st.env.saved("profiles", profilesSnapshot.write(st.profilesAt, profiles, st.env.soft))
 }
 
 func (st *directoryState) touchCardLocked(nick string) {

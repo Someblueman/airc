@@ -10,14 +10,13 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 	history := filepath.Join(t.TempDir(), "history.jsonl")
 	token := filepath.Join(t.TempDir(), "admin.token")
 	for name, tc := range map[string]struct {
-		flags statePaths
-		token string
-		wake  bool
-		want  statePaths
+		history, token string
+		wake           bool
+		want           statePaths
 	}{
 		"no flags": {},
 		"history file only": {
-			flags: statePaths{history: history},
+			history: history,
 			want: statePaths{
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl",
@@ -25,7 +24,7 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 			},
 		},
 		"history file and wake": {
-			flags: statePaths{history: history}, wake: true,
+			history: history, wake: true,
 			want: statePaths{
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl", wakes: history + ".accounts.json.wakes.json",
@@ -42,7 +41,7 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 			},
 		},
 		"history file and admin token": {
-			flags: statePaths{history: history}, token: token,
+			history: history, token: token,
 			want: statePaths{
 				history: history, accounts: history + ".accounts.json", chat: history + ".chat.json",
 				handoffs: history + ".handoffs.jsonl", decisions: history + ".decisions.jsonl",
@@ -50,17 +49,9 @@ func TestResolveStateKeepsTodaysDerivationsWithoutStateDir(t *testing.T) {
 				pastes: history + ".pastes.json",
 			},
 		},
-		"explicit files win": {
-			flags: statePaths{history: history, accounts: "/a", chat: "/c", handoffs: "/h", decisions: "/d", wakes: "/w", topics: "/t", profiles: "/p", moderation: "/m"},
-			token: token, wake: true,
-			want: statePaths{history: history, accounts: "/a", chat: "/c", handoffs: "/h", decisions: "/d", wakes: "/w", topics: "/t", profiles: "/p", moderation: "/m", pastes: history + ".pastes.json"},
-		},
-		"moderation file without a token is kept for configureAdmin to refuse": {
-			flags: statePaths{moderation: "/m"},
-			want:  statePaths{moderation: "/m"},
-		},
+		"wake without an accounts file resolves none": {wake: true},
 	} {
-		got, notes, err := resolveState("", tc.flags, tc.token, tc.wake)
+		got, notes, err := resolveState("", tc.history, tc.token, tc.wake)
 		if err != nil || len(notes) != 0 || got != tc.want {
 			t.Errorf("%s: got %+v, notes %v, err %v; want %+v", name, got, notes, err, tc.want)
 		}
@@ -77,22 +68,22 @@ func TestResolveStateUsesFixedNamesUnderStateDir(t *testing.T) {
 		topics: filepath.Join(dir, "topics.json"), profiles: filepath.Join(dir, "profiles.json"), moderation: filepath.Join(dir, "moderation.json"),
 		pastes: filepath.Join(dir, "pastes.json"),
 	}
-	got, notes, err := resolveState(dir, statePaths{}, token, true)
+	got, notes, err := resolveState(dir, "", token, true)
 	if err != nil || len(notes) != 0 || got != canonical {
 		t.Fatalf("fresh directory: got %+v, notes %v, err %v", got, notes, err)
 	}
 
 	// Without a token or wake notices, those files are not resolved.
-	got, _, err = resolveState(dir, statePaths{}, "", false)
+	got, _, err = resolveState(dir, "", "", false)
 	plain := canonical
 	plain.moderation, plain.wakes = "", ""
 	if err != nil || got != plain {
 		t.Fatalf("without admin and wake: got %+v, err %v", got, err)
 	}
 
-	// An explicit flag wins over the directory.
-	got, notes, err = resolveState(dir, statePaths{history: "/elsewhere/h.jsonl", chat: "/c"}, token, false)
-	if err != nil || len(notes) != 0 || got.history != "/elsewhere/h.jsonl" || got.chat != "/c" || got.accounts != canonical.accounts {
+	// An explicit --history-file wins over the directory.
+	got, notes, err = resolveState(dir, "/elsewhere/h.jsonl", token, false)
+	if err != nil || len(notes) != 0 || got.history != "/elsewhere/h.jsonl" || got.chat != canonical.chat || got.accounts != canonical.accounts {
 		t.Fatalf("overrides: got %+v, notes %v, err %v", got, notes, err)
 	}
 }
@@ -111,7 +102,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got, notes, err := resolveState(dir, statePaths{}, token, true)
+	got, notes, err := resolveState(dir, "", token, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +127,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "chat.json"), []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, notes, err = resolveState(dir, statePaths{}, token, true)
+	got, notes, err = resolveState(dir, "", token, true)
 	if err != nil || got.chat != filepath.Join(dir, "chat.json") {
 		t.Fatalf("shadowed: got %+v, err %v", got, err)
 	}
@@ -158,7 +149,7 @@ func TestResolveStateFindsLegacyFilesAndNeverRenamesThem(t *testing.T) {
 	if err := os.WriteFile(other+".topics.json", []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, _, err = resolveState(dir, statePaths{history: other}, "", false)
+	got, _, err = resolveState(dir, other, "", false)
 	if err != nil || got.history != other || got.topics != other+".topics.json" || got.accounts != filepath.Join(dir, "accounts.json") {
 		t.Fatalf("history elsewhere: got %+v, err %v", got, err)
 	}

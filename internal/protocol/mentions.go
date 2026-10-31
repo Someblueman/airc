@@ -71,22 +71,39 @@ func lineAddress(line string) string {
 	return name
 }
 
-// Mentions returns the lower-cased nicknames a message tags or addresses, in order
-// of first appearance, without duplicates. A name that merely looks like a tag
-// ("user@example.com") is not a mention.
-func Mentions(body string) []string {
-	if !strings.ContainsAny(body, "@:") {
-		return nil // both forms need one of these; skip the scans for plain text
+// Group tags: "@humans" tags every nickname whose profile kind is human,
+// "@agents" every agent, and "@here" everyone with a live session in the
+// room. The server resolves them when a room message is posted and records
+// the nicknames in the message's metadata (ChatMetadata.GroupMentions), at most
+// MaxGroupMentions of them; in a direct message they are plain text.
+const (
+	GroupHumans = "humans"
+	GroupAgents = "agents"
+	GroupHere   = "here"
+
+	// MaxGroupMentions and MaxGroupMentionBytes bound the nicknames a
+	// message's group tags resolve to, by count and by their total length
+	// (each name plus its JSON quotes and comma): a group tag is one room
+	// message, not a fan-out, and its live line must still fit
+	// MaxLineLength with the largest body and the rest of its metadata
+	// (TestLargestGroupMentionLinesFit). The first names in sorted order
+	// that fit are recorded; the rest are not tagged.
+	MaxGroupMentions     = 32
+	MaxGroupMentionBytes = 384
+)
+
+// IsGroupTag reports whether a tagged name is a group tag.
+func IsGroupTag(name string) bool {
+	switch strings.ToLower(name) {
+	case GroupHumans, GroupAgents, GroupHere:
+		return true
 	}
-	var found []string
-	seen := map[string]bool{}
-	add := func(name string) {
-		name = strings.ToLower(strings.TrimRight(name, "-"))
-		if name != "" && !seen[name] {
-			seen[name] = true
-			found = append(found, name)
-		}
-	}
+	return false
+}
+
+// scanMentions calls tag for each "@name" and address for each leading
+// "name:" in body, skipping fenced code blocks.
+func scanMentions(body string, tag, address func(string)) {
 	var fence byte
 	length := 0
 	for line := range strings.SplitSeq(body, "\n") {
@@ -101,28 +118,96 @@ func Mentions(body string) []string {
 			}
 			continue
 		}
-		lineTags(line, add)
+		lineTags(line, tag)
 		if name := lineAddress(line); name != "" {
-			add(name)
+			address(name)
+		}
+	}
+}
+
+// collector lower-cases names and keeps each once, in order of first appearance.
+type collector struct {
+	found []string
+	seen  map[string]bool
+}
+
+func (c *collector) add(name string) {
+	name = strings.ToLower(strings.TrimRight(name, "-"))
+	if name != "" && !c.seen[name] {
+		if c.seen == nil {
+			c.seen = map[string]bool{}
+		}
+		c.seen[name] = true
+		c.found = append(c.found, name)
+	}
+}
+
+// Mentions returns the lower-cased nicknames a message tags or addresses, in order
+// of first appearance, without duplicates. A name that merely looks like a tag
+// ("user@example.com") is not a mention. A group tag's word is returned like
+// any name; GroupMentions picks the groups out.
+func Mentions(body string) []string {
+	if !strings.ContainsAny(body, "@:") {
+		return nil // both forms need one of these; skip the scans for plain text
+	}
+	var c collector
+	scanMentions(body, c.add, c.add)
+	return c.found
+}
+
+// GroupTags returns the group tags ("humans", "agents", "here") a body
+// tags with @, lower-cased, in order of first appearance, under the same
+// word-boundary and code-fence rules as a nickname tag. The address form
+// ("here: ...") is not a group tag.
+func GroupTags(body string) []string {
+	if !strings.Contains(body, "@") {
+		return nil
+	}
+	var c collector
+	scanMentions(body, func(name string) {
+		if IsGroupTag(strings.TrimRight(name, "-")) { // as a nickname tag is trimmed
+			c.add(name)
+		}
+	}, func(string) {})
+	return c.found
+}
+
+// MessageMentions is Mentions plus the nick a handoff step is for, which
+// counts as a mention without being written in the body, and the nicknames
+// the message's group tags resolved to when it was posted (its metadata's
+// mentions), each once.
+func MessageMentions(body, forNick string, resolved []string) []string {
+	found := Mentions(body)
+	if name := strings.ToLower(forNick); name != "" && !slices.Contains(found, name) {
+		found = append(found, name)
+	}
+	for _, nick := range resolved {
+		if name := strings.ToLower(nick); name != "" && !slices.Contains(found, name) {
+			found = append(found, name)
 		}
 	}
 	return found
 }
 
-// MessageMentions is Mentions plus the nick a handoff step is for, which
-// counts as a mention without being written in the body.
-func MessageMentions(body, forNick string) []string {
-	found := Mentions(body)
-	if name := strings.ToLower(forNick); name != "" && !slices.Contains(found, name) {
-		found = append(found, name)
-	}
-	return found
-}
-
-// MentionsNick reports whether body tags or addresses nick (case-insensitive).
+// MentionsNick reports whether body tags or addresses nick (case-insensitive)
+// by name. A group tag is nobody's mention here: the server resolves groups
+// when a room message is posted, and MentionedBy reads its answer.
 func MentionsNick(body, nick string) bool {
 	nick = strings.ToLower(nick)
 	return slices.Contains(Mentions(body), nick)
+}
+
+// MentionedBy reports whether a room message is for nick: its body tags or
+// addresses it, the message is for it (a handoff or decision step), or one
+// of its group tags resolved to it (the message's metadata mentions). A
+// client needs no directory or room membership of its own, because the
+// server resolved the groups when the message was posted; against an older
+// daemon that records none, only the names in the body count.
+func MentionedBy(body, forNick string, resolved []string, nick string) bool {
+	if strings.EqualFold(forNick, nick) || MentionsNick(body, nick) {
+		return true
+	}
+	return slices.ContainsFunc(resolved, func(name string) bool { return strings.EqualFold(name, nick) })
 }
 
 // CodeFence recognizes Markdown backtick/tilde fences, with up to three leading

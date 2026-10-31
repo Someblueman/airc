@@ -202,6 +202,7 @@ func mutationKind(op core.Operation) string {
 // once more and records the duplicate risk; receipt_only never resends and
 // reports the outcome as uncertain without inventing evidence.
 func TestMutationCrashRecoveryRetryAndReceiptOnly(t *testing.T) {
+	t.Parallel()
 	for _, c := range recoveryCases() {
 		for _, policy := range []core.Policy{core.Retry, core.ReceiptOnly} {
 			t.Run(c.name+"/"+string(policy), func(t *testing.T) {

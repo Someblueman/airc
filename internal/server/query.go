@@ -47,7 +47,7 @@ func (s *Server) statusLocked(client *session) {
 		Observers: observers,
 		TLS:       s.cfg.TLSConfig != nil, AccessRequired: s.accessEnabled, Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
 		MaxConnections: s.cfg.MaxConnections, HistoryLimit: s.cfg.HistoryLimit,
-		HistorySize: s.history.size, HistoryFile: s.histFile != nil, PersistenceError: s.persistenceError,
+		HistorySize: s.history.size, HistoryFile: s.histFile != nil, PersistenceError: cmp.Or(s.persistenceError, s.env.failed),
 		HistoryBytes: s.history.bytes, HistoryMaxBytes: s.history.maxBytes, ArchiveBytes: archived,
 	})
 	s.numericLocked(client, "770", nil, string(data))

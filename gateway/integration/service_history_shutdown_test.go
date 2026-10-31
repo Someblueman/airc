@@ -20,6 +20,7 @@ import (
 )
 
 func TestGatewayServeCLIShutdownJoinsActiveReadLease(t *testing.T) {
+	t.Parallel()
 	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch, core.Directory} {
 		t.Run(string(op), func(t *testing.T) { cliReadShutdown(t, op) })
 	}

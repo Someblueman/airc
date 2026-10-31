@@ -10,7 +10,7 @@ test -z "$(gofmt -l .)"                 # every file must be gofmt-clean
 go vet ./... ./gateway/...
 go tool staticcheck ./... ./gateway/... # the version pinned by the root go.mod's tool directive
 GOWORK=off go test -race -count=1 -timeout 60m ./...    # the product: aircd, airc, airc-load and their packages (~1 min)
-go test -C gateway -race -count=1 -timeout 120m ./...   # the gateway, its integration suite included (~25 min); there is no CI, so run both before pushing
+go test -C gateway -race -count=1 -timeout 120m ./...   # the gateway, its integration suite included (~4 min, ~2 without -race); run both before pushing gateway changes
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem  # FullWindow fills 1 GiB
 scripts/githooks/install.sh             # git hooks: gofmt and vet on commit; gofmt, vet, staticcheck and the skill test on push

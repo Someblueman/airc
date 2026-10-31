@@ -98,6 +98,7 @@ func nextRawLiveSignal(t *testing.T, observer *irc.Client, action string) irc.Ch
 }
 
 func TestEventsWatchHeaderLongPollReturnsNativeSignalWithoutCursor(t *testing.T) {
+	t.Parallel()
 	for _, http2 := range []bool{false, true} {
 		t.Run(fmt.Sprintf("http2=%t", http2), func(t *testing.T) {
 			f := newReactionTransportFixture(t)
@@ -133,6 +134,7 @@ func TestEventsWatchHeaderLongPollReturnsNativeSignalWithoutCursor(t *testing.T)
 }
 
 func TestEventsWatchSSEMixedSnapshotAndLiveSignals(t *testing.T) {
+	t.Parallel()
 	for _, encrypted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("encrypted=%t", encrypted), func(t *testing.T) {
 			f := newReactionTransportFixture(t)

@@ -15,6 +15,7 @@ import (
 )
 
 func TestStdioPipeExecutesFramesAndEOFBoundaries(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "stdio-observer", "", false, false)
 	defer observer.Close()

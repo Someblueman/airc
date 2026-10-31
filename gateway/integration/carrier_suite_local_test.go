@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,10 +29,9 @@ import (
 
 // The local carriers an in-process gateway serves join the cross-carrier
 // suite here: a Unix datagram socket, a directory mailbox and an append log
-// (and, in its own file, Unix sequenced packets). Carriers that run as their
-// own process (stdio, socket pair, inherited stream, file mailbox) own the
-// journal while they run, so they cannot share the suite's gateway; they run
-// the shared scenarios in TestLocalProcessCarriers instead.
+// (and, in its own file, Unix sequenced packets). The local carriers that
+// run as their own gateway process join it in
+// carrier_suite_local_process_test.go.
 var _ = registerSuiteCarriers(
 	suiteCarrier{name: "unixgram", listener: config.Listener{Protocol: "unixgram"}, configure: prepareLocalSocket, dial: dialUnixgramSuite, results: true, reads: true, wire: unixSuiteWire},
 	suiteCarrier{name: "dirmailbox", listener: config.Listener{Protocol: "directory_mailbox", Operations: mailboxOperations}, configure: prepareDirectoryMailbox, dial: dialDirectoryMailboxSuite, results: true, wire: mailboxHistoryWire},
@@ -309,11 +307,7 @@ func appendLogSuiteWire(t *testing.T, e *suiteEnv) {
 func mailboxHistoryWire(t *testing.T, e *suiteEnv) {
 	t.Run("bounded_history", func(t *testing.T) {
 		for i := range 2 {
-			id := e.id("seed")
-			plainHTTP(t, http.MethodPost, e.receipts+"/v1/messages", sendBody(t, id, "#wire", fmt.Sprintf("history-seed %d\n", i)+strings.Repeat("世界 🙂", 200), "seeder", ""), nil, nil)
-			if r := e.receipt(t, id, "seeder", ""); r.State != core.Accepted {
-				t.Fatalf("seed %d: %+v", i, r)
-			}
+			e.seed(t, "#wire", fmt.Sprintf("history-seed %d\n", i)+strings.Repeat("世界 🙂", 200), "seeder")
 		}
 		client, reader := e.dial(t), e.guest("reader")
 		checkHistoryPages(t, nativeWebTransportMessages(t, e.socket, "#wire"), func(fields map[string]any) *backend.HistoryPage {

@@ -63,11 +63,12 @@ func TestRemovedCarriersPointToTheNote(t *testing.T) {
 		"listeners[0].mqtt_sn":         listener(`"protocol":"udp","mqtt_sn":{"routes":[{"topic_id":1,"target":{"kind":"room","name":"#r"}}]}`),
 		"listeners[0].fifo":            listener(`"protocol":"stdio","fifo":{}`),
 		"listeners[0].bundle_protocol": listener(`"protocol":"file_mailbox","address":"/private/mailbox","bundle_protocol":{}`),
+		"listeners[0].webrtc":          listener(`"protocol":"http","webrtc":{"ice_transport_policy":"all"}`),
 	}
 	for _, section := range []string{"redis_pubsub", "redis_streams", "irc_bridges", "xmpp_bridges", "sftp", "postgres_notify"} {
 		cases[section] = strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[],"`+section+`":[]`, 1)
 	}
-	for _, protocol := range []string{"fifo", "uart", "system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6", "sctp", "sctp_unordered", "sctp_pr_ttl", "coap_tcp", "coaps_tcp", "coap_oscore", "mqtt_sn", "amqp", "stomp", "scp_inbox", "offline_bundle", "bpv7", "syslog_tls", "syslog_signed", "snmp_v3"} {
+	for _, protocol := range []string{"fifo", "uart", "system_v_queue", "posix_mqueue", "shared_memory", "mapped_file", "mach_ipc", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6", "sctp", "sctp_unordered", "sctp_pr_ttl", "coap_tcp", "coaps_tcp", "coap_oscore", "mqtt_sn", "amqp", "stomp", "scp_inbox", "offline_bundle", "bpv7", "syslog_tls", "syslog_signed", "snmp_v3", "webrtc", "dtls", "coaps"} {
 		for _, enabled := range []string{"true", "false"} {
 			cases["listeners[0].protocol/"+protocol+"/"+enabled] = listener(`"protocol":"` + protocol + `","address":"127.0.0.1:1","enabled":` + enabled)
 		}
@@ -80,7 +81,7 @@ func TestRemovedCarriersPointToTheNote(t *testing.T) {
 		}
 	}
 	// The kept carriers still parse.
-	for _, protocol := range []string{"udp", "coap_udp", "mqtt", "zeromq"} {
+	for _, protocol := range []string{"udp", "coap_udp", "mqtt", "zeromq", "rawquic"} {
 		if _, err := Parse([]byte(listener(`"protocol":"` + protocol + `","address":"127.0.0.1:1"`))); err != nil {
 			t.Errorf("%s refused: %v", protocol, err)
 		}

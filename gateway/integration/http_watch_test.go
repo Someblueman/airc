@@ -14,6 +14,7 @@ import (
 )
 
 func TestHTTPWatchNativeWakeOpaqueScope(t *testing.T) {
+	t.Parallel()
 	for _, http2 := range []bool{false, true} {
 		t.Run(fmt.Sprint("http2=", http2), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, http2, "watch")

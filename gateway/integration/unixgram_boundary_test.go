@@ -11,6 +11,7 @@ import (
 )
 
 func TestUnixgramOversizeTamperUnknownProfileAndIncompleteCannotAdmit(t *testing.T) {
+	t.Parallel()
 	f := newUnixgramFixture(t)
 	request := core.Request{Version: 1, RequestID: "ug-boundary-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: strings.Repeat("b", 3500)}
 	frame := unixgramFrame(t, f, request, false)

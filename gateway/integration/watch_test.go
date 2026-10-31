@@ -13,6 +13,7 @@ import (
 )
 
 func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"watch", "watch-overlap", "watch-duplicate", "watch-preack"} {
 		t.Run(mode, func(t *testing.T) {
 			socket := fixture(t)

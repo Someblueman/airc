@@ -10,11 +10,18 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func sty(codes, text string) string {
-	if text == "" {
+// styled wraps text in the ANSI codes when colour is on, and leaves it plain
+// when it is off (--color never, NO_COLOR, or a dumb terminal).
+func styled(color bool, codes, text string) string {
+	if text == "" || !color {
 		return text
 	}
 	return "\x1b[" + codes + "m" + text + "\x1b[0m"
+}
+
+// sty styles text as this UI's colour setting allows.
+func (m *uiModel) sty(codes, text string) string {
+	return styled(m.color, codes, text)
 }
 
 // layout chooses pane widths: both side panes on wide terminals, fewer as it narrows.
@@ -63,7 +70,7 @@ func (m *uiModel) view() []string {
 	if right > 0 {
 		rightCells = m.memberPane(b, bodyHeight, right)
 	}
-	separator := sty("2", "│")
+	separator := m.sty("2", "│")
 
 	rows := make([]string, 0, height)
 	rows = append(rows, m.header(b, width))
@@ -101,7 +108,7 @@ func (m *uiModel) header(b *uiBuffer, width int) string {
 		title += "  │  " + b.topic
 	}
 	title = fitPlain(title, max(width-utf8.RuneCountInString(state), 1))
-	return sty("7;1", padVisible(title+state, width))
+	return m.sty("7;1", padVisible(title+state, width))
 }
 
 func (m *uiModel) statusBar(b *uiBuffer, width int) string {
@@ -110,28 +117,28 @@ func (m *uiModel) statusBar(b *uiBuffer, width int) string {
 		if isError {
 			codes = "1;38;5;203"
 		}
-		return sty(codes, fitPlain(" "+text, width))
+		return m.sty(codes, fitPlain(" "+text, width))
 	}
 	if m.replyTo != "" {
-		return sty("38;5;75", fitPlain(" Reply to "+m.replyTo+quoted(m.messagePreview(m.replyTo))+" · Enter: send · Esc: cancel", width))
+		return m.sty("38;5;75", fitPlain(" Reply to "+m.replyTo+quoted(m.messagePreview(m.replyTo))+" · Enter: send · Esc: cancel", width))
 	}
 	if b.selectedID != "" {
-		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Ctrl-T: thread · Ctrl-Y: copy ID · Shift/Ctrl-Up/Down: select", width))
+		return m.sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Ctrl-T: thread · Ctrl-Y: copy ID · Shift/Ctrl-Up/Down: select", width))
 	}
 	if b.scroll > 0 {
-		return sty("38;5;221", fitPlain(fmt.Sprintf(" ↑ scrolled back %d lines · PgDn for the newest", b.scroll), width))
+		return m.sty("38;5;221", fitPlain(fmt.Sprintf(" ↑ scrolled back %d lines · PgDn for the newest", b.scroll), width))
 	}
 	if id := threadReplyTarget(b); id != "" {
-		return sty("2", fitPlain(" Enter replies to "+id+quoted(m.messagePreview(id))+" · Ctrl-R on a selected message answers that one instead", width))
+		return m.sty("2", fitPlain(" Enter replies to "+id+quoted(m.messagePreview(id))+" · Ctrl-R on a selected message answers that one instead", width))
 	}
 	if n, humans := m.pendingDecisions(); n > 0 {
 		hint := fmt.Sprintf("%d %s waiting on you", n, plural(n, "decision", "decisions"))
 		if humans > 0 {
 			hint = "a human is waiting on you: " + hint
 		}
-		return sty("1;38;5;"+fmt.Sprint(humanColor), fitPlain(" "+hint+" · /decisions · /answer ID N · Tab: complete, or next view · /help", width))
+		return m.sty("1;38;5;"+fmt.Sprint(humanColor), fitPlain(" "+hint+" · /decisions · /answer ID N · Tab: complete, or next view · /help", width))
 	}
-	return sty("2", fitPlain(" Tab: complete, or next view · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
+	return m.sty("2", fitPlain(" Tab: complete, or next view · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
 }
 
 // quoted sets a message preview off from the hint around it.
@@ -149,7 +156,7 @@ func (m *uiModel) inputRow(width int) (string, int) {
 	room := max(width-utf8.RuneCountInString(prompt)-1, 1)
 	start := max(m.cursor-room+1, 0)
 	shown := m.input[start:min(len(m.input), start+room)]
-	row := sty("1;2", prompt) + strings.NewReplacer("\n", "↵", "\t", "⇥").Replace(string(shown))
+	row := m.sty("1;2", prompt) + strings.NewReplacer("\n", "↵", "\t", "⇥").Replace(string(shown))
 	return padVisible(row, width), utf8.RuneCountInString(prompt) + (m.cursor - start) + 1
 }
 
@@ -164,19 +171,19 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 		return b.cacheLines
 	}
 	if isPasteView(b) {
-		lines := renderPasteLines(b, max(width-1, 10))
+		lines := renderPasteLines(b, max(width-1, 10), m.color)
 		b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
 		return lines
 	}
 	if b.kind == bufHelp || isBoard(b) {
-		lines := renderHelp(b.help, max(width-1, 10))
+		lines := renderHelp(b.help, max(width-1, 10), m.color)
 		for i := range lines {
 			lines[i] = " " + lines[i]
 		}
 		b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
 		return lines
 	}
-	view := newRenderer(true, width, b.kind != bufChannel)
+	view := newRenderer(m.color, width, b.kind != bufChannel)
 	view.kinds = m.kinds
 	view.pasteHint = "/paste "
 	for _, event := range b.items {
@@ -186,7 +193,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	}
 	var lines []string
 	for _, pin := range b.pins {
-		lines = append(lines, sty("1", " Pinned "+pin.ID))
+		lines = append(lines, m.sty("1", " Pinned "+pin.ID))
 		lines = append(lines, strings.Split(strings.TrimRight(view.render(pin), "\n"), "\n")...)
 	}
 	cache := make(map[irc.Event]renderedEvent, len(b.items))
@@ -213,7 +220,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 		lines = append(lines, previous.lines...)
 	}
 	if len(lines) == 0 {
-		lines = []string{sty("2", " Nothing here yet.")}
+		lines = []string{m.sty("2", " Nothing here yet.")}
 	}
 	b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
 	b.cacheEvents = cache
@@ -262,7 +269,7 @@ func (m *uiModel) channelPane(rows, width int) []string {
 		e := entries[i]
 		switch {
 		case e.heading:
-			cells = append(cells, sty("1;2", fitPlain(" "+e.text, width)))
+			cells = append(cells, m.sty("1;2", fitPlain(" "+e.text, width)))
 		case e.buffer == nil:
 			cells = append(cells, strings.Repeat(" ", width))
 		default:
@@ -283,11 +290,11 @@ func (m *uiModel) channelPane(rows, width int) []string {
 			text = fitPlain(text, width-utf8.RuneCountInString(badge)) + badge
 			switch {
 			case b.name == m.current:
-				text = sty("7", text)
+				text = m.sty("7", text)
 			case b.mention:
-				text = sty("1;38;5;203", text)
+				text = m.sty("1;38;5;203", text)
 			case b.unread > 0:
-				text = sty("1", text)
+				text = m.sty("1", text)
 			}
 			cells = append(cells, text)
 		}
@@ -366,24 +373,24 @@ func age(since, now time.Time) string {
 
 func (m *uiModel) memberPane(b *uiBuffer, rows, width int) []string {
 	people := m.participants(b)
-	cells := []string{sty("1;2", fitPlain(fmt.Sprintf(" Members (%d)", len(people)), width))}
+	cells := []string{m.sty("1;2", fitPlain(fmt.Sprintf(" Members (%d)", len(people)), width))}
 	for i, p := range people {
 		if len(cells) >= rows {
 			break
 		}
 		if len(cells) == rows-1 && i < len(people)-1 {
-			cells = append(cells, sty("2", fitPlain(fmt.Sprintf(" +%d more", len(people)-i), width)))
+			cells = append(cells, m.sty("2", fitPlain(fmt.Sprintf(" +%d more", len(people)-i), width)))
 			break
 		}
 		// A human is marked ☺, bright while connected; an agent's session ●.
 		mark, suffix, color := " ", "", fmt.Sprint(nickColor(p.nick))
 		switch {
 		case p.human && p.live:
-			mark = sty("38;5;"+fmt.Sprint(humanColor), "☺")
+			mark = m.sty("38;5;"+fmt.Sprint(humanColor), "☺")
 		case p.human:
-			mark = sty("2", "☺")
+			mark = m.sty("2", "☺")
 		case p.live:
-			mark = sty("38;5;41", "●")
+			mark = m.sty("38;5;41", "●")
 		}
 		if p.human {
 			color = "1;38;5;" + fmt.Sprint(humanColor)
@@ -401,7 +408,7 @@ func (m *uiModel) memberPane(b *uiBuffer, rows, width int) []string {
 		}
 		room := max(width-2-utf8.RuneCountInString(suffix)-1, 1)
 		label := fitPlain(name, room)
-		cells = append(cells, padVisible(" "+mark+" "+sty(color, label)+sty("2", suffix), width))
+		cells = append(cells, padVisible(" "+mark+" "+m.sty(color, label)+m.sty("2", suffix), width))
 	}
 	for len(cells) < rows {
 		cells = append(cells, strings.Repeat(" ", width))

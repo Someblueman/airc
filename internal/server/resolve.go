@@ -35,7 +35,7 @@ func (s *Server) mayResolveLocked(client *session, root Message) bool {
 	if ownsMessage(client, root) {
 		return true
 	}
-	addressed := protocol.MessageMentions(root.Body, root.For)
+	addressed := protocol.MessageMentions(root.Body, root.For, root.GroupMentions)
 	if !protocol.IsChannel(root.Target) {
 		addressed = append(addressed, root.Target)
 	}
@@ -69,7 +69,7 @@ func (s *Server) resolveLocked(client *session, r resolveRequest) error {
 		s.chatEntryLocked(client, protocol.ChatEntry{Action: "resolve", Target: earlier.Target, ID: root.ID, From: earlier.From, Message: &meta})
 		return nil
 	}
-	body, err := s.handoffBody(r.Text, protocol.ResolvedText(""))
+	body, err := s.chatBody(r.Text, protocol.ResolvedText(""))
 	if err != nil {
 		return err
 	}
@@ -86,9 +86,7 @@ func (s *Server) resolveLocked(client *session, r resolveRequest) error {
 	}
 	reply := s.postMessage(client, target, body, &root)
 	reply.Kind, reply.AccountID = "resolved", client.accountID
-	mentions := s.recordLocked(&reply)
-	s.broadcastMessageLocked(reply, client.client.Username, mentions)
-	s.receiptLocked(client, reply, !protocol.IsChannel(reply.Target) && s.liveNickLocked(reply.Target) == nil)
+	s.postStructuredLocked(client, reply)
 	meta := messageMetadata(reply)
 	s.chatEntryLocked(client, protocol.ChatEntry{Action: "resolve", Target: reply.Target, ID: root.ID, From: reply.From, Message: &meta})
 	return nil

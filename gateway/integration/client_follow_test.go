@@ -92,6 +92,7 @@ func followGateway(t *testing.T, upstream string, lease, keepAlive int) map[stri
 // then each post as it lands, then empty keepalives, until the lease ends
 // with nil so the caller resumes from the positions it was given.
 func TestFollowStreamsARoomUntilTheLeaseEnds(t *testing.T) {
+	t.Parallel()
 	addr := testserver.Start(t, server.Config{HistoryLimit: 100}, nil)
 	endpoints := followGateway(t, addr, 2, 1)
 	poster, err := irc.Dial(irc.Config{Nick: "poster", Addr: addr, Ephemeral: true})
@@ -156,7 +157,9 @@ func TestFollowStreamsARoomUntilTheLeaseEnds(t *testing.T) {
 }
 
 // A client that only reads its follow sends the gateway nothing for the
-// whole lease; the connection must not be dropped for that silence.
+// whole lease; the connection must not be dropped for that silence. The
+// test shortens adapter.ConnectionIdle, which every in-process gateway in
+// the package reads, so it does not run in parallel.
 func TestFollowOutlivesTheConnectionIdle(t *testing.T) {
 	released := adapter.ConnectionIdle
 	adapter.ConnectionIdle = 500 * time.Millisecond
@@ -195,7 +198,8 @@ func TestFollowOutlivesTheConnectionIdle(t *testing.T) {
 
 // A connection whose requests are done waits the connection idle, not the
 // hour a stream gets: the read already waiting when its last request ends
-// moves back to the idle timeout.
+// moves back to the idle timeout. Shortening adapter.ConnectionIdle keeps
+// the test serial, as above.
 func TestConnectionIdleAfterARequestEnds(t *testing.T) {
 	released := adapter.ConnectionIdle
 	adapter.ConnectionIdle = 500 * time.Millisecond

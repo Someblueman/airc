@@ -37,18 +37,9 @@ func main() {
 	pasteMax := flags.String("paste-max-size", "64KiB", "largest paste a client may upload (1KiB-8MiB)")
 	pasteTotal := flags.String("paste-max-total", "64MiB", "disk every paste together may use; the oldest unreferenced go first")
 	pasteRetain := flags.String("paste-retain", "7d", "how long a paste is kept after it was last shared or read, such as 7d or 72h; a paste a retained message shares is kept while that message is; 0 keeps pastes until --paste-max-total")
-	var files statePaths
-	flags.StringVar(&files.history, "history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window; default with --state-dir: history.jsonl in it)")
-	flags.StringVar(&files.profiles, "profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted (deprecated: use --state-dir)")
-	flags.StringVar(&files.topics, "topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file) (deprecated: use --state-dir)")
-	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file")
-	flags.StringVar(&files.moderation, "moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token (deprecated: use --state-dir)")
-	flags.StringVar(&files.accounts, "accounts-file", "", "registered users (default: next to history file or admin token) (deprecated: use --state-dir)")
-	flags.StringVar(&files.chat, "chat-file", "", "pins, room settings and polls (default: next to history or accounts file) (deprecated: use --state-dir)")
-	flags.StringVar(&files.handoffs, "handoff-file", "", "open and recent handoffs, appended as JSON lines (default: next to history or accounts file) (deprecated: use --state-dir)")
-	flags.StringVar(&files.decisions, "decision-file", "", "open and recent decisions, appended as JSON lines (default: next to history or accounts file) (deprecated: use --state-dir)")
+	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file, an archive on disk, and reload the newest at startup (--history defaults to 10000000, so --history-memory bounds the window; default with --state-dir: history.jsonl in it; without --state-dir the other state files sit beside it as PATH.accounts.json, PATH.topics.json and so on)")
+	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file; moderation rules persist in moderation.json under --state-dir, else beside the history file or this file")
 	wakeAllow := flags.String("wake-allow", "", "comma-separated URL prefixes accounts may register for wake notices, such as https://ntfy.sh/ (requires an accounts file; default: wake notices off)")
-	flags.StringVar(&files.wakes, "wake-file", "", "wake registrations (default: next to the accounts file) (deprecated: use --state-dir)")
 	maxConnections := flags.Int("max-connections", 4096, "maximum simultaneous clients (1-16384)")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
@@ -123,7 +114,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	paths, notes, err := resolveState(*stateDir, files, *adminTokenFile, *wakeAllow != "")
+	paths, notes, err := resolveState(*stateDir, *historyFile, *adminTokenFile, *wakeAllow != "")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -218,7 +209,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if err := configureAdmin(srv, *adminTokenFile, paths.moderation, paths.history, paths.topics, paths.profiles, paths.accounts, paths.chat, paths.handoffs, paths.decisions, paths.wakes, paths.pastes); err != nil {
+	if err := configureAdmin(srv, *adminTokenFile, paths.moderation); err != nil {
 		logger.Error("admin_config_failed", "error", err.Error())
 		os.Exit(1)
 	}

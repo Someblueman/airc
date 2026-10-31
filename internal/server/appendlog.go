@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -141,38 +141,103 @@ func readLedger[T ledgerRecord](path string, maxRecord int, valid func(T) error)
 	return readLog(path, maxRecord, func(r T) (string, error) { return r.id(), valid(r) })
 }
 
-// compactLedger drops records finished more than keep ago and rewrites the
-// log with one line per record, then appends to the new file.
-func compactLedger[T ledgerRecord](log *appendLog[T], all map[string]T, keep time.Duration, now time.Time, mode atomicfile.Sync) error {
-	for id, r := range all {
-		if !r.live() && now.Sub(r.updatedAt()) > keep {
-			delete(all, id)
-		}
-	}
-	return log.rewrite(sortedRecords(all), mode)
+// ledger describes one kind of ledger record: what its log is called in
+// errors, what a valid saved record is, how many may be live at once, how
+// long a finished one is kept, how long a line may be, and the log event
+// of a failed compaction.
+type ledger[T ledgerRecord] struct {
+	name      string
+	valid     func(T) error
+	maxLive   int
+	keep      time.Duration
+	maxRecord int
+	event     string
 }
 
-// recordLedger records r's new state before it takes effect, and compacts
-// the log once superseded lines outnumber the records held; a failed
-// compaction is logged as event. A nil log keeps the records in memory.
-func recordLedger[T ledgerRecord](log *appendLog[T], all map[string]T, r T, mode atomicfile.Sync, compact func() error, logger *slog.Logger, event string) error {
-	if log != nil {
-		if log.dirty {
-			if err := compact(); err != nil {
-				return err
-			}
+// read loads the ledger's log at path.
+func (l ledger[T]) read(path string) (map[string]T, error) {
+	return readLedger(path, l.maxRecord, l.valid)
+}
+
+// ledgerStore is the live and recent records of one ledger and their
+// append-only log. Every field is read and written with s.mu held;
+// appends and compactions run under s.mu (and messageMu, since every step
+// is a post) with env.sync.
+type ledgerStore[T ledgerRecord] struct {
+	ledger[T]
+	all map[string]T  // by offer ID
+	log *appendLog[T] // nil keeps the records in memory only
+	env *storeEnv
+}
+
+// load reads the log at path, keeping every live record and finished ones
+// for the ledger's keep, compacts it and appends to it from then on. A torn
+// last line, from a crash mid-write, is dropped.
+func (st *ledgerStore[T]) load(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	loaded, err := st.read(path)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", st.name, path, err)
+	}
+	if liveRecords(loaded) > st.maxLive {
+		return fmt.Errorf("%s %s: more than %d open", st.name, path, st.maxLive)
+	}
+	st.all = loaded
+	st.log = &appendLog[T]{path: path}
+	return st.compactLocked()
+}
+
+// close closes the log; every save completes under s.mu.
+func (st *ledgerStore[T]) close() error {
+	if st.log == nil {
+		return nil
+	}
+	err := st.log.close()
+	st.log = nil
+	return err
+}
+
+// compactLocked drops records finished more than keep ago and rewrites the
+// log with one line per record, then appends to the new file.
+func (st *ledgerStore[T]) compactLocked() error {
+	now := st.env.now()
+	for id, r := range st.all {
+		if !r.live() && now.Sub(r.updatedAt()) > st.keep {
+			delete(st.all, id)
 		}
-		if err := log.append(r, mode); err != nil {
+	}
+	return st.log.rewrite(sortedRecords(st.all), st.env.sync)
+}
+
+// save records r's new state before it takes effect, and compacts the log
+// once superseded lines outnumber the records held; a failed compaction is
+// logged. A nil log keeps the records in memory.
+func (st *ledgerStore[T]) save(r T) error {
+	if st.log != nil {
+		if err := st.env.saved(st.name, st.appendLocked(r)); err != nil {
 			return err
 		}
 	}
-	all[r.id()] = r
-	if log != nil && log.crowded(len(all)) {
-		if err := compact(); err != nil {
-			logger.Warn(event, "error", err)
+	st.all[r.id()] = r
+	if st.log != nil && st.log.crowded(len(st.all)) {
+		if err := st.env.saved(st.name, st.compactLocked()); err != nil {
+			st.env.logger.Warn(st.event, "error", err)
 		}
 	}
 	return nil
+}
+
+// appendLocked appends r's line, after rewriting a log a failed append
+// left dirty.
+func (st *ledgerStore[T]) appendLocked(r T) error {
+	if st.log.dirty {
+		if err := st.compactLocked(); err != nil {
+			return err
+		}
+	}
+	return st.log.append(r, st.env.sync)
 }
 
 // liveRecords counts the records not yet finished.

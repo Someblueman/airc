@@ -17,6 +17,7 @@ import (
 )
 
 func TestRawQUICSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
+	t.Parallel()
 	pressure := make(chan quicPressureEvent, 8)
 	trace := &quicPressureTrace{events: pressure}
 	f := newRawQUICFixtureWithConfig(t, false, &quic.Config{
