@@ -22,8 +22,12 @@ type CheckEntry struct {
 	Message *MessageMetadata `json:"message,omitempty"`
 	Topic   string           `json:"topic,omitempty"`
 	Charter string           `json:"charter,omitempty"`
-	Status  string           `json:"status,omitempty"`
-	Cursor  string           `json:"cursor,omitempty"`
-	Gap     bool             `json:"gap,omitempty"`
-	Warning string           `json:"warning,omitempty"`
+	// Orchestrator and Goal are a room's orchestrator mode on its charter
+	// entry, empty when the room is not orchestrated.
+	Orchestrator string `json:"orchestrator,omitempty"`
+	Goal         string `json:"goal,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Cursor       string `json:"cursor,omitempty"`
+	Gap          bool   `json:"gap,omitempty"`
+	Warning      string `json:"warning,omitempty"`
 }

@@ -261,9 +261,25 @@ type ChatRequest struct {
 	// Charter sets a room's charter on the room action: text up to
 	// MaxCharterBytes, or "" to clear it; nil leaves it as it is.
 	Charter *string `json:"charter,omitempty"`
+	// Orchestrator and Goal set a room's orchestrator mode on the room
+	// action: the registered nickname that alone hands work out in the
+	// room, and the room's goal (ValidGoal); "" clears, and clearing the
+	// orchestrator clears the goal. nil leaves it as it is.
+	Orchestrator *string `json:"orchestrator,omitempty"`
+	Goal         *string `json:"goal,omitempty"`
 	// Run is the +airc/run label a post carries; it travels in the tag, not
 	// the JSON.
 	Run string `json:"-"`
+}
+
+// MaxGoalBytes bounds an orchestrated room's goal, the header's limit; the
+// charter holds anything longer.
+const MaxGoalBytes = 400
+
+// ValidGoal reports text an orchestrated room may keep as its goal: one
+// line of at most MaxGoalBytes without control characters. Empty clears.
+func ValidGoal(text string) bool {
+	return BriefText(text, MaxGoalBytes)
 }
 
 // MaxCharterBytes bounds a room's charter: the longer rules beside the
@@ -289,12 +305,16 @@ type ChatEntry struct {
 	SlowSeconds  int64           `json:"slow_seconds,omitempty"`
 	HistoryLimit int             `json:"history_limit,omitempty"`
 	// Charter is a room's charter on a room entry.
-	Charter string   `json:"charter,omitempty"`
-	Options []string `json:"options,omitempty"`
-	Votes   []int    `json:"votes,omitempty"`
-	Closed  bool     `json:"closed,omitempty"`
-	State   string   `json:"state,omitempty"`
-	Holder  string   `json:"holder,omitempty"`
+	Charter string `json:"charter,omitempty"`
+	// Orchestrator and Goal are a room's orchestrator mode on a room entry
+	// and an orchestrate signal: empty when the room is not orchestrated.
+	Orchestrator string   `json:"orchestrator,omitempty"`
+	Goal         string   `json:"goal,omitempty"`
+	Options      []string `json:"options,omitempty"`
+	Votes        []int    `json:"votes,omitempty"`
+	Closed       bool     `json:"closed,omitempty"`
+	State        string   `json:"state,omitempty"`
+	Holder       string   `json:"holder,omitempty"`
 	// Link is where a done handoff's result is; BlockedReason and BlockedAt
 	// are why and since when a blocked handoff is stuck.
 	Link          string           `json:"link,omitempty"`
