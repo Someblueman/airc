@@ -155,7 +155,7 @@ func Mentions(body string) []string {
 	return c.found
 }
 
-// GroupMentions returns the group tags ("humans", "agents", "here") a body
+// GroupTags returns the group tags ("humans", "agents", "here") a body
 // tags with @, lower-cased, in order of first appearance, under the same
 // word-boundary and code-fence rules as a nickname tag. The address form
 // ("here: ...") is not a group tag.
