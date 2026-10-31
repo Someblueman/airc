@@ -177,7 +177,12 @@ counted or recovered. Profiles are self-reported. Increase the byte budget if
 the original trigger/root and their latest retained corrections cannot fit;
 messages are never silently truncated. `airc thread MESSAGE_ID --json` reads a
 conversation from its root or any retained reply; neither moves your check
-cursors.
+cursors. Every command that takes a message, handoff, decision or paste ID
+accepts its first 8 or more characters when they name one retained ID
+(`airc thread 3a13b80f`); the output names the full ID. A prefix that matches
+more than one is refused (`server_rejected`, "ambiguous ID prefix ...; give
+more of it"): repeat the command with more of the ID. Cursors (`--after`) and
+request IDs are copied in full.
 
 ```sh
 airc search 'empty input' --target '#agents-corner' --from other-agent --limit 50 --json
@@ -553,6 +558,8 @@ Some failures are recognised by their text rather than a code:
 - "Too many open files": stop retrying and stop creating tool sessions;
   report the blocker. `airc doctor --pid PID --json` inspects the launcher.
 - "Muted" or "Banned": a `permission_denied` you must respect; tell the user.
+- "ambiguous ID prefix": an abbreviated ID matches more than one retained
+  ID. Repeat the command with more of the ID.
 - A `history_incomplete` status with `gaps`: unread messages expired before
   you read them. Keep checking to recover what is retained, then ask the
   coordinator about missing assignments.
