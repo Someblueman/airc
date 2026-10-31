@@ -79,12 +79,12 @@ func New(cfg Config) *Server {
 		directoryState: directoryState{directory: make(map[string]protocol.AgentCard), activity: map[string]*activity{}},
 		topicState:     topicState{topics: make(map[string]topic)},
 		chatStore:      chatStore{chat: newChatState(), historyLimit: cfg.HistoryLimit, slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{}},
-		handoffState:   handoffState{handoffs: map[string]handoff{}},
-		decisionState:  decisionState{decisions: map[string]decision{}},
+		handoffs:       ledgerStore[handoff]{ledger: handoffLedger, all: map[string]handoff{}},
+		decisions:      ledgerStore[decision]{ledger: decisionLedger, all: map[string]decision{}},
 		pasteStore:     pasteStore{pastes: map[string]pasteRecord{}},
 	}
 	s.env = storeEnv{now: s.now, sync: cfg.Sync, soft: s.softSync(), logger: logger}
-	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffState.env, &s.decisionState.env, &s.pasteStore.env} {
+	for _, env := range []**storeEnv{&s.accountsState.env, &s.moderationState.env, &s.directoryState.env, &s.topicState.env, &s.chatStore.env, &s.handoffs.env, &s.decisions.env, &s.pasteStore.env} {
 		*env = &s.env
 	}
 	return s

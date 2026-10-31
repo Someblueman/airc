@@ -28,8 +28,7 @@ func (s *Server) retryRequestLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "488", nil, "request is not retained; delivery is unknown; inspect history before deciding to send again")
 		return
 	}
-	m := e.Message
-	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.receiptLocked(client, e.Message, s.queuedLocked(e.Message))
 }
 
 func (s *Server) retryLocked(client *session, command protocol.Command, target, body string, parent *Message) bool {
@@ -61,6 +60,6 @@ func (s *Server) retryLocked(client *session, command protocol.Command, target, 
 		s.numericLocked(client, "487", nil, "request ID was already used for different content")
 		return true
 	}
-	s.receiptLocked(client, old, !protocol.IsChannel(target) && s.liveNickLocked(target) == nil)
+	s.receiptLocked(client, old, s.queuedLocked(old))
 	return true
 }

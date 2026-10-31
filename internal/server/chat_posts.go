@@ -28,6 +28,61 @@ func (s *Server) annotated(m Message) Message {
 	return m
 }
 
+// chatBody is the body of a structured post: text with its line endings
+// normalised, or fallback when text is blank, checked as every message is.
+func (s *Server) chatBody(text, fallback string) (string, error) {
+	body := protocol.NormalizeNewlines(text)
+	if strings.TrimSpace(body) == "" {
+		body = fallback
+	}
+	if strings.TrimSpace(body) == "" || len(body) > s.cfg.MaxMessageSize || !utf8.ValidString(body) || strings.ContainsRune(body, 0) {
+		return "", errors.New("message must be nonempty valid UTF-8 within the message limit")
+	}
+	return body, nil
+}
+
+// chatTargetLocked checks that client may post a structured message (what
+// names which: a handoff or decision step, a status, a resolution) to
+// target and returns the target as the message names it.
+func (s *Server) chatTargetLocked(client *session, target, what string) (string, error) {
+	if !validChannel(target) && !protocol.ValidNick(target) {
+		return "", errors.New("a " + what + " needs a room or a nickname")
+	}
+	if !s.postAllowedLocked(client, target) {
+		return "", errChatDenied
+	}
+	if protocol.IsChannel(target) {
+		if _, joined := client.channels[target]; !joined && !client.ephemeral {
+			return "", errors.New("join the room before posting")
+		}
+		return target, nil
+	}
+	if recipient := s.liveNickLocked(target); recipient != nil && !recipient.observer {
+		return recipient.client.Nick, nil
+	}
+	if s.cfg.HistoryLimit == 0 {
+		return "", errors.New("offline direct messages require history")
+	}
+	return target, nil
+}
+
+// queuedLocked reports whether m is a direct message kept for a recipient
+// that is not connected, for its receipt.
+func (s *Server) queuedLocked(m Message) bool {
+	return !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil
+}
+
+// postStructuredLocked records a structured post whose checks passed and
+// whose state is saved, delivers it and confirms it to client. The caller
+// answers with the CHAT entry the post produced. PRIVMSG has its own path
+// (messageLocked): it confirms a room message only to one-shot senders and
+// reactions, and shares a paste.
+func (s *Server) postStructuredLocked(client *session, m Message) {
+	mentions := s.recordLocked(&m)
+	s.broadcastMessageLocked(m, client.client.Username, mentions)
+	s.receiptLocked(client, m, s.queuedLocked(m))
+}
+
 // postRequest posts Text as an action in Target, or as a correction or
 // retraction of message ID, whose target it takes. Every check depends on
 // the retained message or the poster's standing, so none is made here.
@@ -111,9 +166,7 @@ func (s *Server) chatPostLocked(client *session, r postRequest) error {
 			return err
 		}
 	}
-	mentions := s.recordLocked(&m)
-	s.broadcastMessageLocked(m, client.client.Username, mentions)
-	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.postStructuredLocked(client, m)
 	meta := messageMetadata(m)
 	s.chatEntryLocked(client, protocol.ChatEntry{Action: r.Action, Target: m.Target, ID: m.ID, Message: &meta})
 	return nil
