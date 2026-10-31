@@ -20,10 +20,7 @@ import (
 // so the short lease is set on the package variable they read: this test
 // cannot run in parallel with tests that read it.
 func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
-	// The quiet lease must still outlive the server's five-second write bound.
-	timer := readLeaseTimer
-	timer.short = 8 * time.Second
-	lease := shortInProcessTimer(t, timer)
+	lease := shortInProcessTimer(t, readLeaseTimer)
 	f := gatewayHTTPFixture(t, true)
 	var observed []*irc.MessageEvent
 	for i := 0; i < 3; i++ {
