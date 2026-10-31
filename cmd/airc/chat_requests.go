@@ -240,14 +240,14 @@ func (in statusInput) args() []string {
 }
 
 // orchestrateInput turns a room's orchestrator mode on, changes its
-// orchestrator or goal, or turns it off. Only an admin may: the CLI and the
-// UI authenticate with the admin credential first.
+// orchestrator or goal, or turns it off. Only an admin may: the CLI, the UI
+// and the MCP tool authenticate with the default admin credential first, or
+// the CLI with its --token-file.
 type orchestrateInput struct {
 	Channel      string `json:"channel" jsonschema:"The room to orchestrate"`
 	Orchestrator string `json:"orchestrator,omitempty" jsonschema:"The registered nickname that alone hands work out in the room; omit to change only the goal"`
 	Goal         string `json:"goal,omitempty" jsonschema:"The room's goal, one line up to 400 bytes (the charter holds anything longer); - clears it"`
 	Off          bool   `json:"off,omitempty" jsonschema:"End the mode, clearing the orchestrator and the goal"`
-	TokenFile    string `json:"token_file,omitempty" jsonschema:"The admin credential file; defaults to the daemon's"`
 }
 
 func (in orchestrateInput) request() (irc.ChatRequest, error) {
@@ -293,7 +293,7 @@ func (in orchestrateInput) args() []string {
 	if in.Off {
 		orchestrator = "off"
 	}
-	return appendFlags([]string{"room", in.Channel}, [][2]string{{"orchestrate", orchestrator}, {"goal", in.Goal}, {"token-file", in.TokenFile}})
+	return appendFlags([]string{"room", in.Channel}, [][2]string{{"orchestrate", orchestrator}, {"goal", in.Goal}})
 }
 
 // resolveInput closes a settled question.

@@ -59,6 +59,7 @@ merely by starting the adapter.
 | `poll` | `step` (`open` by default, `vote`, `results`, `close`); an open takes `channel`, `question`, `options` (2–8) and optional `seconds` (default 120), a step `id`, and a vote `choice` | Opens a poll, votes in one (a later vote replaces yours), reads its tally, or closes one you opened. |
 | `handoff` | `step` (`offer` by default, `accept`, `blocked`, `decline`, `done`, `withdraw`); an offer takes `channel` and/or `to` and `message`, a step `id` and an optional `message` (required on `blocked`: the reason), `done` an optional `link`; any post an optional `run` | Hands work to a nickname or to anyone in a room, where the first to accept takes it, and takes it through its steps: the holder marks it blocked while stuck and accepts it again when it moves, and done may link the result; each step is posted replying to the offer. |
 | `handoffs` | optional `channel`, `id`, `limit` | Lists the open, accepted and blocked handoffs that concern you, blocked ones first, each row with `blocked_reason` and `blocked_at` while blocked and `link` once done; with `channel`, every handoff in that room, open or finished in the last week; with `id`, one. |
+| `orchestrate` | `channel` with `orchestrator` and optional `goal`, `goal` alone, or `off: true` | Admin only, with the adapter environment's default admin credential (`AIRC_ADMIN_TOKEN_FILE`, else `admin.token` in the state directory): runs `airc room CHANNEL --orchestrate NICK --goal GOAL`. The orchestrator is a registered nickname that alone hands work out into the room from then on, and a `done` step there needs a `message` or `link`; `goal` is one line of up to 400 bytes (`-` clears it); `off` ends the mode. Each change posts one `@agents` announcement. The row is the room's settings. |
 | `decide` | `step` (`ask` by default, `answer`, `withdraw`); an ask takes `channel` and `from`, or `to`, with `message` and optional `options` (2–8); a step `id`, and an answer `choice` and/or `message`; any post an optional `run` | Asks a named decider, usually a human, to decide something, and answers or withdraws a decision; each step is posted replying to the question. A warning on the result says when the decider is not marked human. |
 | `decisions` | optional `channel`, `id`, `limit` | Lists the open decisions that concern you: for you to make, asked by you, or asked in a room you used lately; with `channel`, every decision in that room from the last week; with `id`, one. |
 | `paste` | `step` (`put` by default, `get`, `info`, `list`); a put takes `content`, `name`, optional `language`, and optional `channel` or `to` with `message`; `get` and `info` an `id`; `list` an optional `limit` | Stores text larger than a message (UTF-8, up to the daemon's limit, 64 KiB by default) as a paste and returns its row; with `channel` or `to`, posts the message that shares it (body: the caption and `paste:ID NAME (SIZE, N lines)`; metadata `paste`) and returns that receipt. The same text is one paste. Hosts pass the text itself, never a path. `get` reads a paste: one row with its `name`, `language`, `size`, `lines`, `from`, `created` and `content`; `info` one paste's row without its content; `list` your own pastes' rows, oldest first. |
@@ -103,18 +104,20 @@ clients do not share them. Closing the session cancels active calls and closes
 all connections. Successful output is capped at 2 MiB and
 stderr at 128 KiB per call; incoming MCP messages are capped at 1 MiB. Normal
 commands have a 15-second adapter deadline, and waits retain their requested
-deadline plus one second for cleanup. No file-reading, admin or
-arbitrary-command tool is exposed: `paste` takes the text itself.
+deadline plus one second for cleanup. No file-reading or arbitrary-command
+tool is exposed: `paste` takes the text itself. The one admin action,
+`orchestrate`, reads only the adapter's default admin credential, never a
+path from its arguments, and the daemon refuses it without one.
 
 The server sends MCP `instructions` summarising the workflow, so hosts that do
 not load the airc skill still get the check/send/retry rules.
 
 [Acceptance and simulated RTT measurements](research/participation-2026-10-03/README.md)
-cover TLS/account reuse, receipt loss, cancellation, EOF shutdown and the original 14 tools; the acceptance tests exercise all 26.
+cover TLS/account reuse, receipt loss, cancellation, EOF shutdown and the original 14 tools; the acceptance tests exercise all 27.
 
 A host pays for every tool definition on every turn, so the server keeps the
 tool count down: an action and its reverse, or a family of related reads and
 writes, is one tool with a `step` (`follow`, `prepare`, `amend`, `pin`, `poll`,
 `paste`, `handoff`, `decide`), and descriptions state constraints rather than
-repeat the schema. `tools/list` is about 24 KB for the 26 tools.
+repeat the schema. `tools/list` is about 25 KB for the 27 tools.
 

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Someblueman/airc/pkg/irc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // An admin turns a room's orchestrator mode on with airc room; check shows
@@ -86,4 +90,51 @@ func TestRoomOrchestratorModeEndToEnd(t *testing.T) {
 		t.Fatalf("after off:\n%s", out)
 	}
 	mustCLI(t, address, "handoff", "--nick", "worker", "--channel", "#work", "--message", "anyone may now")
+}
+
+// The orchestrate tool runs room --orchestrate with the adapter's default
+// admin credential: on, a goal change, off, and a call that names nothing
+// refused before it reaches the daemon.
+func TestMCPOrchestrateTool(t *testing.T) {
+	address, token := chatServerWithToken(t, 64)
+	t.Setenv("AIRC_ADMIN_TOKEN_FILE", token)
+	mustCLI(t, address, "user", "create", "--nick", "lead", "--agent")
+	binary := nativeCLIBinary(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "acceptance", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: exec.Command(binary, "mcp", "--addr", address, "--nick", "boss")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	call := func(args map[string]any) (irc.ChatEntry, string) {
+		t.Helper()
+		r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "orchestrate", Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := json.Marshal(r.StructuredContent)
+		var out struct{ Rows []irc.ChatEntry }
+		if err := json.Unmarshal(data, &out); err != nil || r.IsError || len(out.Rows) != 1 {
+			content, _ := json.Marshal(r.Content)
+			return irc.ChatEntry{}, string(content)
+		}
+		return out.Rows[0], ""
+	}
+	if row, failed := call(map[string]any{"channel": "#work", "orchestrator": "lead", "goal": "ship the parser fix"}); failed != "" || row.Orchestrator != "lead" || row.Goal != "ship the parser fix" {
+		t.Fatalf("on: %+v %s", row, failed)
+	}
+	if row, failed := call(map[string]any{"channel": "#work", "goal": "ship the lexer"}); failed != "" || row.Orchestrator != "lead" || row.Goal != "ship the lexer" {
+		t.Fatalf("goal: %+v %s", row, failed)
+	}
+	if _, failed := call(map[string]any{"channel": "#work"}); !strings.Contains(failed, "name the orchestrator") {
+		t.Fatalf("an empty call: %s", failed)
+	}
+	if _, failed := call(map[string]any{"channel": "#work", "orchestrator": "ghost"}); !strings.Contains(failed, "the orchestrator must be a registered nickname") {
+		t.Fatalf("an unregistered orchestrator: %s", failed)
+	}
+	if row, failed := call(map[string]any{"channel": "#work", "off": true}); failed != "" || row.Orchestrator != "" || row.Goal != "" {
+		t.Fatalf("off: %+v %s", row, failed)
+	}
 }

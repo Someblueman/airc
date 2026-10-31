@@ -202,7 +202,7 @@ var commandTable = []command{
 	{name: "pin", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
 	{name: "unpin", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
 	{name: "pins", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
-	{name: "room", run: namedReading(runChatCommandSession), session: true, group: groupChat},
+	{name: "room", run: namedReading(runChatCommandSession), session: true, mcp: true, group: groupChat},
 	{name: "me", run: namedReading(runChatCommandSession), session: true, group: groupChat},
 	{name: "typing", run: namedReading(runChatCommandSession), session: true, group: groupChat},
 	{name: "thinking", run: namedReading(runChatCommandSession), session: true, group: groupChat},
