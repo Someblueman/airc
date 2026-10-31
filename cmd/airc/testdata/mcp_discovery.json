@@ -61,7 +61,7 @@
     }
    },
    {
-    "description": "Post a question to a room or a nickname through the normal send path and wait, in this one call, for the first textual reply from someone else (reactions and signals do not count). Returns the question's receipt, then the reply row, or a wait_expired status; the reply is marked read as a reply check marks it. For hosts that cannot run a check in the background; keep wait_seconds below the host's tool-call timeout, since a killed call reports nothing and the question stays posted.",
+    "description": "Post a question and wait in the same call for the first textual reply from someone else (reactions and signals do not count). Returns the receipt, then the reply row or a wait_expired status; the reply is marked read. A call the host kills reports nothing, but the question stays posted.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -82,7 +82,7 @@
        "type": "string"
       },
       "wait_seconds": {
-       "description": "How long to wait for the first reply, 1 through 3600 seconds; default 60. Keep it below the host's tool-call timeout",
+       "description": "Wait for the first reply, 1-3600 seconds; default 60; keep it below the host's tool-call timeout",
        "type": "integer"
       }
      },
@@ -117,7 +117,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "List the rooms the server knows, with connected members, retained messages, last activity and header.",
+    "description": "List rooms with connected members, retained messages, last activity and header.",
     "inputSchema": {
      "additionalProperties": false,
      "type": "object"
@@ -145,12 +145,12 @@
     }
    },
    {
-    "description": "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline.",
+    "description": "Read new messages and mark them read; peek leaves cursors unchanged. A wait reconnects within its deadline.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "channels": {
-       "description": "Rooms to read besides the inbox; defaults to AIRC_CHANNEL from the adapter environment",
+       "description": "Rooms to read besides the inbox; defaults to AIRC_CHANNEL",
        "items": {
         "type": "string"
        },
@@ -164,7 +164,7 @@
        "type": "boolean"
       },
       "decision": {
-       "description": "Wait for this decision to be answered or withdrawn and return its row; combine with wait_seconds and nothing else",
+       "description": "Wait for this decision ID to be answered or withdrawn and return its row; only wait_seconds may accompany it",
        "type": "string"
       },
       "from_now": {
@@ -172,7 +172,7 @@
        "type": "boolean"
       },
       "include_own": {
-       "description": "Also return this identity's own messages",
+       "description": "Also return your own messages",
        "type": "boolean"
       },
       "max_bytes": {
@@ -184,7 +184,7 @@
        "type": "integer"
       },
       "mentions": {
-       "description": "Only direct messages and messages that tag this identity",
+       "description": "Only direct messages and messages that tag you",
        "type": "boolean"
       },
       "peek": {
@@ -196,7 +196,7 @@
        "type": "string"
       },
       "wait_seconds": {
-       "description": "Total wait deadline, 0 through 3600 seconds",
+       "description": "Wait deadline, 0-3600 seconds",
        "type": "integer"
       }
      },
@@ -228,7 +228,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts.",
+    "description": "Read a message's exchange: trigger, replies, corrections, pins and participant profiles, with omission counts.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -348,7 +348,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one.",
+    "description": "List open decisions that concern you: for you to make, asked by you, or asked in a room you used within ten minutes. With channel, every decision in that room, answered and withdrawn ones from the last week included; with id, one.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -390,7 +390,7 @@
     }
    },
    {
-    "description": "Summarize unread traffic without message bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, corrections, open polls, and changed headers and pins. Marks nothing read unless mark_read; use it after time away instead of reading the whole backlog.",
+    "description": "Summarize unread traffic without bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, open handoffs and decisions, corrections, open polls, changed headers and pins. Marks nothing read unless mark_read.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -512,7 +512,7 @@
     }
    },
    {
-    "description": "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer.",
+    "description": "Offer work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (with a link to the result) or withdraw (the author calls it off). Each step is posted replying to the offer.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -573,7 +573,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
+    "description": "List open, accepted and blocked handoffs that concern you, blocked first: for you, held or offered by you, or open to anyone in a room you used within ten minutes; rows carry blocked_reason, blocked_at and link once done. With channel, every handoff in that room, finished ones from the last week included; with id, one.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -618,12 +618,12 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Read retained messages of a room or a nickname's direct messages without moving check cursors. Ends with a page row; pass its cursor as after.",
+    "description": "Read retained messages of a room or a nickname's direct messages without moving cursors. Ends with a page row; pass its cursor as after.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "after": {
-       "description": "Exclusive message ID cursor from the previous page",
+       "description": "Message ID cursor from the previous page, exclusive",
        "type": "string"
       },
       "limit": {
@@ -667,7 +667,7 @@
     }
    },
    {
-    "description": "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id: one row with its name, language, size, lines, author and the whole content; step info describes one without its content; step list reads your own pastes' rows, newest first.",
+    "description": "Store text larger than a message (a diff, a log, test output) as a paste kept for a week after it was last shared or read; with channel or to, also post a message sharing it, whose body is the caption and a line naming the paste and whose paste field carries its id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id, content included; info describes one without its content; list reads your own pastes, the newest limit of them, oldest first.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -680,7 +680,7 @@
        "type": "string"
       },
       "id": {
-       "description": "Get and info: the paste's ID, from a message row's paste field or a paste result",
+       "description": "Get and info: the paste's ID",
        "type": "string"
       },
       "language": {
@@ -692,7 +692,7 @@
        "type": "integer"
       },
       "message": {
-       "description": "Put: the caption of that message, such as what the reader should look at",
+       "description": "Put: the caption of that message",
        "type": "string"
       },
       "name": {
@@ -733,7 +733,7 @@
     }
    },
    {
-    "description": "Share a message as a room pin, which a check shows once and context lists; unpin takes it down; list reads a room's pins. A pin points at a message; it is not approval.",
+    "description": "Pin a message in its room, where a check shows it once and context lists it; step unpin takes it down, step list reads a room's pins. A pin is not approval.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -888,7 +888,7 @@
     }
    },
    {
-    "description": "Publish or clear an expiring activity state for this identity. Self-reported; expiry means unknown, not available.",
+    "description": "Publish or clear your expiring activity state. Self-reported; expired means unknown, not available.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -950,7 +950,7 @@
        "type": "boolean"
       },
       "kind": {
-       "description": "human or agent; empty string clears it",
+       "description": "human or agent",
        "type": [
         "null",
         "string"
@@ -1003,7 +1003,7 @@
     }
    },
    {
-    "description": "Add a reaction to a retained message. A reaction is not approval or evidence that work was completed. No durable receipt-only retry is available.",
+    "description": "React to a retained message. A reaction is not approval or evidence of completed work; there is no receipt-only retry.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1045,7 +1045,7 @@
     }
    },
    {
-    "description": "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin.",
+    "description": "Close a question settled elsewhere (a DM, a reaction, in person): posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. For the question's author, whoever it addresses, or an admin.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1089,7 +1089,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Search original retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes. Narrow with since/until; newest returns the latest matches first. Results end with a page row whose cursor continues the search; an expired cursor requires restarting from *.",
+    "description": "Search retained messages. Results end with a page row whose cursor continues the search as after; an expired cursor restarts from *.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1162,16 +1162,16 @@
     }
    },
    {
-    "description": "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry.",
+    "description": "Post text to one room, nickname or reply parent; retry recovers an uncertain send's receipt.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Room to post in, such as #agents-corner; give exactly one of channel, to or reply_to",
+       "description": "Room to post in; give exactly one of channel, to or reply_to",
        "type": "string"
       },
       "message": {
-       "description": "Original message text, at most 4096 bytes",
+       "description": "Text to post, at most 4096 bytes",
        "type": "string"
       },
       "pending": {
@@ -1183,19 +1183,19 @@
        "type": "string"
       },
       "request_id": {
-       "description": "Optional stable send key for receipt recovery",
+       "description": "Stable send key for receipt recovery",
        "type": "string"
       },
       "retry": {
-       "description": "Recover this saved request receipt without posting; omit message and targets",
+       "description": "Recover this request ID's receipt without posting; omit other fields",
        "type": "string"
       },
       "run": {
-       "description": "Run label kept on the message (1-64 letters, digits, ., _ or -), which search and history can filter by; defaults to AIRC_RUN",
+       "description": "Run label kept on the message (1-64 letters, digits, ., _ or -); defaults to AIRC_RUN",
        "type": "string"
       },
       "to": {
-       "description": "Nickname for a direct message; queued if the recipient is offline",
+       "description": "Nickname for a direct message, queued if offline",
        "type": "string"
       }
      },
@@ -1224,7 +1224,7 @@
     }
    },
    {
-    "description": "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step. Without task, lists the room's latest status per nickname, newest first.",
+    "description": "Post where you are in a room: the task, whether you are working, blocked or done, and optionally a link. The daemon keeps your latest for directory cards, agent listings and the digest, so post at a change, not every step. Without task, lists the room's latest status per nickname, newest first.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1281,12 +1281,12 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Read original retained thread messages without advancing inbox cursors.",
+    "description": "Read a retained conversation without moving inbox cursors.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "after": {
-       "description": "Exclusive message ID cursor from the previous page",
+       "description": "Message ID cursor from the previous page, exclusive",
        "type": "string"
       },
       "id": {
@@ -1329,7 +1329,7 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "Count unread messages per room and inbox without marking anything read. Cheap; use it to decide whether a check is worthwhile.",
+    "description": "Count unread messages per room and inbox, marking nothing read; the cheap probe before a check.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {

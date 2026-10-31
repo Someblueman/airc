@@ -55,7 +55,7 @@ type mcpDigestInput struct {
 }
 type mcpHistoryInput struct {
 	Target string `json:"target" jsonschema:"#room, or a nickname for its direct messages"`
-	After  string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
+	After  string `json:"after,omitempty" jsonschema:"Message ID cursor from the previous page, exclusive"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1-1000; default 50"`
 	Run    string `json:"run,omitempty" jsonschema:"Only messages posted under this run label"`
 }
@@ -70,7 +70,7 @@ type mcpProfileInput struct {
 	Workspace *string `json:"workspace,omitempty" jsonschema:"Repository or directory you work in"`
 	Tools     *string `json:"tools,omitempty" jsonschema:"Tools or languages you can use"`
 	About     *string `json:"about,omitempty" jsonschema:"What to ask you about"`
-	Kind      *string `json:"kind,omitempty" jsonschema:"human or agent; empty string clears it"`
+	Kind      *string `json:"kind,omitempty" jsonschema:"human or agent"`
 	Clear     bool    `json:"clear,omitempty" jsonschema:"Remove your whole profile"`
 }
 type mcpNoInput struct{}
@@ -82,8 +82,8 @@ type mcpPasteInput struct {
 	Language string `json:"language,omitempty" jsonschema:"Put: its language, such as go, diff or text"`
 	Channel  string `json:"channel,omitempty" jsonschema:"Put: post a message sharing the paste in this room"`
 	To       string `json:"to,omitempty" jsonschema:"Put: post a message sharing the paste to this nickname"`
-	Message  string `json:"message,omitempty" jsonschema:"Put: the caption of that message, such as what the reader should look at"`
-	ID       string `json:"id,omitempty" jsonschema:"Get and info: the paste's ID, from a message row's paste field or a paste result"`
+	Message  string `json:"message,omitempty" jsonschema:"Put: the caption of that message"`
+	ID       string `json:"id,omitempty" jsonschema:"Get and info: the paste's ID"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"List: newest pastes to list, 1-1000; default 200"`
 }
 
@@ -91,7 +91,7 @@ type mcpPasteInput struct {
 // may post a message sharing it, reads one back, describes one or lists your
 // pastes.
 func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id: one row with its name, language, size, lines, author and the whole content; step info describes one without its content; step list reads your own pastes' rows, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message (a diff, a log, test output) as a paste kept for a week after it was last shared or read; with channel or to, also post a message sharing it, whose body is the caption and a line naming the paste and whose paste field carries its id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id, content included; info describes one without its content; list reads your own pastes, the newest limit of them, oldest first."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
 		putOnly := in.Content != "" || in.Name != "" || in.Language != "" || in.Channel != "" || in.To != "" || in.Message != ""
 		switch in.Step {
 		case "list":
@@ -149,7 +149,7 @@ func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
 // Overview and directory tools: what exists, what is unread, who I am.
 func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 	readOnly := &mcpserver.Annotations{ReadOnlyHint: true}
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "unread", Annotations: readOnly, Description: "Count unread messages per room and inbox without marking anything read. Cheap; use it to decide whether a check is worthwhile."}, func(ctx context.Context, _ *mcpserver.Call, in mcpUnreadInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "unread", Annotations: readOnly, Description: "Count unread messages per room and inbox, marking nothing read; the cheap probe before a check."}, func(ctx context.Context, _ *mcpserver.Call, in mcpUnreadInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"unread"}
 		for _, channel := range in.Channels {
 			args = append(args, "--channel", channel)
@@ -159,7 +159,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "digest", Description: "Summarize unread traffic without message bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, corrections, open polls, and changed headers and pins. Marks nothing read unless mark_read; use it after time away instead of reading the whole backlog."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDigestInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "digest", Description: "Summarize unread traffic without bodies: counts, speakers and busy threads per room, unanswered messages addressed to you with previews, open handoffs and decisions, corrections, open polls, changed headers and pins. Marks nothing read unless mark_read."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDigestInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"digest"}
 		for _, channel := range in.Channels {
 			args = append(args, "--channel", channel)
@@ -169,10 +169,10 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "channels", Annotations: readOnly, Description: "List the rooms the server knows, with connected members, retained messages, last activity and header."}, func(ctx context.Context, _ *mcpserver.Call, _ mcpNoInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "channels", Annotations: readOnly, Description: "List rooms with connected members, retained messages, last activity and header."}, func(ctx context.Context, _ *mcpserver.Call, _ mcpNoInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.call(ctx, []string{"channels"}, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "history", Annotations: readOnly, Description: "Read retained messages of a room or a nickname's direct messages without moving check cursors. Ends with a page row; pass its cursor as after."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHistoryInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "history", Annotations: readOnly, Description: "Read retained messages of a room or a nickname's direct messages without moving cursors. Ends with a page row; pass its cursor as after."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHistoryInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.Target == "" || strings.HasPrefix(in.Target, "-") {
 			return nil, mcpOutput{}, errors.New("target required")
 		}
@@ -188,7 +188,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "presence", Description: "Publish or clear an expiring activity state for this identity. Self-reported; expiry means unknown, not available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPresenceInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "presence", Description: "Publish or clear your expiring activity state. Self-reported; expired means unknown, not available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPresenceInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.Clear == (in.State != "") || in.TTLSeconds < 0 || in.TTLSeconds > 3600 {
 			return nil, mcpOutput{}, errors.New("give a state or clear, and ttl_seconds 1-3600")
 		}
@@ -235,7 +235,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
 }
 
 func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search original retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes. Narrow with since/until; newest returns the latest matches first. Results end with a page row whose cursor continues the search; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search retained messages. Results end with a page row whose cursor continues the search as after; an expired cursor restarts from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"search", in.Query}
 		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}, {"--since", in.Since}, {"--until", in.Until}, {"--run", in.Run}} {
 			if pair[1] != "" {
@@ -253,7 +253,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "react", Description: "Add a reaction to a retained message. A reaction is not approval or evidence that work was completed. No durable receipt-only retry is available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpReactionInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "react", Description: "React to a retained message. A reaction is not approval or evidence of completed work; there is no receipt-only retry."}, func(ctx context.Context, _ *mcpserver.Call, in mcpReactionInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) || !protocol.ValidReaction(in.Reaction) {
 			return nil, mcpOutput{}, errors.New("valid message ID and reaction required")
 		}
@@ -282,13 +282,13 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, []string{step, in.ID}, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in handoffInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Offer work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (with a link to the result) or withdraw (the author calls it off). Each step is posted replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in handoffInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
 	for _, name := range []string{"handoffs", "decisions"} {
 		description := map[string]string{
-			"handoffs":  "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
-			"decisions": "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one.",
+			"handoffs":  "List open, accepted and blocked handoffs that concern you, blocked first: for you, held or offered by you, or open to anyone in a room you used within ten minutes; rows carry blocked_reason, blocked_at and link once done. With channel, every handoff in that room, finished ones from the last week included; with id, one.",
+			"decisions": "List open decisions that concern you: for you to make, asked by you, or asked in a room you used within ten minutes. With channel, every decision in that room, answered and withdrawn ones from the last week included; with id, one.",
 		}[name]
 		mcpserver.AddTool(s, &mcpserver.Tool{Name: name, Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: description}, func(ctx context.Context, _ *mcpserver.Call, in listingInput) (*mcpserver.Result, mcpOutput, error) {
 			if _, err := in.request(name); err != nil {
@@ -300,16 +300,16 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in decisionInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step. Without task, lists the room's latest status per nickname, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done, and optionally a link. The daemon keeps your latest for directory cards, agent listings and the digest, so post at a change, not every step. Without task, lists the room's latest status per nickname, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "pin", Description: "Share a message as a room pin, which a check shows once and context lists; unpin takes it down; list reads a room's pins. A pin points at a message; it is not approval."}, func(ctx context.Context, _ *mcpserver.Call, in pinInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "pin", Description: "Pin a message in its room, where a check shows it once and context lists it; step unpin takes it down, step list reads a room's pins. A pin is not approval."}, func(ctx context.Context, _ *mcpserver.Call, in pinInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "poll", Description: "Open a poll in a room with 2-8 numbered options, vote in one by its id and an option's number (a later vote replaces yours), read its results, or close one you opened. A tally is advisory, not a decision; decide asks a named decider."}, func(ctx context.Context, _ *mcpserver.Call, in pollInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in resolveInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question settled elsewhere (a DM, a reaction, in person): posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. For the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in resolveInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply to a message with an expiry; step cancel withdraws your signal, step waiting reads the message's unexpired signals. A signal is conversational: not an ownership claim, a lock or approval."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
