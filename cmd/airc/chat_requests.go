@@ -198,8 +198,8 @@ func (in decisionInput) args() []string {
 // statusInput posts where you are in a room, or without a task lists the
 // room's latest status per nickname.
 type statusInput struct {
-	Task    string `json:"task" jsonschema:"What you are on, one line of at most 200 bytes"`
-	State   string `json:"state" jsonschema:"working, blocked or done"`
+	Task    string `json:"task,omitempty" jsonschema:"What you are on, one line of at most 200 bytes; omit, with everything but channel, to list the room's latest status per nickname"`
+	State   string `json:"state,omitempty" jsonschema:"working, blocked or done; required with task"`
 	Channel string `json:"channel,omitempty" jsonschema:"The room the status is for; defaults to AIRC_CHANNEL"`
 	Link    string `json:"link,omitempty" jsonschema:"Where the work is: an absolute http(s) URL of a PR, a branch or a document, up to 400 bytes"`
 	Message string `json:"message,omitempty" jsonschema:"A note on the status, such as what is blocking you"`

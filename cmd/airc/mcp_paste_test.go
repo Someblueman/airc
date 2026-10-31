@@ -57,6 +57,15 @@ func TestMCPPasteAndPasteGet(t *testing.T) {
 	if len(stored) != 1 || stored[0]["type"] != "paste" || stored[0]["id"] != protocol.PasteID([]byte("# notes\n")) || stored[0]["language"] != "text" {
 		t.Fatalf("stored %+v", stored)
 	}
+	if described := rows("paste", map[string]any{"step": "info", "id": id}); len(described) != 1 || described[0]["id"] != id || described[0]["name"] != "go-test.log" || described[0]["content"] != nil {
+		t.Fatalf("info %+v", described)
+	}
+	if listed := rows("paste", map[string]any{"step": "list"}); len(listed) != 2 || listed[0]["id"] != id || listed[1]["id"] != stored[0]["id"] {
+		t.Fatalf("list %+v", listed)
+	}
+	if r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "paste", Arguments: map[string]any{"step": "list", "content": "x"}}); err == nil && !r.IsError {
+		t.Fatalf("list with content was accepted: %+v", r)
+	}
 	if r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "paste", Arguments: map[string]any{"content": "x", "name": "x", "message": "caption without a target"}}); err == nil && !r.IsError {
 		t.Fatalf("a caption without a target was accepted: %+v", r)
 	}

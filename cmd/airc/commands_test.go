@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
@@ -54,6 +55,11 @@ func TestCommandTableIsConsistent(t *testing.T) {
 // --reaction and cancel is prepare --cancel (mcp_chat_tools.go).
 var mcpToolAliases = map[string]string{"thread": "history", "react": "send", "cancel": "prepare", "paste_get": "paste"}
 
+// mcpToolServing names the tool that runs a command of another name through
+// its step: pin runs pin, unpin and pins; poll runs poll, vote, poll-results
+// and poll-close (chat_requests.go).
+var mcpToolServing = map[string]string{"unpin": "pin", "pins": "pin", "vote": "poll", "poll-results": "poll", "poll-close": "poll"}
+
 // The tool definitions carry schemas and stay hand-written, so this keeps them
 // and the table's mcp marks from drifting apart.
 func TestMCPToolsMatchCommandTable(t *testing.T) {
@@ -89,8 +95,13 @@ func TestMCPToolsMatchCommandTable(t *testing.T) {
 		}
 	}
 	for _, c := range commandTable {
-		if c.mcp && !tools[c.name] {
-			t.Errorf("%s is marked mcp but no MCP tool of that name exists", c.name)
+		if tool := cmp.Or(mcpToolServing[c.name], c.name); c.mcp && !tools[tool] {
+			t.Errorf("%s is marked mcp but no MCP tool %s exists", c.name, tool)
+		}
+	}
+	for name, tool := range mcpToolServing {
+		if c, ok := commandsByName[name]; !ok || !c.mcp || !tools[tool] {
+			t.Errorf("tool %s serves %s, which the table does not mark mcp, or the tool does not exist", tool, name)
 		}
 	}
 	for alias, name := range mcpToolAliases {

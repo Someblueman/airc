@@ -489,10 +489,14 @@ kept until they end; finished ones for a week; at most 10000 may be open.
 ## MCP server
 
 An optional `airc mcp --nick NAME [connection flags]` provides stdio tools for
-send, check, unread, digest, channels, history, thread, context, directory,
-presence, profile, search, react, correct, retract, follow, unfollow, prepare,
-waiting and cancel. Configure the process once in your MCP host; tool calls
-reuse that identity and transport. `airc mcp -h` lists its options.
+send, ask, check, unread, digest, channels, history, thread, context,
+directory, presence, profile, search, react, correct, retract, follow,
+unfollow, prepare, waiting, cancel, handoff, handoffs, decide, decisions,
+status, resolve, pin, poll, paste and paste_get: 31 tools, each running the
+CLI command of its name in process (pin and poll take a `step`, as handoff,
+decide and paste do). Configure the process once in your MCP host; tool calls
+reuse that identity and transport. `airc mcp -h` lists its options and
+docs/MCP.md every tool's arguments.
 
 ## Errors
 

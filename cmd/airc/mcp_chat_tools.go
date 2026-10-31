@@ -72,21 +72,51 @@ type mcpProfileInput struct {
 type mcpNoInput struct{}
 
 type mcpPasteInput struct {
-	Content  string `json:"content" jsonschema:"The text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
-	Name     string `json:"name" jsonschema:"A file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
-	Language string `json:"language,omitempty" jsonschema:"Its language, such as go, diff or text"`
-	Channel  string `json:"channel,omitempty" jsonschema:"Post a message sharing the paste in this room"`
-	To       string `json:"to,omitempty" jsonschema:"Post a message sharing the paste to this nickname"`
-	Message  string `json:"message,omitempty" jsonschema:"The caption of that message, such as what the reader should look at"`
+	Step     string `json:"step,omitempty" jsonschema:"put (the default) stores content; list reads your own pastes; info describes one by id"`
+	Content  string `json:"content,omitempty" jsonschema:"Put: the text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
+	Name     string `json:"name,omitempty" jsonschema:"Put: a file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
+	Language string `json:"language,omitempty" jsonschema:"Put: its language, such as go, diff or text"`
+	Channel  string `json:"channel,omitempty" jsonschema:"Put: post a message sharing the paste in this room"`
+	To       string `json:"to,omitempty" jsonschema:"Put: post a message sharing the paste to this nickname"`
+	Message  string `json:"message,omitempty" jsonschema:"Put: the caption of that message, such as what the reader should look at"`
+	ID       string `json:"id,omitempty" jsonschema:"Info: the paste's ID"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"List: newest pastes to list, 1-1000; default 200"`
 }
 type mcpPasteGetInput struct {
 	ID string `json:"id" jsonschema:"The paste's ID, from a message row's paste field or a paste result"`
 }
 
 // addPasteTools registers paste, which stores text larger than a message and
-// may post a message sharing it, and paste_get, which reads one back.
+// may post a message sharing it, lists your pastes or describes one, and
+// paste_get, which reads one back.
 func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id. Step list reads your own pastes' rows, newest first; step info describes one by id without its content."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+		putOnly := in.Content != "" || in.Name != "" || in.Language != "" || in.Channel != "" || in.To != "" || in.Message != ""
+		switch in.Step {
+		case "list":
+			if putOnly || in.ID != "" {
+				return nil, mcpOutput{}, errors.New("list takes only limit")
+			}
+			args := []string{"paste", "list"}
+			if in.Limit != 0 {
+				args = append(args, "--limit", strconv.Itoa(in.Limit))
+			}
+			return a.call(ctx, args, "", 15*time.Second, false)
+		case "info":
+			if !protocol.ValidMessageID(in.ID) {
+				return nil, mcpOutput{}, errors.New("valid paste ID required")
+			}
+			if putOnly || in.Limit != 0 {
+				return nil, mcpOutput{}, errors.New("info takes only id")
+			}
+			return a.call(ctx, []string{"paste", "info", in.ID}, "", 15*time.Second, false)
+		case "", "put":
+		default:
+			return nil, mcpOutput{}, errors.New("step is put, list or info")
+		}
+		if in.ID != "" || in.Limit != 0 {
+			return nil, mcpOutput{}, errors.New("id goes with info and limit with list")
+		}
 		if in.Content == "" || len(in.Content) > maxPasteRead-1 || in.Name == "" {
 			return nil, mcpOutput{}, errors.New("content up to the daemon's paste limit and a name are required")
 		}
@@ -278,7 +308,13 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in decisionInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step. Without task, lists the room's latest status per nickname, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "pin", Description: "Share a message as a room pin, which a check shows once and context lists; unpin takes it down; list reads a room's pins. A pin points at a message; it is not approval."}, func(ctx context.Context, _ *mcpserver.Call, in pinInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "poll", Description: "Open a poll in a room with 2-8 numbered options, vote in one by its id and an option's number (a later vote replaces yours), read its results, or close one you opened. A tally is advisory, not a decision; decide asks a named decider."}, func(ctx context.Context, _ *mcpserver.Call, in pollInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in resolveInput) (*mcpserver.Result, mcpOutput, error) {
