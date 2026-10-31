@@ -45,7 +45,8 @@ func (m *uiModel) showBoard(v boardIn) {
 		m.buffers = append(m.buffers, b)
 	}
 	b.query = &uiQuery{Kind: "board", Target: v.room}
-	b.help = boardLines(v.entries, m.now())
+	b.help = append(boardGoal(v), boardLines(v.entries, m.now())...)
+	b.help = append(b.help, boardStatuses(v.statuses, m.now())...)
 	b.topic = boardHeader(v.entries)
 	b.version++
 	if !v.refresh {
@@ -112,6 +113,33 @@ func boardLines(entries []irc.ChatEntry, now time.Time) []helpLine {
 		}
 		lines = append(lines, helpLine{head: fmt.Sprintf("%s (%d)", group.title, len(rows))})
 		lines = append(lines, rows...)
+	}
+	return lines
+}
+
+// boardGoal is the board's first line in an orchestrated room: the goal and
+// who orchestrates it.
+func boardGoal(v boardIn) []helpLine {
+	if v.orchestrator == "" {
+		return nil
+	}
+	return []helpLine{{head: "Goal", body: cmp.Or(v.goal, "none set") + "  (" + v.orchestrator + " orchestrates)"}}
+}
+
+// boardStatuses is the board's last section, the room's latest status per
+// nickname, newest first: each line the nickname, the state and the task,
+// its age and where the work is.
+func boardStatuses(statuses []irc.ChatEntry, now time.Time) []helpLine {
+	if len(statuses) == 0 {
+		return nil
+	}
+	lines := []helpLine{{head: fmt.Sprintf("Where everyone is (%d)", len(statuses))}}
+	for _, s := range statuses {
+		body := "[" + s.State + "] " + firstLine(s.Text) + "  " + age(s.At, now)
+		if s.Link != "" {
+			body += "  " + s.Link
+		}
+		lines = append(lines, helpLine{head: s.From, body: body})
 	}
 	return lines
 }
