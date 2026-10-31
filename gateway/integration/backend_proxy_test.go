@@ -3,6 +3,7 @@ package gateway_test
 import (
 	"bufio"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
@@ -97,7 +99,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if len(fields) > 0 && ((mode == "withhold-history" || mode == "watch" || mode == "watch-overlap" || mode == "watch-noise" || delayedAck) && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
 					replies.Add(1)
 				}
-				if mode == "watch-no-check" && len(fields) > 0 && (fields[0] == "OBSERVE" || fields[0] == "CHECK") {
+				if mode == "watch-level-zero" && len(fields) > 0 && (fields[0] == "OBSERVE" || fields[0] == "CHECK") {
 					replies.Add(1)
 				}
 				if len(fields) > 0 && fields[0] == "DIRECTORY" {
@@ -136,8 +138,8 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			if mode == "withhold-directory" && (strings.Contains(line, " 773 ") || strings.Contains(line, " 774 ")) {
 				continue
 			}
-			if mode == "directory-feature-zero" {
-				line = withdraw(line, "DIRECTORY")
+			if mode == "level-zero" || mode == "watch-level-zero" {
+				line = downgrade(line)
 			}
 			if mode == "directory-empty" && strings.Contains(line, " 773 ") {
 				continue
@@ -166,17 +168,8 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 					}
 				}
 			}
-			if mode == "watch-no-check" {
-				line = withdraw(line, "CHECK")
-			}
 			if mode == "features" {
 				line = withdraw(line, "SAFE_RETRY")
-			}
-			if mode == "reaction-feature-zero" {
-				line = withdraw(line, "REACTIONS")
-			}
-			if mode == "custom-reaction-feature-zero" {
-				line = withdraw(line, "CUSTOM_REACTIONS")
 			}
 			if mode == "watch-overlap" && strings.Contains(line, " 785 ") {
 				held = line
@@ -233,10 +226,17 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 	return l.Addr().String(), done, ready, replies
 }
 
-// withdraw takes feature away from a 005 line: the daemon's AIRC level grants
-// every version-only feature, so a lacking one is said with an explicit
-// FEATURE=0 token, which a client reads over the level; a token of its own
-// (SAFE_RETRY=1) is replaced the same way.
+// downgrade makes a 005 line that of a daemon below the gateway's level
+// (AIRC=0), which pkg/irc refuses at the dial.
+func downgrade(line string) string {
+	if !strings.Contains(line, " 005 ") {
+		return line
+	}
+	return strings.Replace(line, fmt.Sprintf(" AIRC=%d", protocol.Level), " AIRC=0", 1)
+}
+
+// withdraw takes a configuration token (SAFE_RETRY=1) away from a 005 line,
+// replacing it with FEATURE=0, which a client reads as withdrawn.
 func withdraw(line, feature string) string {
 	if !strings.Contains(line, " 005 ") {
 		return line

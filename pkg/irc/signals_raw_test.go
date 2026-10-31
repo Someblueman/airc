@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -92,7 +93,7 @@ func startSignalFixture(t *testing.T) *irc.Client {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				fmt.Fprint(conn, ":server 001 reader :ready\r\n")
+				fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :ready\r\n", protocol.Level)
 			}
 			if strings.HasPrefix(line, "OBSERVE ") {
 				fmt.Fprint(conn,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 	"net"
 	"strings"
@@ -43,7 +44,7 @@ func agentsFixture(t *testing.T, lines []string, continuous bool) (*irc.Client, 
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprint(conn, ":server 001 reader :welcome\r\n")
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 			}
 			if line != "AGENTS" {
 				continue

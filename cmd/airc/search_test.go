@@ -111,9 +111,9 @@ func TestSearchTermsTimeWindowsAndNewestFirst(t *testing.T) {
 	}
 }
 
-// searchOnlyDaemon advertises SEARCH without SEARCH_TERMS and records the
-// parameters of each SEARCH it is sent.
-func searchOnlyDaemon(t *testing.T) (string, <-chan []string) {
+// searchDaemon records the parameters of each SEARCH it is sent and answers
+// an empty page.
+func searchDaemon(t *testing.T) (string, <-chan []string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -136,7 +136,7 @@ func searchOnlyDaemon(t *testing.T) (string, <-chan []string) {
 					}
 					switch command.Name {
 					case "USER":
-						fmt.Fprint(conn, ":server 766 observer :Ephemeral session\r\n:server 005 observer MULTILINE=1 SEARCH=1 :supported\r\n:server 001 observer :Welcome\r\n")
+						fmt.Fprintf(conn, ":server 766 observer :Ephemeral session\r\n:server 005 observer AIRC=%d :supported\r\n:server 001 observer :Welcome\r\n", protocol.Level)
 					case "SEARCH":
 						searches <- command.Params
 						fmt.Fprintf(conn, ":server 761 observer %s ok :End of search\r\n", command.Params[0])
@@ -151,21 +151,20 @@ func searchOnlyDaemon(t *testing.T) (string, <-chan []string) {
 	return listener.Addr().String(), searches
 }
 
-func TestSearchOnADaemonWithoutTermsFallsBackToTheExactText(t *testing.T) {
+// A search is sent as terms unless --exact asks for the one substring.
+func TestSearchSendsTermsUnlessExact(t *testing.T) {
 	agentEnv(t)
-	address, searches := searchOnlyDaemon(t)
-	_, stderr, err := cli(t, address, "search", "two words", "--target", "#room")
-	if err != nil || !strings.Contains(stderr, "predates SEARCH_TERMS") {
-		t.Fatalf("multi-word search on an old daemon = %q %v", stderr, err)
+	address, searches := searchDaemon(t)
+	if _, stderr, err := cli(t, address, "search", "two words", "--target", "#room"); err != nil || stderr != "" {
+		t.Fatalf("multi-word search = %q %v", stderr, err)
+	}
+	if params := <-searches; len(params) != 5 || !strings.Contains(params[4], "terms") {
+		t.Fatalf("terms were not sent: %q", params)
+	}
+	if _, _, err := cli(t, address, "search", "two words", "--target", "#room", "--exact"); err != nil {
+		t.Fatal(err)
 	}
 	if params := <-searches; len(params) != 4 {
-		t.Fatalf("an old daemon was sent options: %q", params)
-	}
-	if _, stderr, err = cli(t, address, "search", "word", "--target", "#room"); err != nil || strings.Contains(stderr, "predates") {
-		t.Fatalf("one word means the same either way: %q %v", stderr, err)
-	}
-	<-searches
-	if _, _, err = cli(t, address, "search", "word", "--target", "#room", "--newest"); err == nil || !strings.Contains(err.Error(), "SEARCH_TERMS") {
-		t.Fatalf("--newest on an old daemon = %v", err)
+		t.Fatalf("--exact sent options: %q", params)
 	}
 }

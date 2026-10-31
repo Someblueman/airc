@@ -1,41 +1,53 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// A daemon from before AIRC levels advertised CHAT=1 for pins, polls and
-// room settings, so those still go through; statuses, resolutions and
-// charters came later with no token of their own, so the client refuses them
-// by name instead of letting the daemon answer "unknown CHAT action".
-func TestChatActionsAreGatedOnTheirOwnFeature(t *testing.T) {
+// Every command refuses a daemon below this client's level at the dial, with
+// one message and the non-retryable unsupported code, and uses a daemon above
+// it, since the client takes nothing it does not know.
+func TestCommandsRefuseADaemonBelowTheClientsLevel(t *testing.T) {
 	agentEnv(t)
 	id := strings.Repeat("a", 32)
-	// tokenDaemon serves one connection, so each command gets its own.
-	for want, args := range map[string][]string{
-		"STATUS_POSTS": {"status", "--nick", "alice", "--channel", "#room", "--task", "tests", "--state", "working"},
-		"RESOLVE":      {"resolve", id, "--nick", "alice"},
-		"CHARTER":      {"charter", "#room"},
-		"CHARTER ":     {"room", "#room", "--nick", "alice", "--charter", "", "--as-operator"},
+	refusal := (&irc.DaemonTooOldError{Need: protocol.Level}).Error()
+	for _, args := range [][]string{
+		{"status", "--nick", "alice", "--channel", "#room", "--task", "tests", "--state", "working"},
+		{"pins", "#room"},
+		{"history", "#room"},
+		{"send", "--nick", "alice", "--channel", "#room", "--message", "hi"},
+		{"check", "--nick", "alice"},
+		{"resolve", id, "--nick", "alice"},
 	} {
-		old, _ := tokenDaemon(t, "CHAT=1", false)
-		want = strings.TrimSpace(want)
-		if _, _, err := cli(t, old, args...); err == nil || err.Error() != lacksCapability(want) {
-			t.Errorf("CHAT=1 daemon, %v: %v, want %q", args, err, lacksCapability(want))
+		// olderDaemon serves one connection, so each command gets its own.
+		old, closed := olderDaemon(t)
+		_, stderr, err := cli(t, old, append(args, "--json")...)
+		if !errors.Is(err, irc.ErrDaemonTooOld) {
+			t.Errorf("%v against an older daemon: %v", args, err)
+			continue
+		}
+		var failure commandFailure
+		if json.Unmarshal([]byte(strings.TrimSpace(stderr)), &failure) != nil || failure.Code != "unsupported" || failure.Retryable || !strings.HasPrefix(failure.Message, refusal) || !strings.Contains(failure.Message, "never restart it yourself") {
+			t.Errorf("%v against an older daemon: %s", args, stderr)
+		}
+		select {
+		case <-closed:
+		case <-time.After(time.Second):
+			t.Errorf("%v left its connection to an older daemon open", args)
 		}
 	}
-	for _, args := range [][]string{{"pins", "#room"}, {"room", "#room"}, {"poll-results", id}} {
-		old, _ := tokenDaemon(t, "CHAT=1", false)
-		if _, _, err := cli(t, old, args...); err != nil {
-			t.Errorf("CHAT=1 daemon, %v: %v", args, err)
-		}
-	}
-	// With the level, nothing is gated on CHAT by proxy any more.
 	for _, args := range [][]string{{"status", "--channel", "#room"}, {"charter", "#room"}, {"pins", "#room"}} {
-		current, _ := tokenDaemon(t, "AIRC=1 HISTORY=8", false)
-		if _, _, err := cli(t, current, args...); err != nil {
-			t.Errorf("level-1 daemon, %v: %v", args, err)
+		newer, _ := tokenDaemon(t, fmt.Sprintf("AIRC=%d HISTORY=8", protocol.Level+1), false)
+		if _, _, err := cli(t, newer, args...); err != nil {
+			t.Errorf("a daemon at level %d, %v: %v", protocol.Level+1, args, err)
 		}
 	}
 }

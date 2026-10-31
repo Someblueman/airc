@@ -237,7 +237,7 @@ func TestLocalREPCarriers(t *testing.T) {
 							messages = append(messages, irc.MessageMetadata{ID: fmt.Sprintf("%032x", i+3), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: strings.Repeat("x", 4096)})
 						}
 					}
-					reads := localREPNativeHistory(t, f, plainRequest().Target.Name, messages, "CHECK=1")
+					reads := localREPNativeHistory(t, f, plainRequest().Target.Name, messages)
 					s := startLocalREP(t, c, f, make(chan struct{}, 1))
 					c.handshake(t, s.client)
 					response := s.send(t, f.body(t, core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: plainRequest().Target, Limit: len(messages)}))

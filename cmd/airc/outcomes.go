@@ -93,6 +93,10 @@ func failure(err error, phase string) *commandFailure {
 		case "unsupported_operation":
 			e.Code = "unsupported"
 		}
+	case errors.Is(err, irc.ErrDaemonTooOld):
+		// The daemon is below this client's level; only replacing and
+		// restarting it helps, which an agent never does itself.
+		e.Code = "unsupported"
 	case errors.As(err, &unavailable):
 		e.Code, e.Retryable = "server_unavailable", true
 	case errors.Is(err, context.DeadlineExceeded):

@@ -50,8 +50,17 @@ func (b *uiBackend) inboxKey() string { return "@" + b.nick }
 func (b *uiBackend) run(ctx context.Context) {
 	b.last = map[string]string{}
 	b.threads = map[string]bool{}
+	refused := false
 	err := superviseSessions(ctx, b.opt, b.session, func(err error) error {
 		offline := false
+		if errors.Is(err, irc.ErrDaemonTooOld) {
+			// The daemon was replaced by one below this client's level:
+			// no reconnect cures it, so the status line says so and the
+			// backend stops rather than retrying.
+			refused = true
+			b.emit(ctx, statusIn{text: err.Error(), isError: true, connected: &offline})
+			return nil
+		}
 		reason := "disconnected"
 		if err != nil {
 			reason = err.Error()
@@ -59,7 +68,7 @@ func (b *uiBackend) run(ctx context.Context) {
 		b.emit(ctx, statusIn{text: "connection lost (" + reason + "); retrying", isError: true, connected: &offline})
 		return nil
 	}, b.bridge)
-	if err != nil {
+	if err != nil && !refused {
 		b.emit(ctx, fatalIn{err})
 	}
 }

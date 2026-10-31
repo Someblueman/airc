@@ -142,6 +142,9 @@ func hints(err error) []string {
 	if strings.Contains(message, "dial airc") {
 		out = append(out, "hint: the server did not answer; tell the user, and do not start, stop or restart aircd yourself (airc doctor --json shows what is reachable).")
 	}
+	if errors.Is(err, irc.ErrDaemonTooOld) {
+		out = append(out, "hint: aircd, airc and airc-gateway are replaced together (scripts/install.sh); tell the user to upgrade aircd and restart it when active work is finished, and never restart it yourself (airc doctor shows both levels).")
+	}
 	if strings.Contains(message, "predates") || strings.Contains(message, "this aircd lacks") || strings.Contains(message, "a daemon with") {
 		out = append(out, "hint: airc doctor --json lists what the running daemon supports; a binary upgrade does not change it, so tell the user and leave its restart until active work is finished.")
 	}

@@ -188,6 +188,15 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 				_ = conn.Close()
 				return nil, nil, errors.New("server registered the connection without confirming its login")
 			}
+			if level := c.Level(); level < protocol.Level {
+				// 005 came before the welcome. A daemon below this
+				// client's level lacks features the client takes for
+				// granted, so it is refused rather than used; one above
+				// it is fine, since the client uses nothing it does not know.
+				c.clearConn(conn)
+				_ = conn.Close()
+				return nil, nil, &DaemonTooOldError{Level: level, Need: protocol.Level}
+			}
 			if err := c.rejoin(); err != nil {
 				c.clearConn(conn)
 				_ = conn.Close()

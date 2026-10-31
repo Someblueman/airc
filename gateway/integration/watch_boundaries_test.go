@@ -10,9 +10,9 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/store"
 )
 
-func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testing.T) {
+func TestWatchNoiseCannotExtendIdlePollAndAnOlderDaemonNeverSubscribes(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"watch-noise", "watch-no-check"} {
+	for _, mode := range []string{"watch-noise", "watch-level-zero"} {
 		t.Run(mode, func(t *testing.T) {
 			socket := fixture(t)
 			const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -37,9 +37,12 @@ func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testin
 			}
 			start := time.Now()
 			page, err := b.Read(t.Context(), grant, nil)
-			if mode == "watch-no-check" {
-				if !errors.Is(err, backend.ErrReadUnsupported) || commands.Load() != 0 || len(page.Messages) != 0 {
-					t.Fatal("disabled CHECK used observation/read command", page, err, commands.Load())
+			if mode == "watch-level-zero" {
+				// A daemon below the gateway's level is refused at the
+				// dial: unsupported, not an outage, and nothing is sent.
+				var refusal *backend.Refusal
+				if !errors.As(err, &refusal) || refusal.Failure.Code != core.UnsupportedOperation || refusal.Failure.Transient || commands.Load() != 0 || len(page.Messages) != 0 {
+					t.Fatal("an older daemon was used for observation/read", page, err, commands.Load())
 				}
 			} else if err != nil || time.Since(start) > 4*time.Second || page.Status != "ok" || page.Gap || len(page.Messages) != 0 || page.Cursor != "" || commands.Load() != 1 {
 				t.Fatal("noise extended or corrupted idle poll", page, err, time.Since(start), commands.Load())

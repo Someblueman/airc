@@ -17,7 +17,7 @@ func TestDirectoryNativeFeatureMalformedDuplicateAndJoinedTimeout(t *testing.T) 
 		mode   string
 		status int
 	}{
-		{"directory-feature-zero", 501}, {"directory-malformed", 503}, {"directory-duplicate", 503}, {"withhold-directory", 503},
+		{"level-zero", 501}, {"directory-malformed", 503}, {"directory-duplicate", 503}, {"withhold-directory", 503},
 	} {
 		t.Run(test.mode, func(t *testing.T) {
 			f := gatewayHTTPFixture(t, true, test.mode)

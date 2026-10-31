@@ -32,7 +32,7 @@ func chatPostWireFixture(t *testing.T, wire string) (*irc.Client, <-chan string,
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprint(conn, ":server 005 reader CHAT=1 :features\r\n:server 001 reader :welcome\r\n")
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 			}
 			if strings.Contains(line, `"action":"action"`) {
 				writes <- line

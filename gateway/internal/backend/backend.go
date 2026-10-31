@@ -300,6 +300,12 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 			o.Completion.Failure.UpstreamCode = 433
 			return o, nil
 		}
+		if errors.Is(err, irc.ErrDaemonTooOld) {
+			// AIRC is below this gateway's level: nothing it serves is
+			// supported until the daemon is replaced and restarted, which
+			// no retry does.
+			return failed(a, core.UnsupportedOperation, false, false), nil
+		}
 		return failed(a, core.UpstreamUnavailable, true, false), nil
 	}
 	closed := make(chan struct{})

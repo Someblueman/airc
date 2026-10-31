@@ -78,16 +78,6 @@ func TestConversationCommandsRejectInvalidInputsAndOlderDaemons(t *testing.T) {
 			t.Fatalf("invalid args %v: %v", args, err)
 		}
 	}
-	for _, args := range [][]string{
-		{"send", "--nick", "alice", "--reply-to", id, "--message", "text"},
-		{"check", "--nick", "alice", "--reply-to", id},
-		{"thread", id},
-	} {
-		address, _ := olderDaemon(t, false)
-		if _, _, err := cli(t, address, args...); err == nil || !strings.Contains(err.Error(), "REPLIES") {
-			t.Fatalf("older daemon for %v: %v", args, err)
-		}
-	}
 }
 
 func TestReplyCursorCacheStaysBoundedAndPreservesOtherCursors(t *testing.T) {

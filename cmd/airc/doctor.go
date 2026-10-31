@@ -23,11 +23,14 @@ type doctorReport struct {
 	Connected     bool   `json:"connected"`
 	Ephemeral     bool   `json:"ephemeral"`
 	// Level is the AIRC level the daemon advertised, which grants every
-	// feature of protocol.Features up to it; 0 for a daemon from before
-	// levels, which advertised one token per feature. Features are the 005
-	// tokens as sent: the level, the tokens with a value and those that
-	// depend on the daemon's configuration.
+	// feature of protocol.Features up to it, and ClientLevel the level this
+	// airc speaks: a client refuses a daemon below its own level (Error
+	// then says so, with Level still read from the daemon's 005), and uses
+	// one above it. Features are the 005 tokens as sent: the level, the
+	// tokens with a value and those that depend on the daemon's
+	// configuration.
 	Level        int                    `json:"level"`
+	ClientLevel  int                    `json:"client_level"`
 	Features     map[string]string      `json:"features,omitempty"`
 	Server       *protocol.ServerStatus `json:"server,omitempty"`
 	Process      processResources       `json:"process"`
@@ -58,7 +61,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	if usesTLS(*opt) {
 		config.Network = "tls"
 	}
-	report := doctorReport{Type: "doctor", ClientVersion: version.String(), Address: config.Network + "://" + config.Addr, Process: inspectResources(ctx, os.Getpid())}
+	report := doctorReport{Type: "doctor", ClientVersion: version.String(), ClientLevel: protocol.Level, Address: config.Network + "://" + config.Addr, Process: inspectResources(ctx, os.Getpid())}
 	if *pid > 0 {
 		resources := inspectResources(ctx, *pid)
 		report.AgentProcess = &resources
@@ -80,8 +83,14 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		query.nick = defaultQueryNick()
 	}
 	client, err := dialPrimary(ctx, query)
+	var tooOld *irc.DaemonTooOldError
+	var cause error // what Error reports, returned as it is so its code survives
 	if err != nil {
-		report.Error = explain(err)
+		report.Error, cause = explain(err), err
+		if errors.As(err, &tooOld) {
+			// The dial read the daemon's level before refusing it.
+			report.Level = tooOld.Level
+		}
 		if fb, ok := fallbackFor(query, err); ok {
 			if _, answered, err := fb.Carriers(ctx); err != nil {
 				report.Fallback = "no carrier answered: " + err.Error()
@@ -93,20 +102,13 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		defer client.Close()
 		defer closeOnCancel(ctx, client)()
 		report.Connected, report.Ephemeral, report.Features, report.Level = true, client.Ephemeral(), client.Features(), client.Level()
-		// The table says what this client knows how to use; the daemon's
-		// level and tokens say what it has. Configuration-dependent tokens
-		// (ADMIN, WAKE, ...) are not features a daemon lacks by age, so they
-		// are not warned about here.
-		if missing := protocol.Missing(report.Features, protocol.Level); len(missing) > 0 {
-			report.Warnings = append(report.Warnings, fmt.Sprintf("Daemon lacks %s (AIRC level %d, this airc expects %d); upgrade/restart it when active work is finished", strings.Join(missing, ", "), report.Level, protocol.Level))
-		}
 		if report.Level > protocol.Level {
 			report.Warnings = append(report.Warnings, fmt.Sprintf("Daemon speaks AIRC level %d, this airc level %d; replace airc to use the daemon's newer features", report.Level, protocol.Level))
 		}
 		if client.Supports("STATUS") {
 			report.Server, err = fetchStatus(ctx, client)
 			if err != nil {
-				report.Error = err.Error()
+				report.Error, cause = err.Error(), err
 			} else {
 				if report.Server.Version != report.ClientVersion && report.Server.Version != "devel" && report.ClientVersion != "devel" {
 					report.Warnings = append(report.Warnings, "Client and daemon builds differ; replacing a binary does not update the running daemon")
@@ -154,8 +156,8 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 			features = append(features, key+"="+value)
 		}
 		sort.Strings(features)
-		if report.Connected {
-			fmt.Fprintf(stdout, "Level: AIRC %d (this airc %d)\n", report.Level, protocol.Level)
+		if report.Connected || tooOld != nil {
+			fmt.Fprintf(stdout, "Level: AIRC %d (this airc %d)\n", report.Level, report.ClientLevel)
 		}
 		fmt.Fprintln(stdout, "Features:", strings.Join(features, " "))
 		if len(report.Carriers) > 0 {
@@ -181,10 +183,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 			fmt.Fprintln(stdout, "Warning:", warning)
 		}
 	}
-	if report.Error != "" {
-		return errors.New(report.Error)
-	}
-	return nil
+	return cause
 }
 
 func fetchStatus(ctx context.Context, client *irc.Client) (*protocol.ServerStatus, error) {

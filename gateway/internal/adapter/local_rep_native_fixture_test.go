@@ -15,6 +15,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -28,7 +29,7 @@ func newLocalREPFixture(t *testing.T, protocol string) plainFixture {
 // localREPNativeHistory serves the fixture's upstream: scripted native
 // protocol output exercises the real bounded SDK collector for the guest
 // author's ephemeral read session.
-func localREPNativeHistory(t *testing.T, f plainFixture, target string, messages []irc.MessageMetadata, features string) *atomic.Int32 {
+func localREPNativeHistory(t *testing.T, f plainFixture, target string, messages []irc.MessageMetadata) *atomic.Int32 {
 	t.Helper()
 	listener, err := net.Listen("unix", f.c.Upstream.Address)
 	if err != nil {
@@ -69,7 +70,7 @@ func localREPNativeHistory(t *testing.T, f plainFixture, target string, messages
 							t.Error("native read was not ephemeral")
 							return
 						}
-						_, _ = fmt.Fprintf(conn, ":server 766 author :ephemeral\r\n:server 005 author %s :features\r\n:server 001 author :welcome\r\n", features)
+						_, _ = fmt.Fprintf(conn, ":server 766 author :ephemeral\r\n:server 005 author AIRC=%d :features\r\n:server 001 author :welcome\r\n", protocol.Level)
 					case strings.HasPrefix(line, "CHECK :"):
 						reads.Add(1)
 						if len(messages) == 0 {

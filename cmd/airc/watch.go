@@ -412,6 +412,9 @@ func (w *watcher) outage(cause error) error {
 	if w.json {
 		return w.encoder.Encode(&irc.ConnectionEvent{Type: "connection", Connected: false, Error: reason})
 	}
+	if errors.Is(cause, irc.ErrDaemonTooOld) {
+		return w.write(w.view.info("connection lost ("+reason+")", false)) // not retried
+	}
 	return w.write(w.view.info("connection lost ("+reason+"); retrying", false))
 }
 
