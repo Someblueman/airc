@@ -181,6 +181,13 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 	result := protocol.AdminResult{Action: request.Action, Nick: request.Nick}
 	key := nickKey(request.Nick)
 	if a, exists := s.accounts[key]; exists {
+		// A room it orchestrates stops being orchestrated first, so the chat
+		// snapshot never names an orchestrator without an account.
+		if err := s.clearOrchestratorLocked(a.Nick); err != nil {
+			s.logger.Error("chat_write_failed", "error", err.Error())
+			s.numericLocked(client, "437", nil, "Unable to save chat state; no change applied")
+			return
+		}
 		next := make(map[string]account, len(s.accounts))
 		for k, value := range s.accounts {
 			if k != key {

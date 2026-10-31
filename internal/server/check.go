@@ -47,7 +47,8 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 	}
 	for _, room := range rooms {
 		s.checkEntryLocked(client, protocol.CheckEntry{Kind: "topic", Target: room, Topic: s.topics[room].Text})
-		s.checkEntryLocked(client, protocol.CheckEntry{Kind: "charter", Target: room, Charter: s.chat.Rooms[room].Charter})
+		settings := s.chat.Rooms[room]
+		s.checkEntryLocked(client, protocol.CheckEntry{Kind: "charter", Target: room, Charter: settings.Charter, Orchestrator: settings.Orchestrator, Goal: settings.Goal})
 		for _, pin := range s.chat.Pins[room] {
 			m := messageMetadata(s.annotated(pin))
 			s.checkEntryLocked(client, protocol.CheckEntry{Kind: "pin", Target: room, Message: &m})
