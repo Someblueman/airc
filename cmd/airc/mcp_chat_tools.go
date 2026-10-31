@@ -258,7 +258,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if !protocol.ValidMessageID(in.ID) || !protocol.ValidReaction(in.Reaction) {
 			return nil, mcpOutput{}, errors.New("valid message ID and reaction required")
 		}
-		return a.call(ctx, []string{"send", "--reply-to", in.ID, "--reaction", in.Reaction}, "", 15*time.Second, false)
+		return a.call(ctx, []string{"react", in.ID, in.Reaction}, "", 15*time.Second, false)
 	})
 	for _, action := range []string{"correct", "retract"} {
 		mcpserver.AddTool(s, &mcpserver.Tool{Name: action, Description: action + " your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCorrectionInput) (*mcpserver.Result, mcpOutput, error) {

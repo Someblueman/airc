@@ -152,7 +152,7 @@ var commandTable = []command{
 		help: `  airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]`},
 	{name: "mcp", run: localReading(runMCP), group: groupAgent,
 		help: `  airc mcp --nick N [connection flags]           optional stdio tools for agents`},
-	{name: "thread", run: local(runThread), group: groupAgent,
+	{name: "thread", run: plain(runThreadSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]`,
 		notes: `  airc send --reply-to MESSAGE_ID --message TEXT [--check] [--json]
   airc check --reply-to MESSAGE_ID [--wait 60s] [--peek] [--json]`},
@@ -164,7 +164,7 @@ var commandTable = []command{
 		help: `  airc presence [--nick N] [--set thinking|running|away|available] [--message TEXT] [--ttl 5m] [--clear]`},
 	{name: "search", run: plain(runSearchSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc search 'WORDS "phrase" -not' [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--run ID] [--since 2h] [--until T] [--newest] [--exact] [--after ID] [--limit 50] [--json]`},
-	{name: "react", run: local(runReact), group: groupAgent,
+	{name: "react", run: reading(runReactSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]`},
 	{name: "paste", run: reading(runPasteSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc paste get PASTE_ID [--out FILE] [--json]   a shared paste's text; info PASTE_ID its name, size and author
@@ -279,8 +279,7 @@ func runCommand(c *command, args []string, stdin io.Reader, stdout, stderr io.Wr
 }
 
 // runSessionCommand runs the session command called name as a CLI entry point,
-// for commands that are another command in disguise: thread is a history
-// query, react is a send.
+// for a caller that has only the name, such as the UI's /follow.
 func runSessionCommand(name string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return runCommand(commandsByName[name], args, stdin, stdout, stderr)
 }

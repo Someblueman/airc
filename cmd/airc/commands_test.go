@@ -51,9 +51,8 @@ func TestCommandTableIsConsistent(t *testing.T) {
 }
 
 // mcpToolAliases are the MCP tools whose name differs from the command they
-// run: thread is a history query (mcp_connections.go), react is a send with
-// --reaction and cancel is prepare --cancel (mcp_chat_tools.go).
-var mcpToolAliases = map[string]string{"thread": "history", "react": "send", "cancel": "prepare", "paste_get": "paste"}
+// run: cancel is prepare --cancel and paste_get is paste (mcp_chat_tools.go).
+var mcpToolAliases = map[string]string{"cancel": "prepare", "paste_get": "paste"}
 
 // mcpToolServing names the tool that runs a command of another name through
 // its step: pin runs pin, unpin and pins; poll runs poll, vote, poll-results
