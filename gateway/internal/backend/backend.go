@@ -320,9 +320,8 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	if !client.Ephemeral() {
 		return failed(a, core.UnsupportedOperation, false, false), nil
 	}
-	features := client.Features()
 	for _, feature := range m.features {
-		if features[feature] != "1" {
+		if !client.Supports(feature) {
 			return failed(a, core.UnsupportedOperation, false, false), nil
 		}
 	}
@@ -332,7 +331,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 }
 
 // mutation is how one durable operation runs against AIRC: whether a lookup
-// grant may ask about an earlier send, the features AIRC must advertise, and
+// grant may ask about an earlier send, the features AIRC must have (names
+// irc.Client.Supports answers for: protocol.Features rows, which the daemon's
+// AIRC level grants, and the tokens that depend on its configuration), and
 // the exchange that writes the command and recognises its acknowledgement.
 type mutation struct {
 	lookup   bool
@@ -348,15 +349,15 @@ var mutations = map[core.Operation]mutation{
 	core.ProfileUpdate:     {features: []string{"DIRECTORY"}, exchange: cardExchange},
 	core.PresenceSet:       {features: []string{"DIRECTORY"}, exchange: cardExchange},
 	core.TopicSet:          {exchange: topicExchange}, // TOPIC is a baseline command, like topic.read.
-	core.RoomUpdate:        {features: []string{"CHAT"}, exchange: roomExchange},
-	core.PinsAdd:           {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
-	core.PinsRemove:        {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
+	core.RoomUpdate:        {features: []string{"ROOM"}, exchange: roomExchange},
+	core.PinsAdd:           {features: []string{"PINS", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
+	core.PinsRemove:        {features: []string{"PINS", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
 	core.ActivitySet:       {features: []string{"CHAT"}, exchange: activityExchange},
 	core.ReplySignalSet:    {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
 	core.ReplySignalCancel: {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
-	core.PollCreate:        {features: []string{"CHAT"}, exchange: pollMutationExchange},
-	core.PollVote:          {features: []string{"CHAT"}, exchange: pollMutationExchange},
-	core.PollClose:         {features: []string{"CHAT"}, exchange: pollMutationExchange},
+	core.PollCreate:        {features: []string{"POLLS"}, exchange: pollMutationExchange},
+	core.PollVote:          {features: []string{"POLLS"}, exchange: pollMutationExchange},
+	core.PollClose:         {features: []string{"POLLS"}, exchange: pollMutationExchange},
 	core.MessageAction:     {features: []string{"CHAT"}, exchange: chatPostExchange},
 	core.MessageCorrect:    {features: []string{"CHAT"}, exchange: chatPostExchange},
 	core.MessageRetract:    {features: []string{"CHAT"}, exchange: chatPostExchange},

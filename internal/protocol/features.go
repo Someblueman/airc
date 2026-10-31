@@ -112,10 +112,11 @@ func LevelOf(features map[string]string) int {
 }
 
 // Supports reports whether a daemon whose 005 tokens are features has the
-// named feature: a literal token (KEY or KEY=VALUE, not KEY=0) always says
-// so; otherwise a feature in Features is had when its level is at most the
-// daemon's, or, from a daemon that sent no level, when the token that
-// implied it is there. Names are case-insensitive.
+// named feature. A literal token decides first: KEY or KEY=VALUE grants it
+// and KEY=0 withdraws it, even one the level would grant (how a proxy or a
+// test takes a feature away). Otherwise a feature in Features is had when
+// its level is at most the daemon's, or, from a daemon that sent no level,
+// when the token that implied it is there. Names are case-insensitive.
 func Supports(features map[string]string, name string) bool {
 	name = strings.ToUpper(name)
 	if value, ok := features[name]; ok {

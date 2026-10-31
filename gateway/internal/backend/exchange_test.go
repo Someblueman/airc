@@ -5,6 +5,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -51,12 +52,21 @@ func TestPinnedNumericClassification(t *testing.T) {
 	}
 }
 
-// TestMutationTable checks that every durable operation has an exchange and
-// that only operations with a native request-ID lookup accept lookup grants.
+// TestMutationTable checks that every durable operation has an exchange,
+// that only operations with a native request-ID lookup accept lookup grants,
+// and that every feature a mutation needs is one irc.Client.Supports can
+// answer for: a row of protocol.Features, or a token aircd sends only when
+// configured for it.
 func TestMutationTable(t *testing.T) {
+	configured := map[string]bool{"IDEMPOTENCY": true, "SAFE_RETRY": true}
 	for op, m := range mutations {
 		if !op.IsMutation() || m.exchange == nil || m.lookup != (op == core.Send || op == core.Reply) || m.lookup && !op.HasLookup() {
 			t.Fatalf("%s: %+v", op, m)
+		}
+		for _, feature := range m.features {
+			if _, known := protocol.Features[feature]; !known && !configured[feature] {
+				t.Errorf("%s needs %s, which no daemon advertises", op, feature)
+			}
 		}
 	}
 	if len(mutations) != 18 {
