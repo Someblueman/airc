@@ -136,7 +136,7 @@ func TestContextReadRetainedReplyReportsEvictedRoot(t *testing.T) {
 		next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == id })
 	}
 	r := core.Request{Version: 1, RequestID: "context-evicted-root", Operation: core.ContextRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: reply.ID, Limit: 50}
-	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
+	status, result := settledHTTPRead(t, f, r, evictionReadWithin)
 	if status != http.StatusOK || result.Context == nil {
 		t.Fatalf("retained reply context failed: status=%d result=%+v", status, result)
 	}
