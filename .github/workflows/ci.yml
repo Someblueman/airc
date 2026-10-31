@@ -1,5 +1,5 @@
 # Fast tier: runs on every pull request and every push to main. The gateway
-# module (gateway/) dominates the ~25 minute full suite, so its tests are
+# module (gateway/) dominates the full suite, so its tests are
 # left to nightly.yml; it is still built, vetted and staticchecked here, in
 # workspace mode from the root (`./...` names only the root module's
 # packages, so the gateway is named too). The product's tests run with the
