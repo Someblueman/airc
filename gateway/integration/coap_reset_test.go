@@ -11,11 +11,8 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/gateway/internal/core"
-	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
-	piondtls "github.com/pion/dtls/v3"
-	coapdtls "github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
@@ -35,14 +32,7 @@ type coapResetControl struct {
 	written  <-chan error
 }
 
-func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
-	f := newCoAPFixture(t)
-	watched, reset := dialCoAPResetMonitor(t, f.address, f.cert)
-	f.conn = watched
-	testCoAPResetReleasesLease(t, f, reset, "coaps-reset-watch")
-}
-
-// Plain UDP CoAP matches CoAPS: a Reset of a notification ends its watch.
+// A Reset of a notification ends its watch and releases its native lease.
 func TestCoAPUDPResetDropsNotificationAndReleasesLease(t *testing.T) {
 	p := newPacketFixture(t, "coap_udp", nil)
 	monitor, reset, done := coapResetMonitor()
@@ -81,13 +71,13 @@ func testCoAPResetReleasesLease(t *testing.T, f coapFixture, reset coapResetCont
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cancelCoAPSObservation(observation)
+	defer cancelCoAPObservation(observation)
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	select {
 	case mid := <-reset.captured:
 		t.Logf("captured AGD1 notification MID=%d", mid)
 	case <-ctx.Done():
-		t.Fatal("CoAPS monitor did not observe an AGD1 notification")
+		t.Fatal("CoAP monitor did not observe an AGD1 notification")
 	}
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	reset.release <- struct{}{}
@@ -97,7 +87,7 @@ func testCoAPResetReleasesLease(t *testing.T, f coapFixture, reset coapResetCont
 			t.Fatalf("RST write: %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("CoAPS monitor did not write RST")
+		t.Fatal("CoAP monitor did not write RST")
 	}
 	resetAt := time.Now()
 	if err := waitNativeObserverCountBefore(t, statusClient, baseline, 2*time.Second); err != nil {
@@ -106,42 +96,10 @@ func testCoAPResetReleasesLease(t *testing.T, f coapFixture, reset coapResetCont
 	if elapsed := time.Since(resetAt); elapsed >= 2*time.Second {
 		t.Fatalf("RST did not release native lease promptly: %s", elapsed)
 	}
-	result := coapRPC(t, f, core.Request{Version: 1, RequestID: "coaps-reset-followup", Operation: core.TopicRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}, true)
+	result := coapRPC(t, f, core.Request{Version: 1, RequestID: "coap-reset-followup", Operation: core.TopicRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}, true)
 	if result.Result == nil || result.Result.Topic == nil {
 		t.Fatalf("post-RST RPC result=%+v", result)
 	}
-}
-
-func dialCoAPResetMonitor(t *testing.T, address string, cert testtls.Certificate) (*coapClient.Conn, coapResetControl) {
-	t.Helper()
-	monitor, control, done := coapResetMonitor()
-	options := coapdtls.NewDTLSClientOptions(
-		piondtls.WithRootCAs(cert.Client.RootCAs),
-		piondtls.WithServerName("localhost"),
-		piondtls.WithSupportedProtocols(coapALPN),
-		piondtls.WithExtendedMasterSecret(piondtls.RequireExtendedMasterSecret),
-		piondtls.WithCipherSuites(piondtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, piondtls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384),
-		piondtls.WithMTU(1200),
-	)
-	// Blockwise rewrites outgoing Reset messages as fresh CON requests. Keep it
-	// disabled here so the captured MID is preserved on the wire.
-	conn, err := coapdtls.Dial(address, options, coapOptions.WithBlockwise(false, blockwise.SZX1024, 5*time.Second), coapRequestMonitorOption(func(config *coapClient.Config) { config.RequestMonitor = monitor }))
-	if err != nil {
-		t.Fatal(err)
-	}
-	dtlsConn, ok := conn.NetConn().(*piondtls.Conn)
-	if !ok {
-		_ = conn.Close()
-		t.Fatalf("CoAPS connection is %T, want *dtls.Conn", conn.NetConn())
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	if err := dtlsConn.HandshakeContext(ctx); err != nil {
-		_ = conn.Close()
-		t.Fatal(err)
-	}
-	joinCoAPResetMonitor(t, conn, done)
-	return conn, control
 }
 
 // coapResetMonitor is a client request monitor that drops the first AGD1

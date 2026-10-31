@@ -282,7 +282,7 @@ newer live messages.
 ## Following
 
 On a connection carrier that streams (framed TCP/TLS and Unix streams,
-WebSocket, WebTransport, raw QUIC, WebRTC, CoAP Observe), a `check` sent
+WebSocket, WebTransport, raw QUIC, CoAP Observe), a `check` sent
 with `"stream": true` is a *follow*: one stream that carries its rooms,
 threads and inbox for the gateway's follow lease (`limits.follow_seconds`,
 default five minutes) instead of a check every few seconds. The first

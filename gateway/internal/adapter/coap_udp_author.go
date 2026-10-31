@@ -36,7 +36,7 @@ const coapUDPIdle = 30 * time.Second
 // It demultiplexes the socket by source itself rather than through go-coap's
 // UDP server, which owns its per-source sessions and so offers no write hook.
 // Each source is a go-coap connection over a coapUDPSession, so the adapter
-// sees every datagram it writes, as it does on a DTLS association.
+// sees every datagram it writes.
 func ServeCoAPUDP(parent context.Context, conn *net.UDPConn, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
 	if conn == nil || !d.AuthorAccess() || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return store.ErrInvalid
@@ -181,7 +181,7 @@ func (s *coapUDPServer) newPeer(key coapUDPKey, raddr *net.UDPAddr) *coapUDPPeer
 }
 
 // checkExpirations drives each peer's retransmissions and its block, cache
-// and inactivity expiry, as ServeCoAP does for its association.
+// and inactivity expiry.
 func (s *coapUDPServer) checkExpirations(done chan<- struct{}) {
 	defer close(done)
 	ticker := time.NewTicker(250 * time.Millisecond)
@@ -218,7 +218,7 @@ func (s *coapUDPServer) closePeers() {
 
 // coapUDPSession is one source's association over the shared socket, in place
 // of go-coap's udp/server Session. Its WriteMessage is this carrier's write
-// hook, as coapSession.WriteMessage is for DTLS: it records a confirmable
+// hook: it records a confirmable
 // notification's message ID before the datagram leaves, so a Reset naming it
 // cancels the watch (coapLedger.check, coapState.reset), and reports each
 // message once written, which opens a watch's ready gate after its Observe 0

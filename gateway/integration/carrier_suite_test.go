@@ -67,9 +67,9 @@ type suiteCarrier struct {
 	results bool
 	reads   bool // history.read, search and context.read
 	tls     bool // the listener also serves TLS
-	// secure: the carrier is encrypted by definition (QUIC, DTLS, CoAPS,
-	// WebRTC). Every listener serves the suite's P-256 certificate and every
-	// client's suiteDial.tls trusts it.
+	// secure: the carrier is encrypted by definition (QUIC). Every listener
+	// serves the suite's P-256 certificate and every client's suiteDial.tls
+	// trusts it.
 	secure bool
 	// alpn is the protocol a TLS client negotiates ("" for none).
 	alpn string

@@ -25,7 +25,7 @@ type coapNotification struct {
 	hasObserve bool
 }
 
-func startCoAPSObserve(t *testing.T, f coapFixture, request core.Request) (coapClient.Observation, <-chan coapNotification, string) {
+func startCoAPObserve(t *testing.T, f coapFixture, request core.Request) (coapClient.Observation, <-chan coapNotification, string) {
 	t.Helper()
 	registration := coapObserveRegister(t, f, request, true)
 	token, err := hex.DecodeString(registration.ObservationToken)
@@ -59,31 +59,34 @@ func startCoAPSObserve(t *testing.T, f coapFixture, request core.Request) (coapC
 	}
 	t.Cleanup(func() {
 		cancel()
-		cancelCoAPSObservation(observation)
+		cancelCoAPObservation(observation)
 	})
 	return observation, notifications, registration.ObservationToken
 }
 
-func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
+// A quiet watch over CoAP Observe heartbeats an empty page whose cursor holds
+// its position, Observe 1 cancels it and releases its lease, and the heartbeat
+// cursor resumes the watch as a plain request.
+func TestCoAPUDPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	f := newCoAPFixture(t)
 	socket := f.config.Upstream.Address
-	seedPinMutationMessage(t, socket, "#gateway-fixture", "coaps-quiet-retained")
+	seedPinMutationMessage(t, socket, "#gateway-fixture", "coap-quiet-retained")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
-	request := core.Request{Version: 1, RequestID: "coaps-quiet-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	observation, notifications, _ := startCoAPSObserve(t, f, request)
+	request := core.Request{Version: 1, RequestID: "coap-quiet-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
+	observation, notifications, _ := startCoAPObserve(t, f, request)
 	ready := <-notifications
 	var marker struct {
 		Version       int    `json:"version"`
 		CorrelationID string `json:"correlation_id"`
 		Event         string `json:"event"`
 	}
-	if ready.format != message.AppJSON || !ready.hasObserve || ready.observe != 0 || json.Unmarshal(ready.body, &marker) != nil || marker.Version != 1 || marker.CorrelationID != "coaps-observe-"+request.RequestID || marker.Event != "ready" {
-		t.Fatalf("CoAPS observe ready=%q format=%v observe=%d marker=%+v", ready.body, ready.format, ready.observe, marker)
+	if ready.format != message.AppJSON || !ready.hasObserve || ready.observe != 0 || json.Unmarshal(ready.body, &marker) != nil || marker.Version != 1 || marker.CorrelationID != "coap-observe-"+request.RequestID || marker.Event != "ready" {
+		t.Fatalf("CoAP observe ready=%q format=%v observe=%d marker=%+v", ready.body, ready.format, ready.observe, marker)
 	}
 	first := coapObserveFrame(t, notifications, time.After(20*time.Second))
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil || first.Page.Cursor == "" {
-		t.Fatalf("CoAPS first watch=%+v", first)
+		t.Fatalf("CoAP first watch=%+v", first)
 	}
 	waitNativeObserverCount(t, statusClient, baseline+1)
 
@@ -98,75 +101,52 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	}
 	heartbeat := coapObserveFrame(t, notifications, time.After(20*time.Second))
 	if heartbeat.Event != "page" || heartbeat.Sequence != 2 || heartbeat.Page == nil || len(heartbeat.Page.Messages) != 0 || len(heartbeat.Page.Events) != 0 {
-		t.Fatalf("CoAPS quiet heartbeat=%+v", heartbeat)
+		t.Fatalf("CoAP quiet heartbeat=%+v", heartbeat)
 	}
 	position, err := codec.Open(scope, heartbeat.Page.Cursor)
 	if err != nil || position != initialPosition {
-		t.Fatalf("CoAPS heartbeat cursor=%q want=%q err=%v", position, initialPosition, err)
+		t.Fatalf("CoAP heartbeat cursor=%q want=%q err=%v", position, initialPosition, err)
 	}
 
 	cancelCtx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	if err := observation.Cancel(cancelCtx); err != nil {
 		cancel()
-		t.Fatalf("CoAPS Observe1 cancellation: %v", err)
+		t.Fatalf("CoAP Observe1 cancellation: %v", err)
 	}
 	cancel()
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
 
-	resume := coapRPC(t, f, core.Request{Version: 1, RequestID: "coaps-quiet-resume", Operation: core.Watch, Target: request.Target, Cursor: heartbeat.Page.Cursor, Limit: 8}, true)
+	resume := coapRPC(t, f, core.Request{Version: 1, RequestID: "coap-quiet-resume", Operation: core.Watch, Target: request.Target, Cursor: heartbeat.Page.Cursor, Limit: 8}, true)
 	if resume.Result == nil || resume.Result.Page == nil || resume.Result.Page.Cursor == "" || len(resume.Result.Page.Messages) != 0 {
-		t.Fatalf("CoAPS cursor resume=%+v", resume)
+		t.Fatalf("CoAP cursor resume=%+v", resume)
 	}
 	if !reflect.DeepEqual(resume.Result.Page.Messages, heartbeat.Page.Messages) {
-		t.Fatalf("CoAPS cursor resume changed retained messages=%+v heartbeat=%+v", resume.Result.Page.Messages, heartbeat.Page.Messages)
+		t.Fatalf("CoAP cursor resume changed retained messages=%+v heartbeat=%+v", resume.Result.Page.Messages, heartbeat.Page.Messages)
 	}
 }
 
+// coapObserveFrame reassembles the next notified frame from its AGD1
+// fragments.
 func coapObserveFrame(t *testing.T, notifications <-chan coapNotification, done <-chan time.Time) adapter.FrameResponse {
 	t.Helper()
-	var id [16]byte
-	var total, count int
-	var parts [][]byte
+	var assembly agd1Assembly
 	for {
 		select {
 		case notification := <-notifications:
 			if notification.format != message.AppOctets || !notification.hasObserve {
-				t.Fatalf("CoAPS notification format=%v observe=%v", notification.format, notification.hasObserve)
+				t.Fatalf("CoAP notification format=%v observe=%v", notification.format, notification.hasObserve)
 			}
-			fragmentID, fragmentTotal, index, fragmentCount, payload, err := webRTCResponseFragment(notification.body)
-			if err != nil {
+			body := assembly.add(t, notification.body)
+			if body == nil {
 				continue
-			}
-			if count == 0 {
-				id, total, count = fragmentID, fragmentTotal, fragmentCount
-				parts = make([][]byte, count)
-			} else if fragmentID != id || fragmentTotal != total || fragmentCount != count {
-				t.Fatalf("CoAPS notification assembly header mismatch")
-			}
-			if parts[index] == nil {
-				parts[index] = append([]byte(nil), payload...)
-			}
-			complete := true
-			for _, part := range parts {
-				if part == nil {
-					complete = false
-					break
-				}
-			}
-			if !complete {
-				continue
-			}
-			body := make([]byte, 0, total)
-			for _, part := range parts {
-				body = append(body, part...)
 			}
 			var response adapter.FrameResponse
-			if len(body) != total || json.Unmarshal(body, &response) != nil {
-				t.Fatalf("CoAPS notification frame bytes=%d want=%d", len(body), total)
+			if err := json.Unmarshal(body, &response); err != nil {
+				t.Fatalf("CoAP notification frame: %v", err)
 			}
 			return response
 		case <-done:
-			t.Fatal("CoAPS observe live notification timeout")
+			t.Fatal("CoAP observe live notification timeout")
 			return adapter.FrameResponse{}
 		}
 	}
