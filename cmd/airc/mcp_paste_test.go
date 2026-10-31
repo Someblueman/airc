@@ -13,9 +13,9 @@ import (
 )
 
 // The paste tool stores text and, with a target, posts the message that
-// shares it; paste_get reads it back whole; without a target nothing is
+// shares it; its get step reads it back whole; without a target nothing is
 // posted.
-func TestMCPPasteAndPasteGet(t *testing.T) {
+func TestMCPPasteAndGet(t *testing.T) {
 	address := chatServer(t, 64)
 	binary := nativeCLIBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -49,9 +49,9 @@ func TestMCPPasteAndPasteGet(t *testing.T) {
 	if paste["id"] != id || paste["name"] != "go-test.log" || paste["language"] != "text" || !strings.HasPrefix(shared[0]["message"].(string), "the failing run\npaste:"+id) {
 		t.Fatalf("shared %+v", shared[0])
 	}
-	got := rows("paste_get", map[string]any{"id": id})
+	got := rows("paste", map[string]any{"step": "get", "id": id})
 	if len(got) != 1 || got[0]["content"] != content || got[0]["from"] != "builder" || got[0]["lines"] != float64(400) {
-		t.Fatalf("paste_get %+v", got)
+		t.Fatalf("get %+v", got)
 	}
 	stored := rows("paste", map[string]any{"content": "# notes\n", "name": "notes.md"})
 	if len(stored) != 1 || stored[0]["type"] != "paste" || stored[0]["id"] != protocol.PasteID([]byte("# notes\n")) || stored[0]["language"] != "text" {
@@ -69,7 +69,7 @@ func TestMCPPasteAndPasteGet(t *testing.T) {
 	if r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "paste", Arguments: map[string]any{"content": "x", "name": "x", "message": "caption without a target"}}); err == nil && !r.IsError {
 		t.Fatalf("a caption without a target was accepted: %+v", r)
 	}
-	if r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "paste_get", Arguments: map[string]any{"id": "nope"}}); err == nil && !r.IsError {
+	if r, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "paste", Arguments: map[string]any{"step": "get", "id": "nope"}}); err == nil && !r.IsError {
 		t.Fatalf("a bad id was accepted: %+v", r)
 	}
 	seen := checkMessages(t, mustCLI(t, address, "check", "--nick", "reviewer", "--channel", "room", "--json"))

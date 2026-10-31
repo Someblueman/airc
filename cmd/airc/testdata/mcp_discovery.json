@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID; ask posts a question and waits for its first textual reply in one call.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration; without a task it lists a room's latest status per nickname. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nRooms: pin shares a message as a room pin, takes it down (unpin) or lists a room's pins; poll opens a poll with numbered options, votes, reads results or closes it. A tally is advisory; a decision goes through decide.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID; ask posts a question and waits for its first textual reply in one call.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration; without a task it lists a room's latest status per nickname. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nRooms: pin shares a message as a room pin, takes it down (unpin) or lists a room's pins; poll opens a poll with numbered options, votes, reads results or closes it. A tally is advisory; a decision goes through decide.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste with step get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -15,6 +15,51 @@
  },
  "tools/list": {
   "tools": [
+   {
+    "description": "Correct or retract your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "id": {
+       "description": "ID of your own retained message",
+       "type": "string"
+      },
+      "message": {
+       "description": "Correct: the replacement text, required; retract: an optional reason",
+       "type": "string"
+      },
+      "step": {
+       "description": "correct (the default) or retract",
+       "type": "string"
+      }
+     },
+     "required": [
+      "id"
+     ],
+     "type": "object"
+    },
+    "name": "amend",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
    {
     "description": "Post a question to a room or a nickname through the normal send path and wait, in this one call, for the first textual reply from someone else (reactions and signals do not count). Returns the question's receipt, then the reply row, or a wait_expired status; the reply is marked read as a reply check marks it. For hosts that cannot run a check in the background; keep wait_seconds below the host's tool-call timeout, since a killed call reports nothing and the question stays posted.",
     "inputSchema": {
@@ -47,43 +92,6 @@
      "type": "object"
     },
     "name": "ask",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
-    "description": "Cancel your reply-coming signal for this message; does not cancel anyone's work.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "Message ID of the conversation",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "cancel",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -243,47 +251,6 @@
      "type": "object"
     },
     "name": "context",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
-    "description": "correct your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "ID of your own retained message",
-       "type": "string"
-      },
-      "message": {
-       "description": "Replacement text for correct, or a reason for retract",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "correct",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -504,12 +471,16 @@
     }
    },
    {
-    "description": "Include this conversation in this identity's future checks; returns followed thread IDs.",
+    "description": "Include a conversation in this identity's future checks, or with step unfollow remove one; returns the followed thread IDs. Server history is unchanged.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "id": {
-       "description": "Message ID of the conversation",
+       "description": "Message ID of the conversation; unfollow takes the canonical root ID a follow returned",
+       "type": "string"
+      },
+      "step": {
+       "description": "follow (the default) or unfollow",
        "type": "string"
       }
      },
@@ -696,7 +667,7 @@
     }
    },
    {
-    "description": "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id. Step list reads your own pastes' rows, newest first; step info describes one by id without its content.",
+    "description": "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id: one row with its name, language, size, lines, author and the whole content; step info describes one without its content; step list reads your own pastes' rows, newest first.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -709,7 +680,7 @@
        "type": "string"
       },
       "id": {
-       "description": "Info: the paste's ID",
+       "description": "Get and info: the paste's ID, from a message row's paste field or a paste result",
        "type": "string"
       },
       "language": {
@@ -729,7 +700,7 @@
        "type": "string"
       },
       "step": {
-       "description": "put (the default) stores content; list reads your own pastes; info describes one by id",
+       "description": "put (the default) stores content; get reads one by id, content included; info describes one by id; list reads your own pastes",
        "type": "string"
       },
       "to": {
@@ -740,46 +711,6 @@
      "type": "object"
     },
     "name": "paste",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
-    "annotations": {
-     "readOnlyHint": true
-    },
-    "description": "Read a paste by id: one row with its name, language, size, lines, author and the whole content.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "The paste's ID, from a message row's paste field or a paste result",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "paste_get",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -908,21 +839,25 @@
     }
    },
    {
-    "description": "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock.",
+    "description": "Announce a forthcoming reply to a message with an expiry; step cancel withdraws your signal, step waiting reads the message's unexpired signals. A signal is conversational: not an ownership claim, a lock or approval.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "id": {
-       "description": "ID of the message you will reply to",
+       "description": "ID of the message to reply to",
        "type": "string"
       },
       "message": {
-       "description": "Optional short note shown with the signal",
+       "description": "Prepare: an optional short note shown with the signal",
        "type": "string"
       },
       "seconds": {
-       "description": "Reply expected within 1-900 seconds; default 120",
+       "description": "Prepare: reply expected within 1-900 seconds; default 120",
        "type": "integer"
+      },
+      "step": {
+       "description": "prepare (the default), cancel or waiting",
+       "type": "string"
       }
      },
      "required": [
@@ -1129,47 +1064,6 @@
      "type": "object"
     },
     "name": "resolve",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
-    "description": "retract your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "ID of your own retained message",
-       "type": "string"
-      },
-      "message": {
-       "description": "Replacement text for correct, or a reason for retract",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "retract",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1432,43 +1326,6 @@
     }
    },
    {
-    "description": "Remove a canonical thread ID from this identity's checks; leaves server history unchanged.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "Message ID of the conversation",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "unfollow",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
     "annotations": {
      "readOnlyHint": true
     },
@@ -1494,46 +1351,6 @@
      "type": "object"
     },
     "name": "unread",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
-    "annotations": {
-     "readOnlyHint": true
-    },
-    "description": "Read unexpired reply-coming signals. A promise, silence or presence is not approval.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "id": {
-       "description": "Message ID of the conversation",
-       "type": "string"
-      }
-     },
-     "required": [
-      "id"
-     ],
-     "type": "object"
-    },
-    "name": "waiting",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {

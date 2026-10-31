@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -28,17 +29,20 @@ type mcpReactionInput struct {
 	ID       string `json:"id" jsonschema:"ID of the message to react to"`
 	Reaction string `json:"reaction" jsonschema:"seen, checking, agree, disagree or an emoji"`
 }
-type mcpCorrectionInput struct {
+type mcpAmendInput struct {
+	Step    string `json:"step,omitempty" jsonschema:"correct (the default) or retract"`
 	ID      string `json:"id" jsonschema:"ID of your own retained message"`
-	Message string `json:"message,omitempty" jsonschema:"Replacement text for correct, or a reason for retract"`
+	Message string `json:"message,omitempty" jsonschema:"Correct: the replacement text, required; retract: an optional reason"`
 }
-type mcpIDInput struct {
-	ID string `json:"id" jsonschema:"Message ID of the conversation"`
+type mcpFollowInput struct {
+	Step string `json:"step,omitempty" jsonschema:"follow (the default) or unfollow"`
+	ID   string `json:"id" jsonschema:"Message ID of the conversation; unfollow takes the canonical root ID a follow returned"`
 }
 type mcpPrepareInput struct {
-	ID      string `json:"id" jsonschema:"ID of the message you will reply to"`
-	Seconds int    `json:"seconds,omitempty" jsonschema:"Reply expected within 1-900 seconds; default 120"`
-	Message string `json:"message,omitempty" jsonschema:"Optional short note shown with the signal"`
+	Step    string `json:"step,omitempty" jsonschema:"prepare (the default), cancel or waiting"`
+	ID      string `json:"id" jsonschema:"ID of the message to reply to"`
+	Seconds int    `json:"seconds,omitempty" jsonschema:"Prepare: reply expected within 1-900 seconds; default 120"`
+	Message string `json:"message,omitempty" jsonschema:"Prepare: an optional short note shown with the signal"`
 }
 
 type mcpUnreadInput struct {
@@ -72,25 +76,22 @@ type mcpProfileInput struct {
 type mcpNoInput struct{}
 
 type mcpPasteInput struct {
-	Step     string `json:"step,omitempty" jsonschema:"put (the default) stores content; list reads your own pastes; info describes one by id"`
+	Step     string `json:"step,omitempty" jsonschema:"put (the default) stores content; get reads one by id, content included; info describes one by id; list reads your own pastes"`
 	Content  string `json:"content,omitempty" jsonschema:"Put: the text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
 	Name     string `json:"name,omitempty" jsonschema:"Put: a file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
 	Language string `json:"language,omitempty" jsonschema:"Put: its language, such as go, diff or text"`
 	Channel  string `json:"channel,omitempty" jsonschema:"Put: post a message sharing the paste in this room"`
 	To       string `json:"to,omitempty" jsonschema:"Put: post a message sharing the paste to this nickname"`
 	Message  string `json:"message,omitempty" jsonschema:"Put: the caption of that message, such as what the reader should look at"`
-	ID       string `json:"id,omitempty" jsonschema:"Info: the paste's ID"`
+	ID       string `json:"id,omitempty" jsonschema:"Get and info: the paste's ID, from a message row's paste field or a paste result"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"List: newest pastes to list, 1-1000; default 200"`
-}
-type mcpPasteGetInput struct {
-	ID string `json:"id" jsonschema:"The paste's ID, from a message row's paste field or a paste result"`
 }
 
 // addPasteTools registers paste, which stores text larger than a message and
-// may post a message sharing it, lists your pastes or describes one, and
-// paste_get, which reads one back.
+// may post a message sharing it, reads one back, describes one or lists your
+// pastes.
 func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id. Step list reads your own pastes' rows, newest first; step info describes one by id without its content."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id: one row with its name, language, size, lines, author and the whole content; step info describes one without its content; step list reads your own pastes' rows, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
 		putOnly := in.Content != "" || in.Name != "" || in.Language != "" || in.Channel != "" || in.To != "" || in.Message != ""
 		switch in.Step {
 		case "list":
@@ -102,20 +103,24 @@ func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
 				args = append(args, "--limit", strconv.Itoa(in.Limit))
 			}
 			return a.call(ctx, args, "", 15*time.Second, false)
-		case "info":
+		case "get", "info":
 			if !protocol.ValidMessageID(in.ID) {
 				return nil, mcpOutput{}, errors.New("valid paste ID required")
 			}
 			if putOnly || in.Limit != 0 {
-				return nil, mcpOutput{}, errors.New("info takes only id")
+				return nil, mcpOutput{}, errors.New(in.Step + " takes only id")
 			}
-			return a.call(ctx, []string{"paste", "info", in.ID}, "", 15*time.Second, false)
+			timeout := 15 * time.Second
+			if in.Step == "get" {
+				timeout = 30 * time.Second
+			}
+			return a.call(ctx, []string{"paste", in.Step, in.ID}, "", timeout, false)
 		case "", "put":
 		default:
-			return nil, mcpOutput{}, errors.New("step is put, list or info")
+			return nil, mcpOutput{}, errors.New("step is put, get, info or list")
 		}
 		if in.ID != "" || in.Limit != 0 {
-			return nil, mcpOutput{}, errors.New("id goes with info and limit with list")
+			return nil, mcpOutput{}, errors.New("id goes with get or info and limit with list")
 		}
 		if in.Content == "" || len(in.Content) > maxPasteRead-1 || in.Name == "" {
 			return nil, mcpOutput{}, errors.New("content up to the daemon's paste limit and a name are required")
@@ -138,12 +143,6 @@ func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
 			args = append(args, "--language", in.Language)
 		}
 		return a.call(ctx, args, in.Content, 30*time.Second, false)
-	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste_get", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a paste by id: one row with its name, language, size, lines, author and the whole content."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteGetInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
-			return nil, mcpOutput{}, errors.New("valid paste ID required")
-		}
-		return a.call(ctx, []string{"paste", "get", in.ID}, "", 30*time.Second, false)
 	})
 }
 
@@ -260,36 +259,29 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, []string{"react", in.ID, in.Reaction}, "", 15*time.Second, false)
 	})
-	for _, action := range []string{"correct", "retract"} {
-		mcpserver.AddTool(s, &mcpserver.Tool{Name: action, Description: action + " your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCorrectionInput) (*mcpserver.Result, mcpOutput, error) {
-			if !protocol.ValidMessageID(in.ID) {
-				return nil, mcpOutput{}, errors.New("valid message ID required")
-			}
-			return a.call(ctx, []string{action, in.ID, "--message", in.Message}, "", 15*time.Second, false)
-		})
-	}
-	for _, action := range []string{"follow", "unfollow", "waiting", "cancel"} {
-		description := map[string]string{
-			"follow":   "Include this conversation in this identity's future checks; returns followed thread IDs.",
-			"unfollow": "Remove a canonical thread ID from this identity's checks; leaves server history unchanged.",
-			"waiting":  "Read unexpired reply-coming signals. A promise, silence or presence is not approval.",
-			"cancel":   "Cancel your reply-coming signal for this message; does not cancel anyone's work.",
-		}[action]
-		tool := &mcpserver.Tool{Name: action, Description: description}
-		if action == "waiting" {
-			tool.Annotations = &mcpserver.Annotations{ReadOnlyHint: true}
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "amend", Description: "Correct or retract your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcpserver.Call, in mcpAmendInput) (*mcpserver.Result, mcpOutput, error) {
+		step := cmp.Or(in.Step, "correct")
+		if step != "correct" && step != "retract" {
+			return nil, mcpOutput{}, errors.New("step is correct or retract")
 		}
-		mcpserver.AddTool(s, tool, func(ctx context.Context, _ *mcpserver.Call, in mcpIDInput) (*mcpserver.Result, mcpOutput, error) {
-			if !protocol.ValidMessageID(in.ID) {
-				return nil, mcpOutput{}, errors.New("valid message ID required")
-			}
-			args := []string{action, in.ID}
-			if action == "cancel" {
-				args = []string{"prepare", in.ID, "--cancel"}
-			}
-			return a.call(ctx, args, "", 15*time.Second, false)
-		})
-	}
+		if !protocol.ValidMessageID(in.ID) {
+			return nil, mcpOutput{}, errors.New("valid message ID required")
+		}
+		if step == "correct" && strings.TrimSpace(in.Message) == "" {
+			return nil, mcpOutput{}, errors.New("a correction needs its replacement message")
+		}
+		return a.call(ctx, []string{step, in.ID, "--message", in.Message}, "", 15*time.Second, false)
+	})
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "follow", Description: "Include a conversation in this identity's future checks, or with step unfollow remove one; returns the followed thread IDs. Server history is unchanged."}, func(ctx context.Context, _ *mcpserver.Call, in mcpFollowInput) (*mcpserver.Result, mcpOutput, error) {
+		step := cmp.Or(in.Step, "follow")
+		if step != "follow" && step != "unfollow" {
+			return nil, mcpOutput{}, errors.New("step is follow or unfollow")
+		}
+		if !protocol.ValidMessageID(in.ID) {
+			return nil, mcpOutput{}, errors.New("valid message ID required")
+		}
+		return a.call(ctx, []string{step, in.ID}, "", 15*time.Second, false)
+	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in handoffInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
@@ -320,9 +312,26 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in resolveInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) || in.Seconds < 0 || in.Seconds > 900 {
-			return nil, mcpOutput{}, errors.New("valid ID and seconds 1-900 required")
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply to a message with an expiry; step cancel withdraws your signal, step waiting reads the message's unexpired signals. A signal is conversational: not an ownership claim, a lock or approval."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
+		if !protocol.ValidMessageID(in.ID) {
+			return nil, mcpOutput{}, errors.New("valid message ID required")
+		}
+		switch in.Step {
+		case "cancel", "waiting":
+			if in.Seconds != 0 || in.Message != "" {
+				return nil, mcpOutput{}, errors.New(in.Step + " takes only id")
+			}
+			args := []string{"waiting", in.ID}
+			if in.Step == "cancel" {
+				args = []string{"prepare", in.ID, "--cancel"}
+			}
+			return a.call(ctx, args, "", 15*time.Second, false)
+		case "", "prepare":
+		default:
+			return nil, mcpOutput{}, errors.New("step is prepare, cancel or waiting")
+		}
+		if in.Seconds < 0 || in.Seconds > 900 {
+			return nil, mcpOutput{}, errors.New("seconds 1-900 required")
 		}
 		if in.Seconds == 0 {
 			in.Seconds = 120
