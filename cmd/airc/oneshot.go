@@ -178,13 +178,17 @@ func lacksCapability(capability string) string {
 }
 
 // addressedTo reports whether a message needs nick's attention: it is a direct
-// message to nick, or a channel message that tags or addresses it, or a
-// handoff or decision step for it.
-func addressedTo(nick, target, body, forNick string) bool {
+// message to nick, or a channel message that tags or addresses it, a handoff
+// or decision step for it, or one whose group tag (@humans, @agents, @here)
+// the server resolved to it when it was posted (groupMentions, the message's
+// group_mentions metadata). A guest is in no group but @here, and the server
+// alone knows the room's members and the directory's kinds at post time, so
+// the CLI reads its answer rather than matching the group words itself.
+func addressedTo(nick, target, body, forNick string, groupMentions []string) bool {
 	if !protocol.IsChannel(target) {
 		return strings.EqualFold(target, nick)
 	}
-	return strings.EqualFold(forNick, nick) || protocol.MentionsNick(body, nick)
+	return protocol.MentionedBy(body, forNick, groupMentions, nick)
 }
 
 func queryIdentity(opt *options) error {

@@ -136,7 +136,7 @@ func (c *checker) noteLive(event irc.Event) {
 	if c.settings.replyTo != "" && (message.ReplyTo != c.settings.replyTo || message.Reaction != "") {
 		return
 	}
-	if !c.settings.mentions || addressedTo(c.nick, message.Target, message.Message, message.For) {
+	if !c.settings.mentions || addressedTo(c.nick, message.Target, message.Message, message.For, message.GroupMentions) {
 		c.sawLive = true
 	}
 }

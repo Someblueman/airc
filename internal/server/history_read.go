@@ -84,7 +84,7 @@ func (s *Server) readAfterLocked(target, after string, limit int, accept func(*e
 func archivedEntry(m Message) *entry {
 	e := &entry{Message: m}
 	if protocol.IsChannel(m.Target) {
-		e.mentions = protocol.MessageMentions(m.Body, m.For)
+		e.mentions = protocol.MessageMentions(m.Body, m.For, m.GroupMentions)
 	}
 	return e
 }

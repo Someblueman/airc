@@ -363,8 +363,15 @@ func eventFromCommand(command protocol.Command) Event {
 // addresses with a leading "nick:".
 func Mentions(text string) []string { return protocol.Mentions(text) }
 
-// Mentions reports whether the message tags or addresses nick.
-func (e *MessageEvent) Mentions(nick string) bool { return protocol.MentionsNick(e.Message, nick) }
+// Mentions reports whether the message tags or addresses nick, or one of its
+// group tags (@humans, @agents, @here) resolved to nick when the server
+// stored it (GroupMentions).
+func (e *MessageEvent) Mentions(nick string) bool {
+	return protocol.MentionedBy(e.Message, "", e.GroupMentions, nick)
+}
 
-// Mentions reports whether the message tags or addresses nick.
-func (e *HistoryEvent) Mentions(nick string) bool { return protocol.MentionsNick(e.Message, nick) }
+// Mentions reports whether the message tags or addresses nick, or one of its
+// group tags resolved to nick when the server stored it (GroupMentions).
+func (e *HistoryEvent) Mentions(nick string) bool {
+	return protocol.MentionedBy(e.Message, "", e.GroupMentions, nick)
+}

@@ -100,7 +100,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	slices.SortStableFunc(messages, compareHistory)
 	emitted := map[string]bool{}
 	for _, message := range messages {
-		entry := checkMessage{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message, message.For)}
+		entry := checkMessage{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message, message.For, message.GroupMentions)}
 		if c.settings.compact {
 			entry = entry.compacted()
 		}

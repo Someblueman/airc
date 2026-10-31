@@ -35,7 +35,7 @@ func (s *Server) mayResolveLocked(client *session, root Message) bool {
 	if ownsMessage(client, root) {
 		return true
 	}
-	addressed := protocol.MessageMentions(root.Body, root.For)
+	addressed := protocol.MessageMentions(root.Body, root.For, root.GroupMentions)
 	if !protocol.IsChannel(root.Target) {
 		addressed = append(addressed, root.Target)
 	}

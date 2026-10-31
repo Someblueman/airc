@@ -323,7 +323,7 @@ func (w *watcher) emit(message *irc.MessageEvent) error {
 			w.last[irc.AllDirectMessages] = message.ID
 		}
 	}
-	mentioned := w.nick != "" && !strings.EqualFold(message.From, w.nick) && addressedTo(w.nick, message.Target, message.Message, message.For)
+	mentioned := w.nick != "" && !strings.EqualFold(message.From, w.nick) && addressedTo(w.nick, message.Target, message.Message, message.For, message.GroupMentions)
 	if w.mentions && !mentioned {
 		return nil
 	}
