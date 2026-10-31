@@ -85,8 +85,8 @@ func (c *Client) restoreMonitor(nicks []string) error {
 // BotReply marks automated output while retaining reply and thread context.
 // The marker is descriptive, never an authorization claim.
 func (c *Client) BotReply(parent, text string) error {
-	if !c.Supports("BOT_REPLIES") || !protocol.ValidMessageID(parent) {
-		return errors.New("bot replies require BOT_REPLIES and a valid parent")
+	if !protocol.ValidMessageID(parent) {
+		return errors.New("bot replies require a valid parent")
 	}
 	text = NormalizeMessage(text)
 	if len(text) > 4096 || !utf8.ValidString(text) || strings.ContainsRune(text, 0) {

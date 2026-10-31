@@ -10,7 +10,7 @@ import (
 )
 
 // AllDirectMessages selects every retained/live direct message for human
-// oversight. Check Supports("DM_AUDIT") before using it with older daemons.
+// oversight (the DM_AUDIT feature).
 const AllDirectMessages = protocol.AllDirectMessages
 
 func (c *Client) Join(channel string) error {
@@ -51,13 +51,10 @@ func (c *Client) Part(channel, reason string) error {
 func (c *Client) Send(target, message string) error { return c.sendText("PRIVMSG", target, message) }
 
 // Reply sends to the parent's room, or to the other participant in a DM.
-// The parent must still be retained by a server advertising REPLIES.
+// The parent must still be retained.
 func (c *Client) Reply(parent, message string) error {
 	if !protocol.ValidMessageID(parent) {
 		return errors.New("reply requires a 32-character message ID")
-	}
-	if !c.Supports("REPLIES") {
-		return errors.New("replies need a daemon with REPLIES; upgrade/restart when active work is finished")
 	}
 	return c.sendText("REPLY", parent, message)
 }
@@ -89,9 +86,8 @@ func (c *Client) ReplyWithID(parent, message, requestID string) error {
 }
 
 // SendOptions are the tags a send or reply may carry: a RequestID for safe
-// retries (IDEMPOTENCY) and a Run label (RUN), 1-64 letters, digits, '.',
-// '_' or '-', kept in the message's metadata and searchable. A daemon
-// without RUN ignores the label.
+// retries (IDEMPOTENCY) and a Run label, 1-64 letters, digits, '.', '_' or
+// '-', kept in the message's metadata and searchable.
 type SendOptions struct {
 	RequestID string
 	Run       string
@@ -107,8 +103,8 @@ func (c *Client) SendWith(target, message string, options SendOptions) error {
 
 // ReplyWith is Reply with options.
 func (c *Client) ReplyWith(parent, message string, options SendOptions) error {
-	if !c.Supports("REPLIES") || !protocol.ValidMessageID(parent) {
-		return errors.New("reply needs REPLIES and a valid message ID")
+	if !protocol.ValidMessageID(parent) {
+		return errors.New("reply needs a valid message ID")
 	}
 	return c.sendTagged("REPLY", parent, message, options)
 }
@@ -140,8 +136,8 @@ func (c *Client) sendTagged(command, target, message string, options SendOptions
 		tags += protocol.RunTag + "=" + options.Run + " "
 	}
 	if pasteID != "" {
-		if !c.Supports("PASTE") || !protocol.ValidMessageID(pasteID) {
-			return errors.New("sharing a paste requires PASTE and the paste's ID")
+		if !protocol.ValidMessageID(pasteID) {
+			return errors.New("sharing a paste requires the paste's ID")
 		}
 		if tags == "" {
 			tags = "@"
@@ -166,9 +162,6 @@ func (c *Client) sendTagged(command, target, message string, options SendOptions
 			return err
 		}
 		return c.writeLine(tags + line)
-	}
-	if !c.Multiline() {
-		return errors.New("this server does not support multi-line messages; send a single line or upgrade aircd")
 	}
 	line, err := commandLine(command, []string{target}, protocol.Preview(message))
 	if err != nil {
@@ -210,19 +203,18 @@ func (c *Client) History(channel string, limit int) error {
 // message with ID after, oldest first. An empty after behaves like History. The
 // reply ends with an EndOfHistoryEvent whose Status says whether more remain or
 // the cursor has expired. target may be a nickname to read direct messages
-// addressed to it. Older servers ignore the cursor, so check the status.
+// addressed to it.
 func (c *Client) HistoryAfter(target, after string, limit int) error {
 	return c.HistoryWith(target, after, limit, HistoryOptions{})
 }
 
-// HistoryOptions narrow a history read on a daemon with RUN: Run keeps only
-// the messages posted under that run label.
+// HistoryOptions narrow a history read: Run keeps only the messages posted
+// under that run label.
 type HistoryOptions struct {
 	Run string
 }
 
-// HistoryWith is HistoryAfter with options. Options other than the zero
-// value need a daemon with RUN.
+// HistoryWith is HistoryAfter with options.
 func (c *Client) HistoryWith(target, after string, limit int, options HistoryOptions) error {
 	if options.Run == "" {
 		if after == "" {
@@ -232,9 +224,6 @@ func (c *Client) HistoryWith(target, after string, limit int, options HistoryOpt
 			limit = 50
 		}
 		return c.command("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
-	}
-	if !c.Supports("RUN") {
-		return errors.New("run filters need a daemon with RUN; upgrade/restart when active work is finished")
 	}
 	if !protocol.ValidRunID(options.Run) {
 		return errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")

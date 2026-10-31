@@ -1,19 +1,14 @@
 package protocol
 
 import (
-	"slices"
+	"fmt"
 	"testing"
 )
 
 func TestFeaturesTableIsConsistent(t *testing.T) {
-	for name, feature := range Features {
-		if feature.Level < 1 || feature.Level > Level {
-			t.Errorf("%s is at level %d; this build speaks levels 1-%d", name, feature.Level, Level)
-		}
-		if feature.Token != "" && feature.Token != name {
-			if implied, ok := Features[feature.Token]; !ok || implied.Token != feature.Token {
-				t.Errorf("%s is implied by %s, which is not a feature advertised under its own token", name, feature.Token)
-			}
+	for name, level := range Features {
+		if level < 1 || level > Level {
+			t.Errorf("%s is at level %d; this build speaks levels 1-%d", name, level, Level)
 		}
 	}
 	for _, action := range []string{"context", "pin", "unpin", "pins", "room", "status", "statuses", "resolve", "poll", "vote", "results", "close-poll", "handoff", "handoff-accept", "handoffs", "decision", "decision-answer", "decisions", "paste-begin", "paste-get", "pastes", "action", "correct", "retract", "prepare", "cancel", "waiting", "typing", "thinking"} {
@@ -24,38 +19,31 @@ func TestFeaturesTableIsConsistent(t *testing.T) {
 }
 
 func TestSupportsByLevelAndByToken(t *testing.T) {
-	current := map[string]string{"AIRC": "1", "HISTORY": "1000", "PASTE_BYTES": "65536", "MONITOR": "128", "IDEMPOTENCY": "1"}
+	current := map[string]string{"AIRC": fmt.Sprint(Level), "HISTORY": "1000", "PASTE_BYTES": "65536", "MONITOR": "128", "IDEMPOTENCY": "1"}
 	for _, name := range []string{"CHAT", "chat", "PINS", "STATUS_POSTS", "RESOLVE", "CHARTER", "HISTORY_START", "IDEMPOTENCY", "HISTORY", "MONITOR"} {
 		if !Supports(current, name) {
-			t.Errorf("a level-1 daemon lacks %s", name)
+			t.Errorf("a level-%d daemon lacks %s", Level, name)
 		}
 	}
 	for _, name := range []string{"ADMIN", "WAKE", "NOPE", "SAFE_RETRY"} {
 		if Supports(current, name) {
-			t.Errorf("a level-1 daemon without the %s token has it", name)
+			t.Errorf("a level-%d daemon without the %s token has it", Level, name)
 		}
 	}
-	if LevelOf(current) != 1 || len(Missing(current, Level)) != 0 {
-		t.Errorf("level %d, missing %v", LevelOf(current), Missing(current, Level))
+	if LevelOf(current) != Level {
+		t.Errorf("level %d", LevelOf(current))
 	}
 
-	older := map[string]string{"CHAT": "1", "CONTEXT": "1", "MULTILINE": "1", "HISTORY": "0", "SEARCH": "0"}
-	for _, name := range []string{"CHAT", "CONTEXT", "MULTILINE", "PINS", "POLLS", "ROOM"} {
-		if !Supports(older, name) {
-			t.Errorf("an older CHAT=1 daemon lacks %s", name)
-		}
+	// A literal token decides first: a proxy or a test withdraws a feature
+	// the level grants with NAME=0, and a daemon from before levels, with
+	// one token per feature, has only what its tokens name.
+	withdrawn := map[string]string{"AIRC": fmt.Sprint(Level), "SEARCH": "0", "HISTORY": "0"}
+	if Supports(withdrawn, "SEARCH") || Supports(withdrawn, "HISTORY") || !Supports(withdrawn, "SEARCH_TERMS") {
+		t.Errorf("withdrawn: SEARCH %v, HISTORY %v, SEARCH_TERMS %v", Supports(withdrawn, "SEARCH"), Supports(withdrawn, "HISTORY"), Supports(withdrawn, "SEARCH_TERMS"))
 	}
-	for _, name := range []string{"STATUS_POSTS", "RESOLVE", "CHARTER", "CONTEXT_BYTES", "HANDOFF", "SEARCH", "HISTORY", "AIRC"} {
-		if Supports(older, name) {
-			t.Errorf("an older CHAT=1 daemon has %s", name)
-		}
-	}
-	if LevelOf(older) != 0 {
-		t.Errorf("level %d for a daemon without AIRC", LevelOf(older))
-	}
-	missing := Missing(older, Level)
-	if !slices.IsSorted(missing) || slices.Contains(missing, "CHAT") || slices.Contains(missing, "PINS") || !slices.Contains(missing, "STATUS_POSTS") || !slices.Contains(missing, "HANDOFF") {
-		t.Errorf("missing = %v", missing)
+	older := map[string]string{"CHAT": "1", "MULTILINE": "1"}
+	if !Supports(older, "CHAT") || !Supports(older, "MULTILINE") || Supports(older, "PINS") || Supports(older, "CONTEXT") || LevelOf(older) != 0 {
+		t.Errorf("a daemon without a level: CHAT %v, MULTILINE %v, PINS %v, CONTEXT %v, level %d", Supports(older, "CHAT"), Supports(older, "MULTILINE"), Supports(older, "PINS"), Supports(older, "CONTEXT"), LevelOf(older))
 	}
 
 	newer := map[string]string{"AIRC": "7"}

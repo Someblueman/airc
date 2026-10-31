@@ -112,8 +112,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	resume := c.resume
 	c.mu.Unlock()
 	if resume != "" && !c.cfg.Ephemeral {
-		// Only a server that issued the secret (767) knows RESUME, so an
-		// older server is never asked.
+		// Only a server that issued the secret (767) is asked.
 		line, err := commandLine("RESUME", []string{nick, resume}, "")
 		if err != nil {
 			_ = conn.Close()

@@ -17,11 +17,8 @@ import (
 type PasteInfo = protocol.PasteInfo
 
 // PasteLimit is the largest paste the connected daemon accepts, from its
-// PASTE_BYTES feature; 0 when it has no pastes (no PASTE).
+// PASTE_BYTES token.
 func (c *Client) PasteLimit() int {
-	if !c.Supports("PASTE") {
-		return 0
-	}
 	n, err := strconv.Atoi(c.Features()["PASTE_BYTES"])
 	if err != nil || n <= 0 {
 		return 64 << 10
@@ -44,9 +41,6 @@ func (c *Client) ReplyPaste(parent, message, requestID, pasteID string) error {
 // the paste as stored; the same content uploaded again is the same paste.
 // other sees unrelated events meanwhile.
 func UploadPaste(ctx context.Context, c *Client, name, language string, content []byte, other func(Event)) (PasteInfo, error) {
-	if !c.Supports("PASTE") {
-		return PasteInfo{}, errors.New("this aircd lacks PASTE; upgrade when safe")
-	}
 	if limit := c.PasteLimit(); len(content) > limit {
 		return PasteInfo{}, fmt.Errorf("the paste is %d bytes; this aircd accepts at most %d", len(content), limit)
 	}
@@ -82,9 +76,6 @@ func UploadPaste(ctx context.Context, c *Client, name, language string, content 
 // FetchPaste reads paste id: its description, as the server holds it, and
 // its content. other sees unrelated events meanwhile.
 func FetchPaste(ctx context.Context, c *Client, id string, other func(Event)) (ChatEntry, []byte, error) {
-	if !c.Supports("PASTE") {
-		return ChatEntry{}, nil, errors.New("this aircd lacks PASTE; upgrade when safe")
-	}
 	if !protocol.ValidMessageID(id) {
 		return ChatEntry{}, nil, errors.New("a paste ID is 32 hex digits")
 	}

@@ -42,8 +42,10 @@ func Test005AdvertisesTheLevelAndTheTokensWithAValue(t *testing.T) {
 		key, value, _ := strings.Cut(token, "=")
 		features[key] = value
 	}
-	if missing := protocol.Missing(features, protocol.Level); len(missing) != 0 {
-		t.Errorf("the server lacks %v", missing)
+	for name := range protocol.Features {
+		if !protocol.Supports(features, name) {
+			t.Errorf("the server lacks %s", name)
+		}
 	}
 	for _, name := range []string{"ADMIN", "WAKE", "ACCOUNTS", "ACCESS", "TLS", "WEBIRC", "CARRIERS"} {
 		if protocol.Supports(features, name) {

@@ -29,8 +29,7 @@ type Config struct {
 	// Ephemeral asks the server for a one-shot session: the nickname is not
 	// claimed, the connection never appears in presence listings, channel
 	// messages can be sent without joining, and history can be read freely.
-	// Use it for short-lived commands. Servers that predate the mode ignore the
-	// request; check Client.Ephemeral after Dial.
+	// Use it for short-lived commands.
 	Ephemeral     bool
 	IdentityToken string // saved account credential; SASL PLAIN login unless CreateAccount; never sent as chat
 	CreateAccount bool   // idempotent registration with the same credential
@@ -543,7 +542,7 @@ func (c *Client) Features() map[string]string {
 }
 
 // Multiline reports whether the server accepts and delivers messages that
-// contain line breaks.
+// contain line breaks, which every daemon a client is connected to does.
 func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
 
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }

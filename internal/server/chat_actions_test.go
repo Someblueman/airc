@@ -21,7 +21,7 @@ func TestChatActionTableIsComplete(t *testing.T) {
 		seen[action.name] = true
 		// The feature an action is advertised under is a row of the table
 		// the AIRC level grants, and the one clients gate the action on.
-		if feature, known := protocol.Features[action.requires]; !known || feature.Level > protocol.Level {
+		if level, known := protocol.Features[action.requires]; !known || level > protocol.Level {
 			t.Errorf("%s requires %s, which the server's level %d does not grant", action.name, action.requires, protocol.Level)
 		}
 		if want := protocol.ChatFeature(action.name); action.requires != want {

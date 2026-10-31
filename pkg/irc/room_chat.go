@@ -34,9 +34,6 @@ type EndOfChatEvent struct {
 func (*EndOfChatEvent) ircEvent() {}
 
 func (c *Client) Chat(request ChatRequest) error {
-	if !c.Supports("CHAT") {
-		return errors.New("chat additions require CHAT on the daemon")
-	}
 	text, run := request.Text, request.Run
 	request.Text = ""
 	data, err := json.Marshal(request)
