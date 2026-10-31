@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -51,61 +48,7 @@ func runHandoffSession(ctx context.Context, session *agentConnection, args []str
 	if err := identity(opt); err != nil {
 		return err
 	}
-	return handoffRequest(ctx, *opt, r, stdout)
-}
-
-// runHandoffsSession lists the handoffs that concern you, a room's, or one.
-func runHandoffsSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("airc handoffs", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	opt := addOptions(fs)
-	opt.session = session
-	channel := fs.String("channel", "", "every handoff in this room, finished ones from the last week included")
-	id := fs.String("id", "", "one handoff")
-	limit := fs.Int("limit", 0, "newest handoffs to list, at most 1000 (default 200)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
-	}
-	if *channel != "" && *id != "" {
-		return errors.New("choose --channel or --id")
-	}
-	if *id != "" && !protocol.ValidMessageID(*id) {
-		return errors.New("--id needs a handoff ID")
-	}
-	r := irc.ChatRequest{Action: "handoffs", Target: channelName(*channel), ID: *id, Limit: *limit}
-	if (r.Target != "" || r.ID != "") && opt.nick == "" && opt.identityFile == "" {
-		opt.nick = defaultQueryNick()
-	} else if err := identity(opt); err != nil {
-		return err
-	}
-	return handoffRequest(ctx, *opt, r, stdout)
-}
-
-func handoffRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout io.Writer) error {
-	return chatRequestWithContext(ctx, opt, "HANDOFF", func(ctx context.Context, client *irc.Client) error {
-		entries, err := irc.RequestChat(ctx, client, r, nil)
-		if err != nil {
-			return err
-		}
-		if !opt.json && len(entries) == 0 && r.Action == "handoffs" {
-			_, err := fmt.Fprintln(stdout, "No handoffs.")
-			return err
-		}
-		for _, e := range entries {
-			if opt.json {
-				err = json.NewEncoder(stdout).Encode(newHandoffRow(e))
-			} else {
-				_, err = fmt.Fprintln(stdout, handoffText(e))
-			}
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return chatEntries(ctx, *opt, r, stdout, stderr)
 }
 
 // handoffRow is a handoff as --json prints it, the offer's text plain

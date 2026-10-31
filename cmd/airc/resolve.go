@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"time"
 
@@ -43,23 +41,7 @@ func runResolveSession(ctx context.Context, session *agentConnection, args []str
 	if err := identity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
-		entries, err := irc.RequestChat(ctx, client, r, nil)
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			if opt.json {
-				err = json.NewEncoder(stdout).Encode(newResolveRow(e))
-			} else {
-				_, err = fmt.Fprintln(stdout, resolveText(e))
-			}
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return chatEntries(ctx, *opt, r, stdout, stderr)
 }
 
 // resolveRow is a resolution as --json prints it: the root it closed, where,

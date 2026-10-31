@@ -373,6 +373,33 @@ func (in pinInput) args() []string {
 	return []string{cmp.Or(in.Step, "pin"), in.ID}
 }
 
+// listingInput lists handoffs or decisions, whichever action names: those
+// that concern you, a room's, or one by ID.
+type listingInput struct {
+	Channel string `json:"channel,omitempty" jsonschema:"Every one in this room, those finished in the last week included"`
+	ID      string `json:"id,omitempty" jsonschema:"One, by its ID"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"Newest to list, 1-1000; default 200"`
+}
+
+func (in listingInput) request(action string) (irc.ChatRequest, error) {
+	noun := strings.TrimSuffix(action, "s")
+	if in.Channel != "" && in.ID != "" {
+		return irc.ChatRequest{}, errors.New("choose --channel or --id")
+	}
+	if in.ID != "" && !protocol.ValidMessageID(in.ID) {
+		return irc.ChatRequest{}, errors.New("--id needs a " + noun + " ID")
+	}
+	return irc.ChatRequest{Action: action, Target: channelName(in.Channel), ID: in.ID, Limit: in.Limit}, nil
+}
+
+func (in listingInput) args(action string) []string {
+	args := appendFlags([]string{action}, [][2]string{{"channel", in.Channel}, {"id", in.ID}})
+	if in.Limit != 0 {
+		args = append(args, "--limit="+strconv.Itoa(in.Limit))
+	}
+	return args
+}
+
 // messageText is a post's text as the wire takes it: normalised and within
 // the message limit; a blank one is an error when the action needs text.
 func messageText(text string, required bool) (string, error) {

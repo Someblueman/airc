@@ -386,15 +386,15 @@
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Every decision asked in this room, answered ones from the last week included",
+       "description": "Every one in this room, those finished in the last week included",
        "type": "string"
       },
       "id": {
-       "description": "One decision",
+       "description": "One, by its ID",
        "type": "string"
       },
       "limit": {
-       "description": "Newest decisions to list, 1-1000; default 200",
+       "description": "Newest to list, 1-1000; default 200",
        "type": "integer"
       }
      },
@@ -602,20 +602,20 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included.",
+    "description": "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Every handoff in this room, finished ones from the last week included",
+       "description": "Every one in this room, those finished in the last week included",
        "type": "string"
       },
       "id": {
-       "description": "One handoff",
+       "description": "One, by its ID",
        "type": "string"
       },
       "limit": {
-       "description": "Newest handoffs to list, 1-1000; default 200",
+       "description": "Newest to list, 1-1000; default 200",
        "type": "integer"
       }
      },

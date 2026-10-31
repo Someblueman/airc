@@ -180,17 +180,7 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 			}
 			return err
 		}
-		for _, e := range entries {
-			if opt.json {
-				err = json.NewEncoder(stdout).Encode(e)
-			} else {
-				_, err = fmt.Fprintln(stdout, chatEntryText(e))
-			}
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		return emitEntries(stdout, entries, opt.json, shapeOf(r))
 	})
 }
 

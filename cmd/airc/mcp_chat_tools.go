@@ -41,17 +41,6 @@ type mcpPrepareInput struct {
 	Message string `json:"message,omitempty" jsonschema:"Optional short note shown with the signal"`
 }
 
-type mcpHandoffsInput struct {
-	Channel string `json:"channel,omitempty" jsonschema:"Every handoff in this room, finished ones from the last week included"`
-	ID      string `json:"id,omitempty" jsonschema:"One handoff"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Newest handoffs to list, 1-1000; default 200"`
-}
-type mcpDecisionsInput struct {
-	Channel string `json:"channel,omitempty" jsonschema:"Every decision asked in this room, answered ones from the last week included"`
-	ID      string `json:"id,omitempty" jsonschema:"One decision"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Newest decisions to list, 1-1000; default 200"`
-}
-
 type mcpUnreadInput struct {
 	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to count besides the inbox; defaults to AIRC_CHANNEL"`
 	Mentions bool     `json:"mentions,omitempty" jsonschema:"Count only direct messages and tags"`
@@ -274,32 +263,20 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in handoffInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"handoffs"}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
-			if pair[1] != "" {
-				args = append(args, pair[0]+"="+pair[1])
+	for _, name := range []string{"handoffs", "decisions"} {
+		description := map[string]string{
+			"handoffs":  "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
+			"decisions": "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one.",
+		}[name]
+		mcpserver.AddTool(s, &mcpserver.Tool{Name: name, Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: description}, func(ctx context.Context, _ *mcpserver.Call, in listingInput) (*mcpserver.Result, mcpOutput, error) {
+			if _, err := in.request(name); err != nil {
+				return nil, mcpOutput{}, err
 			}
-		}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
-	})
+			return a.call(ctx, in.args(name), "", 15*time.Second, false)
+		})
+	}
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in decisionInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
-	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decisions", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecisionsInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"decisions"}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
-			if pair[1] != "" {
-				args = append(args, pair[0]+"="+pair[1])
-			}
-		}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)

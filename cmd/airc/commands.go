@@ -180,12 +180,12 @@ var commandTable = []command{
   airc handoff accept|decline|done|withdraw ID [--message NOTE] [--json]   take it, give it back, finish it, or call it off
   airc handoff blocked ID --message WHY [--json]      say the handoff you hold is stuck; accept again when it moves
   airc handoff done ID --link URL [--json]            finish it and record where the result is`},
-	{name: "handoffs", run: plain(runHandoffsSession), session: true, mcp: true, group: groupAgent,
+	{name: "handoffs", run: named(runListingSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc handoffs [--channel #room | --id ID] [--limit N] [--json]   open handoffs for you, held by you or offered by you`},
 	{name: "decide", run: reading(runDecideSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc decide (--channel #room --from N | --to N) --message TEXT|- [--option A --option B]... [--json]   ask N, usually a human, to decide
   airc decide answer|withdraw ID [--choice N] [--message NOTE] [--json]   answer a decision asked of you, or call yours off`},
-	{name: "decisions", run: plain(runDecisionsSession), session: true, mcp: true, group: groupAgent,
+	{name: "decisions", run: named(runListingSession), session: true, mcp: true, group: groupAgent,
 		help:  `  airc decisions [--channel #room | --id ID] [--limit N] [--json]   open decisions for you to make or that you asked`,
 		notes: `  airc check --decision ID [--wait 120s] [--json]   wait for a decision to be answered or withdrawn`},
 	{name: "doctor", run: local(runDoctor), group: groupAgent,

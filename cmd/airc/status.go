@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -51,31 +50,7 @@ func runStatusSession(ctx context.Context, session *agentConnection, args []stri
 	if err != nil {
 		return err
 	}
-	return statusRequest(ctx, *opt, r, stdout)
-}
-
-func statusRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout io.Writer) error {
-	return chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
-		entries, err := irc.RequestChat(ctx, client, r, nil)
-		if err != nil {
-			return err
-		}
-		if !opt.json && len(entries) == 0 {
-			_, err := fmt.Fprintln(stdout, "No statuses in "+r.Target+".")
-			return err
-		}
-		for _, e := range entries {
-			if opt.json {
-				err = json.NewEncoder(stdout).Encode(newStatusRow(e))
-			} else {
-				_, err = fmt.Fprintln(stdout, statusText(e))
-			}
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return chatEntries(ctx, *opt, r, stdout, stderr)
 }
 
 // statusRow is a status as --json prints it: whose it is, the task, the
