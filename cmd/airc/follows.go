@@ -29,7 +29,7 @@ func runFollowSession(ctx context.Context, session *agentConnection, action stri
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || action != "following" && !protocol.ValidMessageID(id) || action == "following" && id != "" {
+	if fs.NArg() != 0 || action != "following" && !protocol.ValidIDArgument(id) || action == "following" && id != "" {
 		return errors.New("use follow|unfollow MESSAGE_ID or following, with --nick N")
 	}
 	if err := identity(opt); err != nil {
@@ -66,6 +66,15 @@ func runFollowSession(ctx context.Context, session *agentConnection, action stri
 			store.Follows = append(store.Follows, id)
 		}
 	} else if action == "unfollow" {
+		// Follows are kept by their full root ID; an abbreviation names the
+		// one it is a prefix of.
+		matching := slices.DeleteFunc(slices.Clone(store.Follows), func(followed string) bool { return !strings.HasPrefix(followed, id) })
+		if len(matching) > 1 {
+			return errors.New("ambiguous ID prefix " + id + "; give more of it")
+		}
+		if len(matching) == 1 {
+			id = matching[0]
+		}
 		store.Follows = slices.DeleteFunc(store.Follows, func(candidate string) bool { return candidate == id })
 		delete(store.Cursors, "thread:"+id)
 	}
@@ -89,7 +98,7 @@ func runFollowSession(ctx context.Context, session *agentConnection, action stri
 }
 
 func waitForAnswer(opt options, id string, duration time.Duration, stdout, stderr io.Writer) error {
-	if !protocol.ValidMessageID(id) {
+	if !protocol.ValidIDArgument(id) {
 		return errors.New("waiting requires a valid message ID")
 	}
 	base, stopSignal := signal.NotifyContext(context.Background(), os.Interrupt)

@@ -45,7 +45,9 @@ func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, repl
 			if msg == nil || !strings.EqualFold(msg.From, nick) || msg.Message != body || msg.Reaction != reaction || requestID != "" && msg.RequestID != requestID {
 				continue
 			}
-			if reply != "" && msg.ReplyTo != reply || reply == "" && !sameTarget(msg.Target, target) {
+			// The parent may have been given abbreviated; the receipt
+			// names it in full.
+			if reply != "" && !strings.HasPrefix(msg.ReplyTo, reply) || reply == "" && !sameTarget(msg.Target, target) {
 				continue
 			}
 			r := &sendResult{MessageEvent: msg, Receipt: info, Code: "accepted", Retryable: false}

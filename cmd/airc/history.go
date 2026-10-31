@@ -153,7 +153,7 @@ func writeHistory(stdout io.Writer, opt options, target string, messages []*irc.
 // Reuse history's bounded paging and output without moving inbox cursors.
 // runThreadSession reads a conversation: it is the history of thread:ID.
 func runThreadSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || !protocol.ValidMessageID(args[0]) {
+	if len(args) == 0 || !protocol.ValidIDArgument(args[0]) {
 		return errors.New("usage: airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]")
 	}
 	return runHistorySession(ctx, session, append([]string{"thread:" + args[0]}, args[1:]...), stdout, stderr)
