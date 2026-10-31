@@ -18,14 +18,12 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 	s.numericLocked(client, "777", nil, string(data))
 }
 
-// chatFeatures are the 005 tokens that advertise CHAT and its actions. Every
-// one is always advertised, so no action is gated on its token today.
-var chatFeatures = []string{"CHAT=1", "CONTEXT=1", "CONTEXT_BYTES=1", "CUSTOM_REACTIONS=1", "HANDOFF=1", "DECISION=1", "PASTE=1"}
-
 // chatAction is one CHAT action: its handler, whether it never appends to
 // history (readOnly, so serializesPosts lets it skip messageMu; a test drives
-// each one and checks), and the 005 feature it is advertised under, "" for
-// the actions CHAT=1 itself covers.
+// each one and checks), and the feature it is advertised under: a row of
+// protocol.Features, which the AIRC level in 005 grants as a whole, so no
+// action is gated on its feature here. A test keeps it equal to
+// protocol.ChatFeature, which is what clients gate on.
 type chatAction struct {
 	name     string
 	handler  func(s *Server, client *session, r protocol.ChatRequest) error
@@ -37,25 +35,25 @@ type chatAction struct {
 // chatReadOnlyActions is derived from it, so nothing is kept in step by hand.
 var chatActionTable = []chatAction{
 	{name: "context", handler: typed(decodeContextRequest, (*Server).contextLocked), readOnly: true, requires: "CONTEXT"},
-	{name: "pins", handler: typed(decodePinRequest, (*Server).pinsLocked), readOnly: true},
-	{name: "pin", handler: typed(decodePinRequest, (*Server).pinsLocked)},
-	{name: "unpin", handler: typed(decodePinRequest, (*Server).pinsLocked)},
-	{name: "prepare", handler: (*Server).signalLocked, readOnly: true},
-	{name: "cancel", handler: (*Server).signalLocked, readOnly: true},
-	{name: "waiting", handler: (*Server).signalLocked, readOnly: true},
-	{name: "typing", handler: (*Server).signalLocked, readOnly: true},
-	{name: "thinking", handler: (*Server).signalLocked, readOnly: true},
-	{name: "room", handler: typed(decodeRoomRequest, (*Server).roomLocked)},
-	{name: "action", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
-	{name: "correct", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
-	{name: "retract", handler: typed(decodePostRequest, (*Server).chatPostLocked)},
-	{name: "status", handler: typed(decodeStatusRequest, (*Server).postStatusLocked)},
-	{name: "statuses", handler: typed(decodeStatusRequest, (*Server).listStatusesLocked), readOnly: true},
-	{name: "resolve", handler: typed(decodeResolveRequest, (*Server).resolveLocked)},
-	{name: "poll", handler: typed(decodePollRequest, (*Server).pollLocked)},
-	{name: "vote", handler: typed(decodePollRequest, (*Server).pollLocked)},
-	{name: "results", handler: typed(decodePollRequest, (*Server).pollLocked), readOnly: true},
-	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked)},
+	{name: "pins", handler: typed(decodePinRequest, (*Server).pinsLocked), readOnly: true, requires: "PINS"},
+	{name: "pin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS"},
+	{name: "unpin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS"},
+	{name: "prepare", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "cancel", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "waiting", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "typing", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "thinking", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "room", handler: typed(decodeRoomRequest, (*Server).roomLocked), requires: "ROOM"},
+	{name: "action", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
+	{name: "correct", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
+	{name: "retract", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
+	{name: "status", handler: typed(decodeStatusRequest, (*Server).postStatusLocked), requires: "STATUS_POSTS"},
+	{name: "statuses", handler: typed(decodeStatusRequest, (*Server).listStatusesLocked), readOnly: true, requires: "STATUS_POSTS"},
+	{name: "resolve", handler: typed(decodeResolveRequest, (*Server).resolveLocked), requires: "RESOLVE"},
+	{name: "poll", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
+	{name: "vote", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
+	{name: "results", handler: typed(decodePollRequest, (*Server).pollLocked), readOnly: true, requires: "POLLS"},
+	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
 	{name: "handoff", handler: (*Server).offerHandoffLocked, requires: "HANDOFF"},
 	{name: "handoff-accept", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
 	{name: "handoff-blocked", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},

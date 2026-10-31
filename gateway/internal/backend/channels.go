@@ -18,7 +18,7 @@ func (b *Backend) Channels(ctx context.Context, grant *store.ReadGrant) (core.Ch
 	valid := func(r core.Request) bool { return r.Operation == core.ChannelsRead }
 	// The channel list's limit includes its line terminator.
 	return readSnapshot(ctx, b, grant, valid, core.MaxChannelsBytes-1, func(ctx context.Context, client *irc.Client, _ core.Request) (core.ChannelsResult, error) {
-		if client.Features()["CHANNELS"] != "1" {
+		if !client.Supports("CHANNELS") {
 			return core.ChannelsResult{}, ErrReadUnsupported
 		}
 		return boundedChannelsRequest(ctx, client, core.MaxChannelsBytes)

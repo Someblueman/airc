@@ -21,9 +21,8 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 	if r.Target == nil || r.Target.Kind != "room" || r.ParentID == "" || r.ThreadMode != threadModeThread && r.ThreadMode != threadModeReplies {
 		return core.Request{}, store.ErrInvalid
 	}
-	features := client.Features()
 	if r.ThreadMode == threadModeThread {
-		if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
+		if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
 			return core.Request{}, ErrReadUnsupported
 		}
 		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)
@@ -37,7 +36,7 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 		r.ParentID = root
 		return r, nil
 	}
-	if features["CHECK"] == "1" {
+	if client.Supports("CHECK") {
 		proofRequest := r
 		proofRequest.Limit = 1
 		proofRequest.Cursor = "*"
@@ -53,7 +52,7 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 			return r, nil
 		}
 	}
-	if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
+	if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
 		return core.Request{}, ErrReadUnsupported
 	}
 	proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)

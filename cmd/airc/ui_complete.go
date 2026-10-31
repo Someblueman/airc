@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -17,7 +18,7 @@ type uiCommand struct {
 	name  string
 	usage string // arguments after the name; "ID" first means a message ID
 	help  string
-	needs string // a 005 capability, or "" for commands every daemon serves
+	needs string // a feature (protocol.Features or a configuration token), or "" for commands every daemon serves
 	group string
 }
 
@@ -26,7 +27,7 @@ var uiCommands = []uiCommand{
 	{"/join", "#channel", "open a channel and follow it live", "", "General"},
 	{"/msg", "nick text", "send a direct message", "", "General"},
 	{"/topic", "[text|-]", "show, set or clear the channel header", "TOPIC", "General"},
-	{"/charter", "", "open this room's charter, its longer rules, in a view; /close returns", "CHAT", "General"},
+	{"/charter", "", "open this room's charter, its longer rules, in a view; /close returns", "CHARTER", "General"},
 	{"/run", "ID", "a read-only view of this room's messages posted under run ID, oldest first", "RUN", "General"},
 	{"/search", "words", "search this room: every word must occur, \"phrases\" stay together, -word excludes", "SEARCH", "General"},
 	{"/close", "", "close this room, thread, search or help view", "", "General"},
@@ -40,21 +41,21 @@ var uiCommands = []uiCommand{
 	{"/next", "", "continue an open thread or search", "REPLIES", "Conversations"},
 	{"/first", "", "restart a thread or search from the oldest retained results", "REPLIES", "Conversations"},
 	{"/paste", "ID", "open a shared paste read-only, 200 lines a page; /next continues", "PASTE", "Conversations"},
-	{"/pin", "ID", "share a message as a room pin", "CHAT", "Room"},
-	{"/unpin", "ID", "remove a room pin", "CHAT", "Room"},
-	{"/pins", "", "list this room's pins", "CHAT", "Room"},
+	{"/pin", "ID", "share a message as a room pin", "PINS", "Room"},
+	{"/unpin", "ID", "remove a room pin", "PINS", "Room"},
+	{"/pins", "", "list this room's pins", "PINS", "Room"},
 	{"/correct", "ID text", "publish a correction to your message", "CHAT", "Room"},
 	{"/retract", "ID reason", "retract your message", "CHAT", "Room"},
 	{"/prepare", "ID note", "promise a reply within two minutes", "CHAT", "Room"},
 	{"/waiting", "ID", "who has promised a reply", "CHAT", "Room"},
 	{"/cancel", "ID", "cancel your own promise", "CHAT", "Room"},
 	{"/me", "text", "an action in this room", "CHAT", "Room"},
-	{"/poll", "question | a | b", "a one-hour poll in this room", "CHAT", "Room"},
-	{"/vote", "ID number", "vote in a poll", "CHAT", "Room"},
-	{"/results", "ID", "poll results", "CHAT", "Room"},
-	{"/close-poll", "ID", "close your poll", "CHAT", "Room"},
-	{"/status", "[task | working|blocked|done | note]", "post where you are in this room; alone, list the room's latest statuses", "CHAT", "Room"},
-	{"/resolve", "ID [note]", "close a question settled elsewhere: its author, who it addresses, or an admin", "CHAT", "Conversations"},
+	{"/poll", "question | a | b", "a one-hour poll in this room", "POLLS", "Room"},
+	{"/vote", "ID number", "vote in a poll", "POLLS", "Room"},
+	{"/results", "ID", "poll results", "POLLS", "Room"},
+	{"/close-poll", "ID", "close your poll", "POLLS", "Room"},
+	{"/status", "[task | working|blocked|done | note]", "post where you are in this room; alone, list the room's latest statuses", "STATUS_POSTS", "Room"},
+	{"/resolve", "ID [note]", "close a question settled elsewhere: its author, who it addresses, or an admin", "RESOLVE", "Conversations"},
 	{"/handoff", "[@nick] text", "hand work to this room (first to accept takes it), to nick, or in a DM to them", "HANDOFF", "Handoffs"},
 	{"/accept", "ID [note]", "take a handoff", "HANDOFF", "Handoffs"},
 	{"/done", "ID [note]", "tell everyone a handoff you hold is finished", "HANDOFF", "Handoffs"},
@@ -102,14 +103,14 @@ var uiKeys = []helpLine{
 	{"Ctrl-C", "quit (Ctrl-D with nothing typed)"},
 }
 
-// supports reports a daemon capability, true until the daemon has said
-// otherwise so nothing is refused before the first connection.
+// supports reports a daemon feature as irc.Client.Supports does, true until
+// the daemon has said otherwise so nothing is refused before the first
+// connection.
 func (m *uiModel) supports(feature string) bool {
 	if feature == "" || m.features == nil {
 		return true
 	}
-	value, ok := m.features[feature]
-	return ok && value != "0"
+	return protocol.Supports(m.features, feature)
 }
 
 // helpLines is the content of the /help view for the connected daemon.

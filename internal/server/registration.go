@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/Someblueman/airc/internal/version"
 )
 
 // ephemeralLocked marks a connection as a one-shot agent session. It must
@@ -152,8 +151,11 @@ func (s *Server) tryRegisterLocked(client *session) {
 		// Sent before the welcome so a client knows the mode once registration completes.
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
-	// Advertised before the welcome so a client knows the features once registered.
-	features := []string{"RESUME=1", "CHECK=1", "RECEIPTS=1", "BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "SEARCH_TERMS=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "RUN=1", "SERVER_VERSION=" + version.String()}
+	// Advertised before the welcome so a client knows the features once
+	// registered: the AIRC level stands for every version-only feature
+	// (protocol.Features); the tokens that carry a value, the standard IRC
+	// ones and those that depend on configuration are sent on their own.
+	features := []string{fmt.Sprintf("%s=%d", protocol.LevelToken, protocol.Level), "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit)}
 	if s.accessEnabled {
 		features = append(features, "ACCESS=1")
 	}
@@ -175,7 +177,6 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if s.wake != nil {
 		features = append(features, "WAKE=1")
 	}
-	features = append(features, chatFeatures...)
 	features = append(features, fmt.Sprintf("PASTE_BYTES=%d", s.cfg.PasteBytes))
 	if s.cfg.HistoryLimit > 0 {
 		features = append(features, "IDEMPOTENCY=1", "SAFE_RETRY=1")

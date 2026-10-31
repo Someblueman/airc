@@ -57,8 +57,8 @@ func TestPinnedUpstream(t *testing.T) {
 		t.Fatal("ephemeral mode not negotiated")
 	}
 	for _, feature := range []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY", "REPLIES"} {
-		if author.Features()[feature] != "1" {
-			t.Fatalf("required %s=1; negotiated %v", feature, author.Features())
+		if !author.Supports(feature) {
+			t.Fatalf("required %s; negotiated %v", feature, author.Features())
 		}
 	}
 	const requestID = "fixture-stable-id"
