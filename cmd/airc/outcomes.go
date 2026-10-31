@@ -24,12 +24,16 @@ type commandFailure struct {
 	Code      string `json:"code"`
 	Phase     string `json:"phase"`
 	Retryable bool   `json:"retryable"`
-	RequestID string `json:"request_id,omitempty"`
-	Accepted  bool   `json:"accepted,omitempty"`
-	MessageID string `json:"message_id,omitempty"`
-	Message   string `json:"message"`
-	err       error
-	reported  bool
+	// RetryAfterSeconds is the delay the server stated for a rate_limited
+	// refusal, so an agent waits that long rather than parsing the message;
+	// 0 when it stated none.
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
+	RequestID         string `json:"request_id,omitempty"`
+	Accepted          bool   `json:"accepted,omitempty"`
+	MessageID         string `json:"message_id,omitempty"`
+	Message           string `json:"message"`
+	err               error
+	reported          bool
 }
 
 func (e *commandFailure) Error() string { return e.Message }
@@ -58,10 +62,23 @@ func failure(err error, phase string) *commandFailure {
 			e.Code = "invalid_target"
 		case "404", "484", "485", "465", "474", "481", "482":
 			e.Code = "permission_denied"
+		case "405":
+			e.Code = "limit_reached"
+		case "421":
+			e.Code = "unsupported"
 		case "437":
+			// A transient condition: a state write failed, a per-address
+			// window is in force, or transient state is full. REGISTER keeps
+			// 437 for its account limit too, since clients abort their
+			// registration on a pinned set of numerics; that one is told
+			// apart by its text, which no window shares.
 			e.Code, e.Retryable = "server_busy", true
+			if strings.Contains(rejection.Message, "limit reached") && !strings.Contains(rejection.Message, "try again later") {
+				e.Code, e.Retryable = "limit_reached", false
+			}
 		case "486":
 			e.Code, e.Retryable = "rate_limited", true
+			e.RetryAfterSeconds = slowModeDelay(rejection.Message)
 		}
 	case errors.As(err, &refusal):
 		// A gateway carrier's refusal, in the same codes as AIRC's numerics.
@@ -73,6 +90,8 @@ func failure(err error, phase string) *commandFailure {
 			e.Code = "permission_denied"
 		case "id_conflict":
 			e.Code = "request_conflict"
+		case "unsupported_operation":
+			e.Code = "unsupported"
 		}
 	case errors.As(err, &unavailable):
 		e.Code, e.Retryable = "server_unavailable", true
@@ -92,6 +111,24 @@ func failure(err error, phase string) *commandFailure {
 		e.Code, e.Retryable = "server_unavailable", true
 	}
 	return e
+}
+
+// slowModeDelay reads the delay from a 486 refusal in the daemon's one grammar
+// for it, "Slow mode: retry after N seconds". Any other text yields 0, so an
+// agent is never told a delay the server did not state.
+func slowModeDelay(text string) int {
+	delay, ok := strings.CutPrefix(text, "Slow mode: retry after ")
+	if !ok {
+		return 0
+	}
+	if delay, ok = strings.CutSuffix(delay, " seconds"); !ok {
+		return 0
+	}
+	seconds, err := strconv.Atoi(delay)
+	if err != nil || seconds < 1 || strconv.Itoa(seconds) != delay {
+		return 0
+	}
+	return seconds
 }
 
 // localFileError reports a failed local file operation (state directory,

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -88,6 +89,60 @@ func TestJSONErrorsAreClassifiedWithoutParsingProse(t *testing.T) {
 	e := failure(&irc.RejectedError{Code: "904", Message: "arbitrary translated text"}, "login")
 	if e.Code != "auth_failed" || e.Retryable || strings.Contains(e.Code, "text") {
 		t.Fatal(e)
+	}
+}
+
+func TestLimitsAndDisabledFeaturesAreNotRetryable(t *testing.T) {
+	for _, c := range []struct {
+		code, text, want string
+		retryable        bool
+	}{
+		{"405", "Server channel limit reached", "limit_reached", false},
+		{"405", "You have joined too many channels", "limit_reached", false},
+		{"421", "Wake notices are not enabled on this daemon", "unsupported", false},
+		{"421", "Unknown command", "unsupported", false},
+		{"437", "Slow-mode state full; retry later", "server_busy", true},
+		{"437", "Unable to save moderation; no change applied", "server_busy", true},
+		// REGISTER refusals are all 437 (pkg/irc aborts registration on a
+		// pinned set of numerics), so the account limit is told by its text.
+		{"437", "registration rejected: Account creation limit for this address reached; try again later", "server_busy", true},
+		{"437", "registration rejected: Account limit reached", "limit_reached", false},
+	} {
+		e := failure(&irc.RejectedError{Code: c.code, Message: c.text}, "request")
+		if e.Code != c.want || e.Retryable != c.retryable {
+			t.Errorf("%s %q: %s retryable %v, want %s %v", c.code, c.text, e.Code, e.Retryable, c.want, c.retryable)
+		}
+	}
+	if e := failure(&fallback.Refusal{Code: "unsupported_operation"}, "request"); e.Code != "unsupported" || e.Retryable {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func TestRateLimitCarriesTheServersDelay(t *testing.T) {
+	// Native IRC hands the numeric over directly; a fallback carrier wraps
+	// it in a refusal. Both carry the stated delay as a number.
+	native := &irc.RejectedError{Code: "486", Message: "Slow mode: retry after 12 seconds"}
+	for _, err := range []error{native, &fallback.Refusal{Code: "486", UpstreamCode: 486, Err: native}} {
+		e := failure(err, "send")
+		if e.Code != "rate_limited" || !e.Retryable || e.RetryAfterSeconds != 12 {
+			t.Fatalf("%+v", e)
+		}
+		if data, _ := json.Marshal(e); !strings.Contains(string(data), `"retry_after_seconds":12`) {
+			t.Fatal(string(data))
+		}
+	}
+	// A delay the server did not state in its one grammar is not invented.
+	for _, text := range []string{"unknown grammar", "Slow mode: retry after 0 seconds", "Slow mode: retry after +3 seconds", "Slow mode: retry after 3 seconds later", "Slow mode: retry after many seconds"} {
+		e := failure(&irc.RejectedError{Code: "486", Message: text}, "send")
+		if e.Code != "rate_limited" || !e.Retryable || e.RetryAfterSeconds != 0 {
+			t.Fatalf("%q: %+v", text, e)
+		}
+		if data, _ := json.Marshal(e); strings.Contains(string(data), "retry_after_seconds") {
+			t.Fatal(string(data))
+		}
+	}
+	if e := failure(&irc.RejectedError{Code: "437", Message: "Slow mode: retry after 12 seconds"}, "send"); e.RetryAfterSeconds != 0 {
+		t.Fatalf("a delay on another numeric was trusted: %+v", e)
 	}
 }
 

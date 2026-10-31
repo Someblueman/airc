@@ -164,8 +164,8 @@ func TestAccountAdminRequestValidation(t *testing.T) {
 	conn, reader := wireRegister(t, plain, "admin", true)
 	io.WriteString(conn, "OPER :"+testAdminToken+"\r\nADMIN :{\"action\":\"account-list\"}\r\nADMIN :{\"action\":\"account-delete\",\"nick\":\"x\"}\r\n")
 	expectLine(t, reader, conn, " 381 ")
-	expectLine(t, reader, conn, " 437 ")
-	expectLine(t, reader, conn, " 437 ")
+	expectLine(t, reader, conn, " 421 ")
+	expectLine(t, reader, conn, " 421 ")
 }
 
 func TestAccountCreationIsLimitedPerRemoteAddressOverTime(t *testing.T) {

@@ -56,7 +56,7 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 		}
 		if s.watchers[key] == nil {
 			if len(s.watchers) >= maxTotalChannels {
-				s.numericLocked(client, "437", []string{target}, "Server observation limit reached")
+				s.numericLocked(client, "405", []string{target}, "Server observation limit reached")
 				continue
 			}
 			s.watchers[key] = make(map[string]*session)

@@ -131,7 +131,7 @@ func TestModerationRejectsCorruptSnapshotsAndBounds(t *testing.T) {
 	}
 	actor := &session{client: Client{Nick: "operator"}, admin: true, out: make(chan string, 4), done: make(chan struct{})}
 	s.adminLocked(actor, protocol.Command{Trailing: `{"action":"ban","nick":"overflow"}`})
-	if line := <-actor.out; !containsNumeric(line, "437") {
+	if line := <-actor.out; !containsNumeric(line, "405") {
 		t.Fatal(line)
 	}
 }

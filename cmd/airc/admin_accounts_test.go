@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,4 +68,13 @@ func TestAdminAccountArgumentsAndAvailability(t *testing.T) {
 	plain, _ := adminCLISetup(t, nil)
 	deniedCLI(t, plain, "Accounts are not enabled", "admin", "account-delete", "alice")
 	deniedCLI(t, plain, "Accounts are not enabled", "admin", "account-list")
+	// An agent is told the feature is absent, not that the daemon is busy.
+	_, stderr, err := cli(t, plain, "admin", "account-list", "--json")
+	var failure commandFailure
+	if err == nil || json.Unmarshal([]byte(stderr), &failure) != nil {
+		t.Fatal(err, stderr)
+	}
+	if failure.Code != "unsupported" || failure.Retryable {
+		t.Fatalf("%+v", failure)
+	}
 }

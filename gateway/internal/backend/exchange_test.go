@@ -40,6 +40,15 @@ func TestPinnedNumericClassification(t *testing.T) {
 	if o.Completion.Failure.Code != core.CapacityExceeded || !o.Completion.Failure.Transient {
 		t.Fatal("temporary registration capacity became permanent", o)
 	}
+	a.Kind = store.SendAttempt
+	o, _ = numericFailure(a, &irc.RawEvent{Command: "437", Trailing: "Slow-mode state full; retry later"})
+	if o.Completion.Failure.Code != core.CapacityExceeded || !o.Completion.Failure.Transient || o.Completion.MayHavePosted {
+		t.Fatal("transient capacity became permanent", o)
+	}
+	o, _ = numericFailure(a, &irc.RawEvent{Command: "405", Trailing: "Server channel limit reached"})
+	if o.Completion.Failure.Code != core.CapacityExceeded || o.Completion.Failure.Transient || o.Completion.MayHavePosted || o.Completion.Failure.UpstreamCode != 405 {
+		t.Fatal("a permanent limit was left retryable", o)
+	}
 }
 
 // TestMutationTable checks that every durable operation has an exchange and
