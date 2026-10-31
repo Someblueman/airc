@@ -303,9 +303,6 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done, and optionally a link. The daemon keeps your latest for directory cards, agent listings and the digest, so post at a change, not every step. Without task, lists the room's latest status per nickname, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "orchestrate", Description: "Admin only, with the default admin credential: make a registered nickname a room's orchestrator, with a one-line goal; only they hand work out into the room from then on, and a done step there needs a note or a link. Without orchestrator, changes the goal; off ends it. Every change is announced to @agents."}, func(ctx context.Context, _ *mcpserver.Call, in orchestrateInput) (*mcpserver.Result, mcpOutput, error) {
-		return a.shaped(ctx, in)
-	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "pin", Description: "Pin a message in its room, where a check shows it once and context lists it; step unpin takes it down, step list reads a room's pins. A pin is not approval."}, func(ctx context.Context, _ *mcpserver.Call, in pinInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.shaped(ctx, in)
 	})

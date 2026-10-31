@@ -240,9 +240,9 @@ func (in statusInput) args() []string {
 }
 
 // orchestrateInput turns a room's orchestrator mode on, changes its
-// orchestrator or goal, or turns it off. Only an admin may: the CLI, the UI
-// and the MCP tool authenticate with the default admin credential first, or
-// the CLI with its --token-file.
+// orchestrator or goal, or turns it off. Only an admin may: the CLI and the
+// UI authenticate with the default admin credential first, or the CLI with
+// its --token-file. No MCP tool exposes it: the adapter has no admin tool.
 type orchestrateInput struct {
 	Channel      string `json:"channel" jsonschema:"The room to orchestrate"`
 	Orchestrator string `json:"orchestrator,omitempty" jsonschema:"The registered nickname that alone hands work out in the room; omit to change only the goal"`

@@ -51,16 +51,15 @@ func TestCommandTableIsConsistent(t *testing.T) {
 }
 
 // mcpToolAliases are the MCP tools whose name differs from the command they
-// run: amend runs correct, and retract through its step (mcp_chat_tools.go);
-// orchestrate runs room.
-var mcpToolAliases = map[string]string{"amend": "correct", "orchestrate": "room"}
+// run: amend runs correct, and retract through its step (mcp_chat_tools.go).
+var mcpToolAliases = map[string]string{"amend": "correct"}
 
 // mcpToolServing names the tool that runs a command of another name through
 // its step: pin runs pin, unpin and pins; poll runs poll, vote, poll-results
 // and poll-close (chat_requests.go); follow runs unfollow, prepare runs
 // waiting and prepare --cancel, and amend runs correct and retract
-// (mcp_chat_tools.go), and orchestrate runs room.
-var mcpToolServing = map[string]string{"unpin": "pin", "pins": "pin", "vote": "poll", "poll-results": "poll", "poll-close": "poll", "unfollow": "follow", "waiting": "prepare", "correct": "amend", "retract": "amend", "room": "orchestrate"}
+// (mcp_chat_tools.go).
+var mcpToolServing = map[string]string{"unpin": "pin", "pins": "pin", "vote": "poll", "poll-results": "poll", "poll-close": "poll", "unfollow": "follow", "waiting": "prepare", "correct": "amend", "retract": "amend"}
 
 // The tool definitions carry schemas and stay hand-written, so this keeps them
 // and the table's mcp marks from drifting apart.

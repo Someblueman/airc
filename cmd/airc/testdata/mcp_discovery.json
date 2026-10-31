@@ -667,55 +667,6 @@
     }
    },
    {
-    "description": "Admin only, with the default admin credential: make a registered nickname a room's orchestrator, with a one-line goal; only they hand work out into the room from then on, and a done step there needs a note or a link. Without orchestrator, changes the goal; off ends it. Every change is announced to @agents.",
-    "inputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "channel": {
-       "description": "The room to orchestrate",
-       "type": "string"
-      },
-      "goal": {
-       "description": "The room's goal, one line up to 400 bytes (the charter holds anything longer); - clears it",
-       "type": "string"
-      },
-      "off": {
-       "description": "End the mode, clearing the orchestrator and the goal",
-       "type": "boolean"
-      },
-      "orchestrator": {
-       "description": "The registered nickname that alone hands work out in the room; omit to change only the goal",
-       "type": "string"
-      }
-     },
-     "required": [
-      "channel"
-     ],
-     "type": "object"
-    },
-    "name": "orchestrate",
-    "outputSchema": {
-     "additionalProperties": false,
-     "properties": {
-      "error": true,
-      "rows": {
-       "items": true,
-       "type": [
-        "null",
-        "array"
-       ]
-      },
-      "warnings": {
-       "type": "string"
-      }
-     },
-     "required": [
-      "rows"
-     ],
-     "type": "object"
-    }
-   },
-   {
     "description": "Store text larger than a message (a diff, a log, test output) as a paste kept for a week after it was last shared or read; with channel or to, also post a message sharing it, whose body is the caption and a line naming the paste and whose paste field carries its id, name, language, size and lines. The same text stored twice is one paste. Step get reads one by id, content included; info describes one without its content; list reads your own pastes, the newest limit of them, oldest first.",
     "inputSchema": {
      "additionalProperties": false,
