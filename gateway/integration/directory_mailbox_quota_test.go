@@ -16,6 +16,7 @@ import (
 )
 
 func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
+	t.Parallel()
 	f := prepareDirectoryMailboxFixture(t)
 	for i := 0; i < adapter.MaxDirectoryMailboxFiles; i++ {
 		name := fmt.Sprintf("quota-%03d", i)

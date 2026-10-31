@@ -20,6 +20,7 @@ import (
 // check, then waits: a live post in either room ends the wait with it, and
 // a quiet wait ends empty at its bound.
 func TestBackendCheckRoomsAndWait(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	b, err := backend.New(c)
@@ -118,6 +119,7 @@ func postWhileAwaiting(t *testing.T, b *backend.Backend, post func() error) time
 // timeout with nothing to read: keepalive pings hold the session, and the
 // quiet check answers empty instead of failing.
 func TestBackendCheckLongWait(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	b, err := backend.New(c)
@@ -149,6 +151,7 @@ func TestBackendCheckLongWait(t *testing.T) {
 // its listener lets it read. A message to the same nickname from before the
 // account existed is left out; a guest has no inbox.
 func TestBackendCheckInbox(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, _ := acceptanceJournalFixture(t, socket, token)
@@ -232,6 +235,7 @@ func TestBackendCheckInbox(t *testing.T) {
 // readable room comes whole, a thread in a direct conversation is withheld,
 // and a thread AIRC does not retain is expired.
 func TestBackendCheckThreads(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	b, err := backend.New(c)
@@ -316,6 +320,7 @@ func TestBackendCheckThreads(t *testing.T) {
 // the cursors returns every message once, in order. A refusal here would
 // meet every retry from the same positions.
 func TestBackendCheckFitsLargeBacklog(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	b, err := backend.New(c)

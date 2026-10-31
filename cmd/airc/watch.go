@@ -49,11 +49,22 @@ type watcher struct {
 	targets []watchTarget
 	backlog int
 
+	// Whose attention the stream watches for: with --mentions only messages
+	// that tag or DM nick are shown; a live one rings the bell (BEL on the
+	// terminal) and notifies the desktop when asked. Backlog does neither.
+	nick     string
+	mentions bool
+	bell     bool
+	notifier *desktopNotifier
+
 	encoder   *json.Encoder
 	last      map[string]string // newest shown message ID per history target
 	seen      map[string]struct{}
 	seenOrder []string
+	shown     int  // messages printed so far
+	live      bool // the session has caught up; what follows was said just now
 	down      bool // an outage has been reported and not yet recovered
+	ctx       context.Context
 }
 
 func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -62,17 +73,29 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel, @nick, or comma-separated list to watch")
 	allDMs := fs.Bool("all-dms", false, "include all direct messages for human oversight")
-	colorMode := fs.String("color", "auto", "colored output: auto, always, or never (auto also honors NO_COLOR)")
+	colorMode := colorFlag(fs)
 	width := fs.Int("width", 0, "wrap text to this many columns (default: terminal width)")
 	backlog := fs.Int("backlog", -1, fmt.Sprintf("recent messages to show on start, 0 for none (default %d, or 0 with --json)", defaultBacklog))
+	mentions := fs.Bool("mentions", false, "show only messages that tag or DM --nick, following its direct messages too")
+	bell := fs.Bool("bell", false, "ring the terminal bell when a live message tags or DMs --nick")
+	notify := fs.Bool("notify", false, "desktop notifications when a live message tags or DMs --nick (opt-in)")
+	quietHours := fs.String("quiet-hours", "", "notification quiet hours, local HH:MM-HH:MM")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *channel == "" && !*allDMs {
 		return errors.New("--channel or --all-dms is required")
 	}
-	if *colorMode != "auto" && *colorMode != "always" && *colorMode != "never" {
-		return errors.New("--color must be auto, always, or never")
+	if err := checkColorMode(*colorMode); err != nil {
+		return err
+	}
+	attentive := *mentions || *bell || *notify
+	if attentive && opt.nick == "" && opt.identityFile == "" {
+		return errors.New("--mentions, --bell and --notify need --nick (or --identity-file): whose mentions to watch for")
+	}
+	notifier, err := newDesktopNotifier(*notify, *quietHours)
+	if err != nil {
+		return err
 	}
 	if *backlog < 0 {
 		*backlog = defaultBacklog
@@ -90,8 +113,16 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 		opt: *opt, out: stdout, json: opt.json, backlog: *backlog,
 		view:    newRenderer(useColor(*colorMode, stdout), outputWidth(*width, stdout), strings.Contains(*channel, ",")),
 		encoder: json.NewEncoder(stdout), last: map[string]string{}, seen: map[string]struct{}{},
+		mentions: *mentions, bell: *bell, notifier: notifier,
 	}
-	for _, item := range splitList(*channel) {
+	if attentive {
+		w.nick = opt.nick
+	}
+	items := splitList(*channel)
+	if *mentions && !slices.ContainsFunc(items, func(item string) bool { return strings.EqualFold(channelName(item), "@"+opt.nick) }) {
+		items = append(items, "@"+opt.nick) // the direct messages are mentions too
+	}
+	for _, item := range items {
 		item = channelName(item)
 		target := watchTarget{observe: item, history: item}
 		if strings.HasPrefix(item, "@") && item != irc.AllDirectMessages {
@@ -115,6 +146,7 @@ func (w *watcher) run(ctx context.Context) error {
 // session runs one connection. up reports whether it got as far as streaming.
 func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (up bool, err error) {
 	defer closeOnCancel(ctx, client)()
+	w.ctx, w.live = ctx, false
 	names := make([]string, len(w.targets))
 	for i, target := range w.targets {
 		if target.history == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
@@ -140,6 +172,11 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		if err := w.write(w.banner()); err != nil {
 			return false, err
 		}
+		if w.mentions && !w.json {
+			if err := w.write(w.view.info("showing only messages that tag or DM "+w.nick, true)); err != nil {
+				return false, err
+			}
+		}
 		if err := w.showTopics(ctx, client, func(event irc.Event) { pending = append(pending, event) }); err != nil {
 			return false, err
 		}
@@ -158,16 +195,18 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 	for _, message := range caught {
 		w.view.reserve(message.From) // fix the nick column before printing anything
 	}
+	shown := w.shown
 	for _, message := range caught {
 		if err := w.emit(message.MessageEvent()); err != nil {
 			return true, err
 		}
 	}
-	if first && len(caught) > 0 && !w.json {
+	if first && w.shown > shown && !w.json {
 		if err := w.write(w.view.rule("live")); err != nil {
 			return true, err
 		}
 	}
+	w.live = true
 	for _, event := range pending {
 		if err := w.handle(event); err != nil {
 			return true, err
@@ -284,10 +323,30 @@ func (w *watcher) emit(message *irc.MessageEvent) error {
 			w.last[irc.AllDirectMessages] = message.ID
 		}
 	}
-	if w.json {
-		return w.encoder.Encode(message)
+	mentioned := w.nick != "" && !strings.EqualFold(message.From, w.nick) && addressedTo(w.nick, message.Target, message.Message, message.For)
+	if w.mentions && !mentioned {
+		return nil
 	}
-	return w.write(w.view.render(message))
+	w.shown++
+	if w.json {
+		if err := w.encoder.Encode(message); err != nil {
+			return err
+		}
+	} else if err := w.write(w.view.render(message)); err != nil {
+		return err
+	}
+	if !w.live || !mentioned {
+		return nil
+	}
+	if w.bell && !w.json {
+		if err := w.write("\a"); err != nil {
+			return err
+		}
+	}
+	if err := w.notifier.notify(w.ctx, message.From+" in "+message.Target, message.Message); err != nil {
+		return w.show("notification failed: "+err.Error(), false)
+	}
+	return nil
 }
 
 func (w *watcher) write(text string) error {

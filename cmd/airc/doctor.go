@@ -104,7 +104,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 					report.Warnings = append(report.Warnings, "History is disabled; offline agents cannot retrieve channel messages")
 				}
 				if report.Server.PersistenceError != "" {
-					report.Warnings = append(report.Warnings, "History persistence failed; messages are only in memory")
+					report.Warnings = append(report.Warnings, "Saving state failed; the daemon serves it from memory: "+report.Server.PersistenceError)
 				}
 			}
 		} else {

@@ -24,7 +24,7 @@ func uncachedLog(b *uiBuffer, width int) []string {
 		}
 	}
 	if len(lines) == 0 {
-		lines = []string{sty("2", " Nothing here yet.")}
+		lines = []string{styled(true, "2", " Nothing here yet.")}
 	}
 	return lines
 }

@@ -26,6 +26,7 @@ func grpcPage(t *testing.T, frame *v1.WatchFrame) backend.HistoryPage {
 }
 
 func TestGRPCWatchRetainedLiveAndCancellation(t *testing.T) {
+	t.Parallel()
 	f := newGRPCGatewayFixture(t)
 	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "grpc-watch-parent")
 	author := dial(t, f.config.Upstream.Address, "grpc-watch-author", "", false, true)

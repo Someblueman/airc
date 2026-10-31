@@ -18,6 +18,7 @@ import (
 // list with members, retained message counts and topics, never a direct
 // conversation, and reflects a native PART on the next read.
 func TestChannelsReadNativeMetadataAndPart(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	live := seedChannels(t, f.socket)
 	beforeHistory := channelHistorySnapshot(t, f.socket)
@@ -74,6 +75,7 @@ func TestChannelsReadNativeMetadataAndPart(t *testing.T) {
 // TestChannelsReadRequiresListenerOperation refuses a read the listener does
 // not grant before any native work.
 func TestChannelsReadRequiresListenerOperation(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()

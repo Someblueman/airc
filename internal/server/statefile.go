@@ -13,9 +13,9 @@ import (
 )
 
 // snapshot is how one JSON state file is read and replaced: a bounded read,
-// one strict decode, and an atomic replace of the whole file. Stores that
-// decode leniently or wrap their own errors read the bytes and decode them
-// themselves.
+// one strict decode, and an atomic replace of the whole file. The stores
+// that set a corrupt file aside rather than refuse to start (topics,
+// profiles) read the bytes and decode them leniently themselves.
 type snapshot struct {
 	limit    int64  // bytes the file may hold
 	tooLarge string // the store's own wording for an oversized file
@@ -23,8 +23,10 @@ type snapshot struct {
 	indent   bool   // written with MarshalIndent (topics)
 }
 
-// chatSnapshot is the snapshot the durable chat stores (accounts, chat,
-// wakes) use: bounded reads and write-before-apply.
+// chatSnapshot is the snapshot accounts, chat and wakes share: bounded
+// reads, a bare null refused, and write-before-apply. How hard a write
+// tries to reach the device is the caller's: accounts and chat use
+// env.sync, wakes env.soft (see storeEnv).
 var chatSnapshot = snapshot{limit: 8 << 20, tooLarge: "invalid or oversized chat state", invalid: "invalid or oversized chat state"}
 
 // bytes reads the file at path, creating its directory first. found is
@@ -78,7 +80,7 @@ func (f snapshot) write(path string, value any, mode atomicfile.Sync) error {
 	return atomicfile.Write(path, append(data, '\n'), 0o600, mode)
 }
 
-// New durable chat stores use bounded reads and write-before-apply snapshots.
+// readState and writeState read and write a file with chatSnapshot.
 func readState(path string, value any) error {
 	return chatSnapshot.read(path, value)
 }

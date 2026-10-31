@@ -20,6 +20,7 @@ import (
 // to the room's native NAMES: joined members with their operator flag, not
 // passive observers, and an explicit empty list for an unknown room.
 func TestMembersReadNativeVisibilityOperatorsAndUnknownRoom(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, []core.Target{{Kind: "room", Name: "#members-unknown"}}, true)
 	const room = "#gateway-fixture"
 	if err := f.observer.Part(room, ""); err != nil {

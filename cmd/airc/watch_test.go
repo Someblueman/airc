@@ -194,3 +194,51 @@ func TestWatchShowsHeadersAtStartAndLiveChanges(t *testing.T) {
 	mustCLI(t, address, "topic", "#room", "--nick", "dana", "--clear")
 	waitForOutput(t, out, "dana cleared the topic of #room")
 }
+
+func TestWatchMentionsShowOnlyWhatTagsOrDMsTheNickAndRingTheBellLive(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	send(t, address, "writer", "#room", "chatter")
+	send(t, address, "writer", "#room", "@me backlog tag")
+	mustCLI(t, address, "send", "--nick", "writer", "--to", "me", "--message", "backlog dm")
+	out, stop := startWatch(t, "--nick", "me", "--channel", "#room", "--mentions", "--bell", "--color", "never", "--width", "100", "--addr", address)
+	waitForOutput(t, out, "--- live ---")
+	got := out.String()
+	if strings.Contains(got, "chatter") || !strings.Contains(got, "backlog tag") || !strings.Contains(got, "backlog dm") {
+		t.Fatalf("backlog should hold only the tag and the DM:\n%s", got)
+	}
+	if strings.Contains(got, "\a") {
+		t.Fatalf("backlog rang the bell:\n%s", got)
+	}
+	if !strings.Contains(got, "showing only messages that tag or DM me") {
+		t.Fatalf("the banner should say what is shown:\n%s", got)
+	}
+	send(t, address, "writer", "#room", "noise")
+	send(t, address, "me", "#room", "@me talking to myself")
+	send(t, address, "writer", "#room", "me: live tag")
+	waitForOutput(t, out, "live tag")
+	got = out.String()
+	if strings.Contains(got, "noise") || strings.Contains(got, "talking to myself") {
+		t.Fatalf("a live message without a mention, or one's own, was shown:\n%s", got)
+	}
+	if strings.Count(got, "\a") != 1 || strings.Index(got, "\a") < strings.Index(got, "live tag") {
+		t.Fatalf("a live mention should ring the bell once, after it is shown:\n%q", got)
+	}
+	mustCLI(t, address, "send", "--nick", "writer", "--to", "me", "--message", "live dm")
+	waitForOutput(t, out, "live dm")
+	if strings.Count(out.String(), "\a") != 2 {
+		t.Fatalf("a live DM should ring the bell:\n%q", out.String())
+	}
+	if err := stop(); err != nil {
+		t.Fatalf("clean shutdown returned %v", err)
+	}
+	for _, args := range [][]string{{"--channel", "#room", "--mentions"}, {"--channel", "#room", "--bell"}, {"--channel", "#room", "--notify"}} {
+		err := runWatchContext(context.Background(), append(args, "--addr", address), io.Discard, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), "--nick") {
+			t.Fatalf("%v without --nick: %v", args, err)
+		}
+	}
+	if err := runWatchContext(context.Background(), []string{"--nick", "me", "--channel", "#room", "--notify", "--quiet-hours", "nonsense", "--addr", address}, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "HH:MM") {
+		t.Fatalf("bad quiet hours: %v", err)
+	}
+}

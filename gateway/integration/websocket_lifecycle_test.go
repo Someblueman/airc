@@ -14,6 +14,7 @@ import (
 )
 
 func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
+	t.Parallel()
 	ping := shortGatewayTimer(t, websocketPingTimer)
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", nil)
 	request := core.Request{Version: 1, RequestID: "heartbeat", Operation: core.CapabilitiesGet}
@@ -67,6 +68,7 @@ func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
 // A listener's keepalive sets its ping interval, with a pong due by the
 // next ping, and how long a socket may wait between requests.
 func TestWebSocketListenerKeepalive(t *testing.T) {
+	t.Parallel()
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", nil, func(l *config.Listener) {
 		l.Keepalive = &config.Keepalive{IdleSeconds: 5, PingSeconds: 1}
 	})

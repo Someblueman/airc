@@ -49,6 +49,7 @@ func nativeSend(t *testing.T, socket, nick, token, room, body, requestID string)
 // send that landed and is retried over a gateway carrier (or the reverse)
 // resolves to the first message, and its receipt reports that message.
 func TestNativeAndGatewayRetriesShareOneRequestID(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	g := startAuthorGateway(t, authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"}))
 	base := "http://" + g.addresses["web"]

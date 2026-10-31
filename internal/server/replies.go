@@ -67,7 +67,7 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 			return repeated == nil
 		})
 		if repeated != nil {
-			s.receiptLocked(client, *repeated, !protocol.IsChannel(repeated.Target) && s.liveNickLocked(repeated.Target) == nil)
+			s.receiptLocked(client, *repeated, s.queuedLocked(*repeated))
 			return
 		}
 	}

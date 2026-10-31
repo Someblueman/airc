@@ -368,7 +368,7 @@ func readRacing(ctx context.Context, opt options, capability string, native func
 		defer closeOneShot(opt, r.native)
 		defer closeOnCancel(ctx, r.native)()
 		if !r.native.Supports(capability) {
-			return fmt.Errorf("this aircd lacks %s; upgrade when safe", capability)
+			return errors.New(lacksCapability(capability))
 		}
 		return native(ctx, r.native)
 	}

@@ -17,6 +17,7 @@ import (
 )
 
 func TestGatewayServeCLIDirectoryWithoutCursorOrChatTargets(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", account, true, true)

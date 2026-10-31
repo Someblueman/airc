@@ -13,6 +13,7 @@ import (
 // A client reaching the gateway reads the same ordered carrier list aircd
 // advertises in 005 CARRIERS, with no credential.
 func TestCapabilitiesPublishCarriers(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"})
 	c.Carriers = []string{"irc:6667", "framed:6683", "http:6680"}

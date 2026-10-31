@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -123,15 +121,17 @@ func (s *Server) channelsLocked(client *session) {
 
 // topicState is the channel headers and the file they are saved to. Every
 // field is read and written with s.mu held; saves run under s.mu with
-// env.soft, and a failed save is logged, not returned.
+// env.soft, and a failed save is logged and reported by STATUS, not
+// returned.
 type topicState struct {
 	topics   map[string]topic // channel headers; independent of who is connected
 	topicsAt string           // file the topics are saved to, if any
 	env      *storeEnv
 }
 
-// Headers are written indented, as they always were, and read unbounded.
-var topicsSnapshot = snapshot{indent: true}
+// topicsSnapshot reads the headers bounded and writes them indented, as
+// they always were; a file that does not decode is set aside (see load).
+var topicsSnapshot = snapshot{limit: 4 << 20, tooLarge: "topics file exceeds 4 MiB", indent: true}
 
 // RestoreTopics loads channel headers from path and saves every later change
 // to it, so headers survive a restart. Call it before Serve.
@@ -145,15 +145,11 @@ func (s *Server) RestoreTopics(path string) error {
 }
 
 func (st *topicState) load(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create topics directory: %w", err)
-	}
-	data, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-	case err != nil:
+	data, found, err := topicsSnapshot.bytes(path)
+	if err != nil {
 		return fmt.Errorf("read topics file: %w", err)
-	default:
+	}
+	if found {
 		var loaded map[string]topic
 		if err := json.Unmarshal(data, &loaded); err != nil {
 			// Headers are not worth refusing to start over: keep the evidence, start empty.
@@ -177,7 +173,7 @@ func (st *topicState) load(path string) error {
 func (st *topicState) close() error { return nil }
 
 func (st *topicState) saveTopicsLocked() {
-	if err := topicsSnapshot.write(st.topicsAt, st.topics, st.env.soft); err != nil {
+	if err := st.env.saved("topics", topicsSnapshot.write(st.topicsAt, st.topics, st.env.soft)); err != nil {
 		st.env.logger.Error("topics_write_failed", "error", err.Error())
 	}
 }

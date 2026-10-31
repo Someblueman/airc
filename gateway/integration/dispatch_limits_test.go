@@ -15,6 +15,7 @@ import (
 )
 
 func TestDispatchListenerOperationsDoNotAdmit(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, identity := acceptanceJournalFixture(t, socket, account)

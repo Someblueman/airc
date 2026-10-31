@@ -12,6 +12,7 @@ import (
 )
 
 func TestPinnedFixtureSharesOnlyImmutableBinary(t *testing.T) {
+	t.Parallel()
 	first, second := fixture(t), fixture(t)
 	provision := dial(t, first, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()

@@ -21,14 +21,12 @@ const (
 	stateProfiles   = "profiles.json"
 	stateModeration = "moderation.json"
 	// statePastes is the paste index; the pastes themselves are files in
-	// the directory named after it (pastes/). There is no --paste-file:
-	// pastes live under --state-dir or beside the history file.
+	// the directory named after it (pastes/).
 	statePastes = "pastes.json"
 )
 
 // statePaths are the daemon's state files, one per feature: "" leaves
-// that feature in memory. As flags they are the explicit --*-file
-// overrides, each of which wins over --state-dir and the older derivations.
+// that feature in memory.
 type statePaths struct {
 	history, accounts, chat, handoffs, decisions, wakes, topics, profiles, moderation, pastes string
 }
@@ -39,25 +37,22 @@ type stateNote struct {
 	event, path, canonical string
 }
 
-// resolveState chooses every state file. An explicit flag wins. Without
-// --state-dir the defaults are the older derivations next to the history
-// file (or the admin token), so no existing invocation changes. With it,
-// each file is DIR/<fixed name>; a file still at its older name is used
-// where the fixed one does not exist yet, so nothing is renamed, and
-// reported in notes. wake says whether wake notices are on, which need the
-// accounts file.
-func resolveState(dir string, flags statePaths, adminToken string, wake bool) (statePaths, []stateNote, error) {
-	paths := statePaths{history: flags.history}
+// resolveState chooses every state file from --state-dir, --history-file and
+// the admin token. Without --state-dir the files sit beside the history file
+// (or the admin token) under their older names, so no existing invocation
+// changes. With it, each file is DIR/<fixed name>; a file still at its older
+// name is used where the fixed one does not exist yet, so nothing is renamed,
+// and reported in notes. wake says whether wake notices are on, which need
+// the accounts file.
+func resolveState(dir, historyFile, adminToken string, wake bool) (statePaths, []stateNote, error) {
+	paths := statePaths{history: historyFile}
 	if dir != "" && paths.history == "" {
 		paths.history = filepath.Join(dir, stateHistory)
 	}
 	var notes []stateNote
-	// choose resolves one file from its override and its older derivation,
-	// which is derived from the files resolved before it.
-	choose := func(override, legacy, name string) (string, error) {
-		if override != "" {
-			return override, nil
-		}
+	// choose resolves one file from its older derivation, which is derived
+	// from the files resolved before it, and its fixed name under dir.
+	choose := func(legacy, name string) (string, error) {
 		if dir == "" {
 			return legacy, nil
 		}
@@ -93,41 +88,36 @@ func resolveState(dir string, flags statePaths, adminToken string, wake bool) (s
 		return ""
 	}
 	var err error
-	if paths.accounts, err = choose(flags.accounts, beside(adminToken, ".accounts.json"), stateAccounts); err != nil {
+	if paths.accounts, err = choose(beside(adminToken, ".accounts.json"), stateAccounts); err != nil {
 		return paths, nil, err
 	}
-	if paths.chat, err = choose(flags.chat, beside(paths.accounts, ".chat.json"), stateChat); err != nil {
+	if paths.chat, err = choose(beside(paths.accounts, ".chat.json"), stateChat); err != nil {
 		return paths, nil, err
 	}
-	if paths.handoffs, err = choose(flags.handoffs, beside(paths.accounts, ".handoffs.jsonl"), stateHandoffs); err != nil {
+	if paths.handoffs, err = choose(beside(paths.accounts, ".handoffs.jsonl"), stateHandoffs); err != nil {
 		return paths, nil, err
 	}
-	if paths.decisions, err = choose(flags.decisions, beside(paths.accounts, ".decisions.jsonl"), stateDecisions); err != nil {
+	if paths.decisions, err = choose(beside(paths.accounts, ".decisions.jsonl"), stateDecisions); err != nil {
 		return paths, nil, err
 	}
 	if wake && paths.accounts != "" {
-		legacy := paths.accounts + ".wakes.json"
-		if paths.wakes, err = choose(flags.wakes, legacy, stateWakes); err != nil {
+		if paths.wakes, err = choose(paths.accounts+".wakes.json", stateWakes); err != nil {
 			return paths, nil, err
 		}
-	} else if wake {
-		paths.wakes = flags.wakes
 	}
-	if paths.topics, err = choose(flags.topics, beside("", ".topics.json"), stateTopics); err != nil {
+	if paths.topics, err = choose(beside("", ".topics.json"), stateTopics); err != nil {
 		return paths, nil, err
 	}
-	if paths.pastes, err = choose("", beside(paths.accounts, ".pastes.json"), statePastes); err != nil {
+	if paths.pastes, err = choose(beside(paths.accounts, ".pastes.json"), statePastes); err != nil {
 		return paths, nil, err
 	}
-	if paths.profiles, err = choose(flags.profiles, beside(paths.accounts, ".profiles.json"), stateProfiles); err != nil {
+	if paths.profiles, err = choose(beside(paths.accounts, ".profiles.json"), stateProfiles); err != nil {
 		return paths, nil, err
 	}
 	if adminToken != "" {
-		if paths.moderation, err = choose(flags.moderation, beside(adminToken, ".moderation.json"), stateModeration); err != nil {
+		if paths.moderation, err = choose(beside(adminToken, ".moderation.json"), stateModeration); err != nil {
 			return paths, nil, err
 		}
-	} else {
-		paths.moderation = flags.moderation
 	}
 	return paths, notes, nil
 }

@@ -14,6 +14,7 @@ import (
 )
 
 func TestUnixPacketNativeRecordSizeProfileAndTargetRefusals(t *testing.T) {
+	t.Parallel()
 	f := newUnixPacketFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, kind := range []string{"unknown-profile", "target", "oversize", "partial"} {

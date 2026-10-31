@@ -272,7 +272,7 @@ func (w *wakes) saveWakesLocked(next map[string]*wakeState) error {
 	for id, state := range next {
 		saved[id] = savedWake{wakeRegistration: state.reg, Pending: state.pending, Latest: state.latest, NextAt: state.nextAt}
 	}
-	if err := writeState(w.path, saved, w.env.soft); err != nil {
+	if err := w.env.saved("wakes", writeState(w.path, saved, w.env.soft)); err != nil {
 		return err
 	}
 	w.dirty, w.saved = false, w.env.now()

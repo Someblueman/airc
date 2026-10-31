@@ -9,9 +9,8 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 )
 
-// coapPeer is the minimal association surface shared by go-coap UDP sessions
-// and the TCP/TLS consumer. The adapter owns admission and cancellation; the
-// peer owns its transport framing.
+// coapPeer is what the adapter uses of a go-coap connection. The adapter owns
+// admission and cancellation; the peer owns its transport framing.
 type coapPeer interface {
 	AcquireMessage(context.Context) *pool.Message
 	ReleaseMessage(*pool.Message)

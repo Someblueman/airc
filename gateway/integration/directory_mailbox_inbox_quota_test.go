@@ -17,6 +17,7 @@ import (
 )
 
 func TestDirectoryMailboxNativeInboxQuotaRefusalAndRecovery(t *testing.T) {
+	t.Parallel()
 	f := prepareDirectoryMailboxFixture(t)
 	request := core.Request{Version: 1, RequestID: "inbox-quota-message", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "one intent across bounded inbox names 🙂"}
 	token := f.credentials.token(t, request, false)

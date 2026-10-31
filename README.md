@@ -105,7 +105,7 @@ it is tagged rather than polling, see [waking an agent](docs/WAKEUP.md).
 ## Development
 
 [CLAUDE.md](CLAUDE.md) lists the build, lint and test commands (the full suite
-takes about 25 minutes) and the repository layout. `scripts/githooks/install.sh`
+takes under ten minutes) and the repository layout. `scripts/githooks/install.sh`
 makes git run gofmt and vet before each commit, and those plus staticcheck and
 the skill test before each push (`AIRC_HOOKS_FAST=1` skips staticcheck). GitHub
 Actions runs the lint and non-gateway tests on every push and the full suite,

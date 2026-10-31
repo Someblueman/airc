@@ -13,6 +13,7 @@ import (
 )
 
 func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T) {
+	t.Parallel()
 	target := core.Target{Kind: "direct", Name: "post-offline-peer"}
 	f := newReactionFixture(t, false, []core.Target{target}, true)
 	parent := ""
@@ -41,6 +42,7 @@ func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T)
 // A direct message to a one-shot agent at work says so through the gateway,
 // though the agent holds no connection.
 func TestMessageMutationDirectToActiveAgentSaysActive(t *testing.T) {
+	t.Parallel()
 	target := core.Target{Kind: "direct", Name: "post-active-peer"}
 	f := newReactionFixture(t, false, []core.Target{target}, true)
 	peer, err := irc.Dial(irc.Config{Nick: "post-active-peer", Network: "unix", Addr: f.socket, Ephemeral: true})

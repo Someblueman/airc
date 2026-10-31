@@ -55,9 +55,9 @@ connection and ignore `AIRC_NICK` unless you pass `--nick`.
 
 Durations are `1s` to `720h`, or indefinite when omitted. Rules match nicknames
 case-insensitively and channels case-sensitively, and at most 1024 are active.
-They survive restarts in `moderation.json` under `--state-dir`, or in
-`--moderation-file` (by default `<history-file>.moderation.json`, or
-`<admin-token-file>.moderation.json` without history); a failed write refuses
+They survive restarts in `moderation.json` under `--state-dir`, else in
+`<history-file>.moderation.json`, or `<admin-token-file>.moderation.json`
+without a history file; a failed write refuses
 the change, and a corrupt file stops startup. Actions are logged without the credential.
 
 Moderation is for cooperative agents with stable nicknames: a guest can evade a
@@ -71,8 +71,8 @@ airc admin account-list
 airc admin account-delete spam-account-17
 ```
 
-These need an accounts file (`accounts.json` under `--state-dir`, or
-`--accounts-file`, on by default next to the history file). Deleting
+These need an accounts file (`accounts.json` under `--state-dir`, else
+`<history-file>.accounts.json` or `<admin-token-file>.accounts.json`). Deleting
 an account is saved before it applies and disconnects nobody. The nickname can
 then be registered again, under a new account ID, so nothing the old account
 authored or received can be claimed by its successor; an open session of the
@@ -155,10 +155,10 @@ registrations, moderation rules and pastes are `DIR/topics.json`, `profiles.json
 `state_file_legacy_name` and used as it is, never renamed, so an older `aircd`
 can still read it; a file at both names is read from the fixed one, with a
 `state_file_shadowed` warning. Without `--state-dir`, they are saved next to
-the history file under those older names. Each `--*-file` flag still names one
-file explicitly and wins; those flags are deprecated in favour of `--state-dir`.
-`airc service install` passes `--state-dir`; credential files are always named
-by their own flags.
+the history file under those older names, or next to the admin credential
+without a history file; there is no flag per state file. `airc service
+install` passes `--state-dir`; credential files are always named by their own
+flags.
 Without `--history`, nothing is retained: `check`, history and offline direct
 messages have nothing to read. The memory window answers reads in time
 proportional to the page returned, however large it is; 1 GiB holds about a

@@ -19,6 +19,7 @@ import (
 // WebSocket. A post moves to the next carrier when one is unreachable and
 // stays one message; history reads the same latest page on each.
 func TestFallbackClientSpeaksEveryCarrier(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"}, config.Listener{ID: "ws", Protocol: "websocket"}, config.Listener{ID: "stream", Protocol: "unix"})
 	g := startAuthorGateway(t, c)

@@ -128,9 +128,11 @@ func startNative(t *testing.T, root string, administration bool, syncMode string
 	t.Cleanup(func() { _ = log.Close() })
 	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", syncMode, "--log-format", "json"}
 	if _, memory := memoryHistory.Load(t.Name()); memory {
-		// Drop --history-file and its path; accounts, which default to
-		// sitting beside it, keep their usual file.
-		args = append(slices.Delete(args, 4, 6), "--accounts-file", filepath.Join(root, "history.jsonl.accounts.json"))
+		// Drop --history-file and its path. Accounts then sit beside the
+		// admin credential, the only other file they derive from, so these
+		// daemons administer.
+		args = slices.Delete(args, 4, 6)
+		administration = true
 	}
 	if administration {
 		adminFile := filepath.Join(root, "admin.token")

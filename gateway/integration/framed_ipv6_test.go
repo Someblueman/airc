@@ -10,6 +10,7 @@ import (
 )
 
 func TestFramedCLINativeIPv6(t *testing.T) {
+	t.Parallel()
 	testnet.RequireIPv6Loopback(t)
 	for _, secure := range []bool{false, true} {
 		conn, credentials, _, stop := framedFixtureAddress(t, secure, "[::1]:0")

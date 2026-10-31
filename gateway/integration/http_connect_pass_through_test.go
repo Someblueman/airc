@@ -31,6 +31,7 @@ import (
 // This is deliberately opt-in: it exercises an installed external proxy rather
 // than making mitmproxy part of the ordinary integration-test prerequisites.
 func TestHTTPConnectProxyPassThroughTLSAcceptance(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("AGW_CONNECT_PROXY") != "1" {
 		t.Skip("requires AGW_CONNECT_PROXY=1 and installed mitmdump")
 	}

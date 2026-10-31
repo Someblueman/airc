@@ -15,6 +15,7 @@ import (
 // native poll: each saved acknowledgement equals the native results, a vote
 // replaces the actor's earlier vote, and close is reported closed.
 func TestPollMutationHTTP(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := contractRoom()
 	observer := newReplySignalObserver(t, f.socket, *target)

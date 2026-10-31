@@ -17,6 +17,7 @@ import (
 
 // Opt-in native-browser probe: open the printed owned URL in a real browser.
 // No user accounts/state or production authorSpec are exposed to this fixture.
+// It drives the host's one browser, so it is not parallel.
 func TestBrowserFetchOriginAndEvents(t *testing.T) {
 	if os.Getenv("AGW_BROWSER_PROBE") != "1" {
 		t.Skip("requires interactive real browser")

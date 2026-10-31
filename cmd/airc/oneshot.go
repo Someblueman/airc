@@ -154,6 +154,29 @@ func hints(err error) []string {
 	return out
 }
 
+// capabilityFlags names the aircd flags behind the 005 capabilities a daemon
+// advertises only when it is configured for them; every other capability
+// comes with the daemon's version.
+var capabilityFlags = map[string]string{
+	"ACCESS":      "--access-token-file",
+	"ACCOUNTS":    "--state-dir, --accounts-file or --admin-token-file",
+	"ADMIN":       "--admin-token-file",
+	"IDEMPOTENCY": "--history",
+	"SAFE_RETRY":  "--history",
+	"TLS":         "--tls-cert and --tls-key",
+	"WAKE":        "--wake-allow (and an accounts file)",
+}
+
+// lacksCapability says why the connected daemon has no capability: the flags
+// it runs without, or, for a capability every current daemon has, its age.
+// The "this aircd lacks" opening is what the hints recognise.
+func lacksCapability(capability string) string {
+	if flags, configured := capabilityFlags[capability]; configured {
+		return fmt.Sprintf("this aircd lacks %s: it runs without %s", capability, flags)
+	}
+	return fmt.Sprintf("this aircd lacks %s; upgrade when safe", capability)
+}
+
 // addressedTo reports whether a message needs nick's attention: it is a direct
 // message to nick, or a channel message that tags or addresses it, a handoff
 // or decision step for it, or one whose group tag (@humans, @agents, @here)

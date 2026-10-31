@@ -13,6 +13,7 @@ import (
 )
 
 func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
+	t.Parallel()
 	for _, datagrams := range []bool{false, true} {
 		t.Run(fmt.Sprintf("datagrams-%t", datagrams), func(t *testing.T) {
 			f := newRawQUICFixture(t, datagrams)

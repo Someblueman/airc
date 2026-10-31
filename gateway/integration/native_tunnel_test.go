@@ -20,6 +20,7 @@ import (
 // after the gateway asserted their source with WEBIRC, and an independent
 // native reader sees the posts.
 func TestNativeTunnelsThroughTheService(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	account := dial(t, socket, "carol", aliceToken, true, false)
 	_ = account.Close()

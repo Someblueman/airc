@@ -25,6 +25,7 @@ import (
 )
 
 func TestHTTPDurableSendAndBoundedHistoryThroughSSHSOCKS(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("AIRC_TEST_SSH_SOCKS") != "1" {
 		t.Skip("set AIRC_TEST_SSH_SOCKS=1 to run the isolated SSH SOCKS fixture")
 	}

@@ -14,9 +14,12 @@ type ServerStatus struct {
 	HistoryFile    bool   `json:"history_file"`
 	// HistoryBytes is the approximate memory the retained window uses, out
 	// of HistoryMaxBytes; ArchiveBytes is the history file and its archive.
-	HistoryBytes     int64  `json:"history_bytes,omitempty"`
-	HistoryMaxBytes  int64  `json:"history_max_bytes,omitempty"`
-	ArchiveBytes     int64  `json:"archive_bytes,omitempty"`
+	HistoryBytes    int64 `json:"history_bytes,omitempty"`
+	HistoryMaxBytes int64 `json:"history_max_bytes,omitempty"`
+	ArchiveBytes    int64 `json:"archive_bytes,omitempty"`
+	// PersistenceError is the history append or rotation that failed, else
+	// the latest state file a store could not save, as "store: error"
+	// (topics, wakes, pastes, ...), until that store saves again.
 	PersistenceError string `json:"persistence_error,omitempty"`
 	// Carriers is the advertised carrier list (see Carrier), in preference order.
 	Carriers []string `json:"carriers,omitempty"`

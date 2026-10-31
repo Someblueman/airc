@@ -177,7 +177,7 @@ type datagramCarrier interface {
 
 // plain, when not nil, admits plain frames run as their author with the
 // carrying connection's source and session.
-func serveFragmentDatagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string, authenticatedActivity func(), plain *dispatch.Ingress) error {
+func serveFragmentDatagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string, plain *dispatch.Ingress) error {
 	if carrier == nil || closeConn == nil || d == nil || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
@@ -215,14 +215,7 @@ func serveFragmentDatagrams(parent context.Context, carrier datagramCarrier, clo
 				return err
 			}
 		}
-		if err := writeCtx.Err(); err != nil {
-			return err
-		}
-		// Errors and transport input never extend a credential-bearing lease.
-		if authenticatedActivity != nil && (response.Result != nil || response.Page != nil) {
-			authenticatedActivity()
-		}
-		return nil
+		return writeCtx.Err()
 	}
 	assembler := newDatagramAssembler()
 	next := func() ([]byte, error) {

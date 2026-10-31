@@ -225,7 +225,7 @@ var commandTable = []command{
 		help: `  airc agents [--json]         airc names #room [--json]`},
 	{name: "names", run: local(runNames), group: groupHuman},
 	{name: "ui", run: local(runUI), group: groupHuman,
-		help: `  airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight`},
+		help: `  airc ui [--nick N] [--channel #room,...] [--color auto|always|never]   full-screen client with All DMs human oversight`},
 	{name: "topic", run: local(runTopic), group: groupHuman,
 		help: `  airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check`},
 	{name: "charter", run: plain(runCharterSession), session: true, group: groupHuman,
@@ -239,7 +239,9 @@ var commandTable = []command{
   airc skill reference [SECTION|--list]                       its reference, or one section by heading`},
 	{name: "watch", run: local(runWatch), group: groupHuman,
 		help: `  airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
-                                                             live stream for a human monitor`},
+                                                             live stream for a human monitor
+  airc watch --nick N --channel #room [--mentions] [--bell] [--notify [--quiet-hours 22:00-08:00]]
+                                                             only, or with a bell or desktop notice for, what tags or DMs you`},
 	{name: "interactive", run: localReading(runInteractive), group: groupHuman,
 		help: `  airc --nick N [--channel #general]                         persistent interactive session`},
 }

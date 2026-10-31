@@ -27,6 +27,7 @@ const (
 // client source (WEBIRC); a connection identifies once and then posts as the
 // account; aircd throttles repeated bad tokens from one source.
 func TestAuthorRegisterIdentifyAndThrottle(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	watcher := dial(t, socket, "watcher", "", false, false)
 	if err := watcher.Join("#lobby"); err != nil {
@@ -113,6 +114,7 @@ func TestAuthorRegisterIdentifyAndThrottle(t *testing.T) {
 // a history cursor resumes elsewhere, and a registered author's job parked by
 // a gateway restart resumes when the request comes back with its token.
 func TestAuthorStateCrossesCarriersAndRestarts(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	provision := dial(t, socket, "alice", aliceToken, true, true)
 	_ = provision.Close()
@@ -193,6 +195,7 @@ func TestAuthorStateCrossesCarriersAndRestarts(t *testing.T) {
 // without TLS and server-sent events. JSON-RPC and MCP are suite carriers
 // (TestCarrierSuite/jsonrpc, TestCarrierSuite/mcp_http).
 func TestAuthorHTTPFamilyCarriers(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"})
 	g := startAuthorGateway(t, c)

@@ -14,6 +14,7 @@ import (
 )
 
 func TestGRPCReplayAndWholeNativeHistorySearchContext(t *testing.T) {
+	t.Parallel()
 	f := newGRPCGatewayFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	send := core.Request{Version: 1, RequestID: "grpc-replay-send", Operation: core.Send, Target: room, Message: "gRPC héllo 🌍\nsecond line"}

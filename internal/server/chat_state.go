@@ -117,7 +117,7 @@ func (st *chatStore) close() error { return nil }
 // writeChatLocked writes next, the snapshot as it will be, before the
 // caller applies it.
 func (st *chatStore) writeChatLocked(next chatState) error {
-	return writeState(st.chatAt, next, st.env.sync)
+	return st.env.saved("chat", writeState(st.chatAt, next, st.env.sync))
 }
 
 func (s *Server) saveChatLocked(next chatState) error {
