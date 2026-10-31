@@ -105,7 +105,7 @@ func contextFixture(t *testing.T, lines []string, continuous bool) (*irc.Client,
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprintf(conn, ":server 005 reader CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 :features\r\n:server 001 reader :welcome\r\n")
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 			}
 			if !strings.HasPrefix(line, "CHAT :") {
 				continue

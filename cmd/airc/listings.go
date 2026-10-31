@@ -30,8 +30,7 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 	}
 	defer client.Close()
 	defer closeOnCancel(ctx, client)()
-	// ACTIVE adds one-shot agents active in the last ten minutes; an older
-	// daemon ignores it and lists persistent sessions as before.
+	// ACTIVE adds one-shot agents active in the last ten minutes.
 	if err := client.Raw("AGENTS ACTIVE"); err != nil {
 		return err
 	}

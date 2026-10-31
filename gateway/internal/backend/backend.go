@@ -300,6 +300,12 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 			o.Completion.Failure.UpstreamCode = 433
 			return o, nil
 		}
+		if errors.Is(err, irc.ErrDaemonTooOld) {
+			// AIRC is below this gateway's level: nothing it serves is
+			// supported until the daemon is replaced and restarted, which
+			// no retry does.
+			return failed(a, core.UnsupportedOperation, false, false), nil
+		}
 		return failed(a, core.UpstreamUnavailable, true, false), nil
 	}
 	closed := make(chan struct{})
@@ -317,9 +323,6 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 		_ = client.Close()
 	}()
 	accountID = client.AccountID()
-	if !client.Ephemeral() {
-		return failed(a, core.UnsupportedOperation, false, false), nil
-	}
 	for _, feature := range m.features {
 		if !client.Supports(feature) {
 			return failed(a, core.UnsupportedOperation, false, false), nil
@@ -331,10 +334,11 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 }
 
 // mutation is how one durable operation runs against AIRC: whether a lookup
-// grant may ask about an earlier send, the features AIRC must have (names
-// irc.Client.Supports answers for: protocol.Features rows, which the daemon's
-// AIRC level grants, and the tokens that depend on its configuration), and
-// the exchange that writes the command and recognises its acknowledgement.
+// grant may ask about an earlier send, the tokens AIRC must advertise beyond
+// its level (those that depend on its configuration: IDEMPOTENCY and
+// SAFE_RETRY need history; every feature of this gateway's AIRC level comes
+// with any daemon it reaches, since the dial refuses an older one), and the
+// exchange that writes the command and recognises its acknowledgement.
 type mutation struct {
 	lookup   bool
 	features []string
@@ -342,25 +346,25 @@ type mutation struct {
 }
 
 var mutations = map[core.Operation]mutation{
-	core.Send:  {lookup: true, features: []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY"}, exchange: sendExchange},
-	core.Reply: {lookup: true, features: []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY", "REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: parentExchange},
+	core.Send:  {lookup: true, features: []string{"IDEMPOTENCY", "SAFE_RETRY"}, exchange: sendExchange},
+	core.Reply: {lookup: true, features: []string{"IDEMPOTENCY", "SAFE_RETRY"}, exchange: parentExchange},
 	// REACT has no native request-ID lookup.
-	core.ReactionAdd:       {features: []string{"RECEIPTS", "REACTIONS", "REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: reactionExchange},
-	core.ProfileUpdate:     {features: []string{"DIRECTORY"}, exchange: cardExchange},
-	core.PresenceSet:       {features: []string{"DIRECTORY"}, exchange: cardExchange},
-	core.TopicSet:          {exchange: topicExchange}, // TOPIC is a baseline command, like topic.read.
-	core.RoomUpdate:        {features: []string{"ROOM"}, exchange: roomExchange},
-	core.PinsAdd:           {features: []string{"PINS", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
-	core.PinsRemove:        {features: []string{"PINS", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
-	core.ActivitySet:       {features: []string{"CHAT"}, exchange: activityExchange},
-	core.ReplySignalSet:    {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
-	core.ReplySignalCancel: {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
-	core.PollCreate:        {features: []string{"POLLS"}, exchange: pollMutationExchange},
-	core.PollVote:          {features: []string{"POLLS"}, exchange: pollMutationExchange},
-	core.PollClose:         {features: []string{"POLLS"}, exchange: pollMutationExchange},
-	core.MessageAction:     {features: []string{"CHAT"}, exchange: chatPostExchange},
-	core.MessageCorrect:    {features: []string{"CHAT"}, exchange: chatPostExchange},
-	core.MessageRetract:    {features: []string{"CHAT"}, exchange: chatPostExchange},
+	core.ReactionAdd:       {exchange: parentExchange},
+	core.ProfileUpdate:     {exchange: cardExchange},
+	core.PresenceSet:       {exchange: cardExchange},
+	core.TopicSet:          {exchange: topicExchange},
+	core.RoomUpdate:        {exchange: roomExchange},
+	core.PinsAdd:           {exchange: pinExchange},
+	core.PinsRemove:        {exchange: pinExchange},
+	core.ActivitySet:       {exchange: activityExchange},
+	core.ReplySignalSet:    {exchange: replySignalExchange},
+	core.ReplySignalCancel: {exchange: replySignalExchange},
+	core.PollCreate:        {exchange: pollMutationExchange},
+	core.PollVote:          {exchange: pollMutationExchange},
+	core.PollClose:         {exchange: pollMutationExchange},
+	core.MessageAction:     {exchange: chatPostExchange},
+	core.MessageCorrect:    {exchange: chatPostExchange},
+	core.MessageRetract:    {exchange: chatPostExchange},
 }
 
 // accepted is an exchange's outcome once AIRC acknowledged the mutation: the

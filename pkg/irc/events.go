@@ -109,14 +109,13 @@ func (e *HistoryEvent) MessageEvent() *MessageEvent {
 
 // EndOfHistoryEvent closes a history reply. Status is "ok", "more" (the limit was
 // reached and later messages remain), or "expired" (the cursor is no longer
-// retained, so the latest messages were sent instead). Servers that predate
-// cursors leave it empty.
+// retained, so the latest messages were sent instead).
 type EndOfHistoryEvent struct {
 	Type   string `json:"type"`
 	Target string `json:"target"`
 	Status string `json:"status,omitempty"`
 	// Cursor is the server watermark when caught up, or the last returned ID
-	// when more remain. Older servers leave it empty.
+	// when more remain.
 	Cursor string `json:"cursor,omitempty"`
 }
 

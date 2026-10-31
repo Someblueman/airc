@@ -26,9 +26,6 @@ func (e *pollNativeError) Unwrap() error { return ErrReadUnavailable }
 func (b *Backend) Poll(ctx context.Context, grant *store.ReadGrant) (core.PollResult, error) {
 	valid := func(r core.Request) bool { return roomRead(core.PollResults)(r) && protocol.ValidMessageID(r.PollID) }
 	return readSnapshot(ctx, b, grant, valid, core.MaxPollBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.PollResult, error) {
-		if !client.Supports("POLLS") {
-			return core.PollResult{}, ErrReadUnsupported
-		}
 		return boundedPollRequest(ctx, client, r.Target.Name, r.PollID, core.MaxPollBytes)
 	})
 }

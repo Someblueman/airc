@@ -155,13 +155,7 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	if *wait > 0 {
 		return waitForAnswer(*opt, r.ID, *wait, stdout, stderr)
 	}
-	// Gated on the action's own feature, so an older daemon is told what it
-	// lacks (pins, polls, room settings or charters) rather than CHAT.
-	capability := protocol.ChatFeature(r.Action)
-	if r.Charter != nil {
-		capability = "CHARTER"
-	}
-	return chatRequestWithContext(ctx, *opt, capability, func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 		if changingRoom && !*asOperator {
 			path := *tokenFile
 			if path == "" {
@@ -181,23 +175,10 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 		}
 		entries, err := irc.RequestChat(ctx, client, r, nil)
 		if err != nil {
-			if r.Charter != nil && charterUnsupported(err) {
-				return errNoCharters
-			}
 			return err
 		}
 		return emitEntries(stdout, entries, opt.json, shapeOf(r))
 	})
-}
-
-// errNoCharters is what a daemon from before room charters amounts to: its
-// strict decode refuses the field it does not know.
-var errNoCharters = errors.New("this aircd predates room charters; restart it from a current build")
-
-// charterUnsupported reports the rejection an older daemon's strict decode
-// gives a request with the charter field.
-func charterUnsupported(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "CHAT needs one bounded JSON request")
 }
 
 // charterText reads the charter --charter names: a file, - for stdin, or ""
@@ -246,7 +227,7 @@ func runCharterSession(ctx context.Context, session *agentConnection, args []str
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "CHARTER", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 		entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}, nil)
 		if err != nil {
 			return err

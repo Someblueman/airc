@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -68,7 +69,7 @@ func disconnectedReplyClient(t *testing.T, reply string) *irc.Client {
 		for scanner.Scan() {
 			switch {
 			case strings.HasPrefix(scanner.Text(), "USER "):
-				if _, err := fmt.Fprint(conn, ":server 001 observer :welcome\r\n"); err != nil {
+				if _, err := fmt.Fprintf(conn, ":server 005 observer AIRC=%d :features\r\n:server 001 observer :welcome\r\n", protocol.Level); err != nil {
 					finished <- err
 					return
 				}

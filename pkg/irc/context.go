@@ -28,29 +28,22 @@ func RequestContextWithEvents(ctx context.Context, c *Client, id string, limit i
 }
 
 // ContextOptions bounds retained records and, when nonzero, the complete wire
-// response (777 entries and 778 terminator including CRLF). MaxBytes requires
-// CONTEXT_BYTES and must be 1024-1048576; zero retains legacy unbounded behavior.
+// response (777 entries and 778 terminator including CRLF). MaxBytes must be
+// 1024-1048576; zero leaves the response unbounded.
 type ContextOptions struct {
 	Limit    int
 	MaxBytes int
 }
 
-// RequestContextWithOptions requests server-side bounds. Unsupported byte budgets
-// fail before sending; callers can explicitly choose legacy retrieval instead.
-// It requires exclusive ownership of the event stream, as RequestChat does.
+// RequestContextWithOptions requests server-side bounds. It requires
+// exclusive ownership of the event stream, as RequestChat does.
 func RequestContextWithOptions(ctx context.Context, c *Client, id string, options ContextOptions, other func(Event)) (ConversationContext, error) {
 	result := ConversationContext{}
-	if !c.Supports("CONTEXT") {
-		return result, errors.New("context requires CONTEXT on the daemon")
-	}
 	if !protocol.ValidIDArgument(id) || options.Limit < 1 || options.Limit > 1000 {
 		return result, errors.New("context requires a message ID and limit 1-1000")
 	}
 	if options.MaxBytes != 0 && (options.MaxBytes < 1024 || options.MaxBytes > 1<<20) {
 		return result, errors.New("context max_bytes must be 1024-1048576 or zero")
-	}
-	if options.MaxBytes != 0 && !c.Supports("CONTEXT_BYTES") {
-		return result, errors.New("context byte budget requires CONTEXT_BYTES on the daemon")
 	}
 	entries, err := RequestChat(ctx, c, ChatRequest{Action: "context", ID: id, Limit: options.Limit, MaxBytes: options.MaxBytes}, other)
 	if err != nil {

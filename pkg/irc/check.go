@@ -12,9 +12,6 @@ import (
 // RequestCheck has the same single outstanding request rule as RequestChat.
 // Unrelated live events are forwarded while the complete snapshot is read.
 func RequestCheck(ctx context.Context, c *Client, r CheckRequest, other func(Event)) ([]CheckEntry, error) {
-	if !c.Supports("CHECK") {
-		return nil, errors.New("combined checks require CHECK on the daemon")
-	}
 	data, err := json.Marshal(r)
 	if err != nil {
 		return nil, err

@@ -16,6 +16,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/backend"
 	"github.com/Someblueman/airc/gateway/internal/config"
 	"github.com/Someblueman/airc/gateway/internal/core"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
@@ -250,7 +251,7 @@ func scriptCoAPUDPWatchUpstream(t *testing.T, address string) <-chan struct{} {
 			line := lines.Text()
 			switch {
 			case strings.HasPrefix(line, "USER "):
-				_, _ = fmt.Fprintf(conn, ":server 766 %[1]s :ephemeral\r\n:server 005 %[1]s CHECK=1 :features\r\n:server 001 %[1]s :welcome\r\n", coapUDPWatcher)
+				_, _ = fmt.Fprintf(conn, ":server 766 %[1]s :ephemeral\r\n:server 005 %[1]s AIRC=%[2]d :features\r\n:server 001 %[1]s :welcome\r\n", coapUDPWatcher, protocol.Level)
 			case strings.HasPrefix(line, "OBSERVE "):
 				_, _ = fmt.Fprintf(conn, ":server 765 %s %s\r\n", coapUDPWatcher, strings.TrimPrefix(line, "OBSERVE "))
 			case strings.HasPrefix(line, "CHECK "):

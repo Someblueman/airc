@@ -71,8 +71,8 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	defer c.Close()
-	if !c.Supports("BOT_REPLIES") || c.Features()["HISTORY"] == "0" {
-		return errors.New("bot requires BOT_REPLIES and retained history on the daemon")
+	if c.Features()["HISTORY"] == "0" {
+		return errors.New("bot requires retained history on the daemon")
 	}
 	for _, channel := range cfg.Channels {
 		if err := c.Join(channel); err != nil {

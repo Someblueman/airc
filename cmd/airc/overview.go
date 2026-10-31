@@ -213,7 +213,7 @@ func runChannelsSession(ctx context.Context, session *agentConnection, args []st
 		return nil
 	}
 	// The room list reads the same over any carrier.
-	return readRacing(ctx, *opt, "CHANNELS", func(ctx context.Context, client *irc.Client) error {
+	return readRacing(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 		list, err := fetchChannels(client, nil)
 		if err != nil {
 			return err

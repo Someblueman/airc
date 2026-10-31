@@ -40,15 +40,6 @@ func TestUIAuditShowsAllDMsWithoutPollutingPersonalInbox(t *testing.T) {
 	}
 }
 
-func TestUIAuditReportsUnsupportedDaemon(t *testing.T) {
-	m := newTestModel()
-	m.update(auditIn{available: false})
-	m.switchTo(irc.AllDirectMessages)
-	if header := visible(m.header(m.cur(), 140)); !strings.Contains(header, "unavailable") || !strings.Contains(header, "DM_AUDIT") {
-		t.Fatalf("unsupported audit was silently presented as empty: %s", header)
-	}
-}
-
 func TestAuditCodeLinesFitNarrowPanes(t *testing.T) {
 	m := newTestModel()
 	m.update(msgIn{event: uiMessage("code", "longsendernickname", "longrecipientnickname", "```python\n    value  =  'keep  spaces'\n```", 0)})

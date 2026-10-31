@@ -50,9 +50,6 @@ func (b *Backend) Check(ctx context.Context, grant *store.ReadGrant, scope Check
 	scope.DirectMessages = scope.DirectMessages && a.Author.Registered
 	var result core.CheckResult
 	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
-		if !client.Supports("CHECK") {
-			return ErrReadUnsupported
-		}
 		p := checkPlan{request: r, scope: scope, nick: client.Nick()}
 		if !strings.EqualFold(p.nick, a.Author.Nick) {
 			return auth.ErrForbidden

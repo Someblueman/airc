@@ -30,8 +30,8 @@ func charterHeader(room, text string, store *cursorStore) (checkTopic, bool) {
 	return checkTopic{Type: "charter", Target: room, Charter: text, Fingerprint: fingerprint}, true
 }
 
-// checkCharters reads each followed room's charter on a daemon without
-// CHECK, as checkPins reads its pins.
+// checkCharters reads each followed room's charter when a check is too large
+// to combine, as checkPins reads its pins.
 func checkCharters(ctx context.Context, c *irc.Client, rooms []checkTarget, store *cursorStore, other func(irc.Event)) ([]checkTopic, error) {
 	var headers []checkTopic
 	for _, room := range rooms {

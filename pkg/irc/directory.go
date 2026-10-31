@@ -11,9 +11,6 @@ import (
 )
 
 func (c *Client) Directory(nick string) error {
-	if !c.Supports("DIRECTORY") {
-		return errors.New("directory needs a daemon with DIRECTORY")
-	}
 	if nick == "" {
 		return c.Raw("DIRECTORY")
 	}
@@ -22,9 +19,6 @@ func (c *Client) Directory(nick string) error {
 
 // UpdateProfile changes only supplied fields of this nickname's card.
 func (c *Client) UpdateProfile(fields map[string]string) error {
-	if !c.Supports("DIRECTORY") {
-		return errors.New("profiles need a daemon with DIRECTORY")
-	}
 	data, err := json.Marshal(fields)
 	if err != nil {
 		return err
@@ -33,9 +27,6 @@ func (c *Client) UpdateProfile(fields map[string]string) error {
 }
 
 func (c *Client) SetPresence(state, note string, ttl time.Duration) error {
-	if !c.Supports("DIRECTORY") {
-		return errors.New("presence needs a daemon with DIRECTORY")
-	}
 	if state != "clear" && (!protocol.ValidPresence(state) || ttl < time.Second || ttl > time.Hour) || !protocol.BriefText(note, 240) {
 		return errors.New("invalid presence state, TTL (1s-1h), or note (240 bytes)")
 	}
@@ -44,14 +35,8 @@ func (c *Client) SetPresence(state, note string, ttl time.Duration) error {
 }
 
 func (c *Client) React(parent, kind string) error {
-	if !c.Supports("REACTIONS") {
-		return errors.New("reactions need a daemon with REACTIONS")
-	}
 	if !protocol.ValidIDArgument(parent) || !protocol.ValidReaction(kind) {
 		return errors.New("reaction requires a message ID and a single symbol")
-	}
-	if kind != "seen" && kind != "checking" && kind != "agree" && kind != "disagree" && !c.Supports("CUSTOM_REACTIONS") {
-		return errors.New("custom reactions need CUSTOM_REACTIONS")
 	}
 	return c.Raw("REACT " + parent + " :" + kind)
 }
@@ -61,8 +46,7 @@ func (c *Client) Search(target, query, from, after string, limit int) error {
 	return c.SearchWith(target, query, from, after, limit, SearchOptions{})
 }
 
-// SearchOptions refine a search on a daemon with SEARCH_TERMS. The zero value
-// is a plain SEARCH: one case-insensitive substring, oldest first.
+// SearchOptions refine a search. The zero value is a plain SEARCH: one case-insensitive substring, oldest first.
 type SearchOptions struct {
 	// Terms reads the query as terms that must all occur: words, "quoted
 	// phrases", and -word or -"phrase" for what must not.
@@ -100,12 +84,8 @@ func (o SearchOptions) encode() string {
 	return strings.Join(parts, ",")
 }
 
-// SearchWith is Search with options. Options other than the zero value need
-// a daemon with SEARCH_TERMS.
+// SearchWith is Search with options.
 func (c *Client) SearchWith(target, query, from, after string, limit int, options SearchOptions) error {
-	if !c.Supports("SEARCH") {
-		return errors.New("search needs a daemon with SEARCH")
-	}
 	if !protocol.BriefText(query, 256) || query == "" || limit < 1 || limit > 1000 {
 		return errors.New("search requires a query of at most 256 bytes and limit 1-1000")
 	}
@@ -116,13 +96,10 @@ func (c *Client) SearchWith(target, query, from, after string, limit int, option
 		from = "*"
 	}
 	params := []string{target, fmt.Sprint(limit), after, from}
-	if options.Run != "" && (!c.Supports("RUN") || !protocol.ValidRunID(options.Run)) {
-		return errors.New("run filters need a daemon with RUN and a label of 1-64 letters, digits, '.', '_' or '-'")
+	if options.Run != "" && !protocol.ValidRunID(options.Run) {
+		return errors.New("a run label is 1-64 letters, digits, '.', '_' or '-'")
 	}
 	if encoded := options.encode(); encoded != "" {
-		if !c.Supports("SEARCH_TERMS") {
-			return errors.New("search terms, time windows and newest-first need a daemon with SEARCH_TERMS")
-		}
 		params = append(params, encoded)
 	}
 	return c.command("SEARCH", params, query)

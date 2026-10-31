@@ -56,10 +56,8 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 		if after == "" {
 			if protocol.IsChannel(target.name) {
 				limit = c.settings.initial
-			} else if c.client.Supports("HISTORY_START") {
-				after = "*"
 			} else {
-				limit = 1000 // oldest available through an older daemon's latest-only API
+				after = "*" // an inbox or a thread is read from its oldest retained message
 			}
 		}
 		read := targetRead{target: target}
@@ -77,17 +75,10 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 			}
 			if page.status == "expired" {
 				batch.gaps = append(batch.gaps, target.name)
-				if c.client.Supports("HISTORY_START") {
-					page, err = fetchHistory(ctx, c.client, target.name, "*", limit, c.noteLive)
-				} else {
-					page, err = fetchHistory(ctx, c.client, target.name, "", 1000, c.noteLive)
-				}
+				page, err = fetchHistory(ctx, c.client, target.name, "*", limit, c.noteLive)
 				if err != nil {
 					return checkBatch{}, err
 				}
-			}
-			if !c.client.Supports("HISTORY_START") && len(page.messages) == 1000 && (after == "" || len(batch.gaps) > 0) {
-				batch.warnings = append(batch.warnings, "Older daemon recovery is limited to the latest 1000 messages for "+target.name)
 			}
 			read.page.status, read.page.cursor = page.status, page.cursor
 			for i, message := range page.messages {

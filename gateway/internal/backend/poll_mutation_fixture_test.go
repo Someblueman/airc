@@ -33,7 +33,7 @@ func pollMutationFixture(t *testing.T, target string, result irc.ChatEntry, rece
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprint(conn, ":server 005 reader AIRC=1 :features\r\n:server 001 reader :welcome\r\n") // a daemon with the level token, no CHAT=1
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 				continue
 			}
 			if strings.Contains(line, `"action":"results"`) {

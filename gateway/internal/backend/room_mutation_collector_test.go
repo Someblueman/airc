@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -93,7 +94,7 @@ func roomMutationFixture(t *testing.T, lines string, continuous bool) (*irc.Clie
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprint(conn, ":server 005 reader AIRC=1 :features\r\n:server 001 reader :welcome\r\n") // a daemon with the level token, no CHAT=1
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 			}
 			if !strings.HasPrefix(line, "CHAT :") {
 				continue

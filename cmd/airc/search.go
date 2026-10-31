@@ -36,7 +36,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	until := fs.String("until", "", "only messages before this time, in the same forms as --since")
 	newest := fs.Bool("newest", false, "newest matches first (reads the memory window; older matches may remain in the archive)")
 	exact := fs.Bool("exact", false, "match the query as one literal substring, not as terms")
-	run := fs.String("run", "", "only messages posted under this run label (needs a daemon with RUN)")
+	run := fs.String("run", "", "only messages posted under this run label")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -98,13 +98,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	}
 	native := func(ctx context.Context, client *irc.Client) error {
 		search := options
-		switch {
-		case *exact:
-		case client.Supports("SEARCH_TERMS"):
-			search.Terms = true
-		case !plainSearchWord(query):
-			fmt.Fprintln(stderr, "airc: this aircd predates SEARCH_TERMS, so the query was matched as one exact substring; upgrade when safe")
-		}
+		search.Terms = !*exact
 		if err := client.SearchWith(*target, query, *from, *after, *limit, search); err != nil {
 			return err
 		}
@@ -116,12 +110,12 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	}
 	refined := options.Newest || options.Run != "" || !options.Since.IsZero() || !options.Until.IsZero() || !*exact && !plainSearchWord(query)
 	if *after != "*" || !protocol.IsChannel(*target) || refined {
-		return chatRequestWithContext(ctx, *opt, "SEARCH", native)
+		return chatRequestWithContext(ctx, *opt, native)
 	}
 	// The first page of a room's matches for one word reads the same over any
 	// carrier; the gateway matches a literal substring, which a single plain
 	// word is either way.
-	return readRacing(ctx, *opt, "SEARCH", native, func(ctx context.Context, conn *fallback.Conn) (fallback.Endpoint, error) {
+	return readRacing(ctx, *opt, native, func(ctx context.Context, conn *fallback.Conn) (fallback.Endpoint, error) {
 		found, err := conn.Search(ctx, fallback.Search{Room: *target, Query: query, From: *from, Limit: *limit})
 		if err != nil {
 			return fallback.Endpoint{}, err

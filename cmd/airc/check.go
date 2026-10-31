@@ -53,7 +53,7 @@ func addCheckOptions(fs *flag.FlagSet) *checkOptions {
 	fs.StringVar(&c.decision, "decision", "", "wait for this decision to be answered or withdrawn and print it (with --wait; moves no cursors)")
 	fs.DurationVar(&c.wait, "wait", 0, "total time allowed for a blocking check (for example 60s)")
 	fs.BoolVar(&c.peek, "peek", false, "show messages without marking them read")
-	fs.IntVar(&c.limit, "limit", 100, "legacy history page size (1-1000); combined checks use the output budget")
+	fs.IntVar(&c.limit, "limit", 100, "history page size (1-1000) of a check too large to combine; combined checks use the output budget")
 	fs.IntVar(&c.initial, "initial", 20, "recent channel context on first check (inboxes start at the oldest retained message)")
 	fs.IntVar(&c.maxMessages, "max-messages", 100, "maximum messages returned by one check (1-1000)")
 	fs.IntVar(&c.maxBytes, "max-bytes", 32768, "maximum output bytes including metadata (1024-1048576); messages are never truncated")
@@ -208,7 +208,7 @@ func (c *checkOptions) decisionOnly(fs *flag.FlagSet) error {
 // followed by a status: decided when it is final, wait_expired when it is
 // still open.
 func waitForDecision(ctx context.Context, opt options, id string, wait time.Duration, stdout io.Writer) error {
-	return chatRequestWithContext(ctx, opt, "DECISION", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
 		fetch := func() (irc.ChatEntry, error) {
 			entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "decisions", ID: id}, nil)
 			if err != nil {
@@ -346,23 +346,10 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		defer closeOneShot(opt, client)
 	}
 	defer closeOnCancel(ctx, client)()
-	if !client.Ephemeral() {
-		return errors.New("this aircd predates airc check; upgrade the daemon when its active work is finished")
-	}
-	if settings.replyTo != "" && !client.Supports("REPLIES") {
-		return errors.New("reply checks need a daemon with REPLIES; upgrade/restart when active work is finished")
-	}
 	if value, known := client.Features()["HISTORY"]; known && value == "0" {
 		return errors.New("aircd history is disabled; check cannot retrieve messages (start the daemon with --history N when safe)")
 	}
-	inbox := checkTarget{name: opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick}
-	if client.Supports("MENTIONS") {
-		inbox.name = "@" + opt.nick
-	} else if settings.mentions {
-		return errors.New("this aircd predates mentions; upgrade it when safe; ordinary check still reads followed channels and direct messages")
-	} else {
-		fmt.Fprintln(stderr, "airc: warning: this daemon has no cross-channel mentions; only followed channels and direct messages are checked (see airc doctor)")
-	}
+	inbox := checkTarget{name: "@" + opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick}
 	targets := append(followed, inbox)
 	if settings.replyTo == "" && !settings.mentions {
 		for _, id := range store.Follows {
@@ -385,19 +372,21 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		}
 	}
 	var headers []checkTopic
-	combined := client.Supports("CHECK") && len(targets) <= 64
+	// One combined snapshot, unless the check has more selectors than CHECK
+	// takes or its request exceeds a line: then each part is read on its own.
+	combined := len(targets) <= 64
 	if combined {
 		data, _ := json.Marshal(c.combinedRequest(store, followed))
 		combined = len(data)+len("CHECK :") <= protocol.MaxLineLength
 	}
-	if !combined && client.Supports("PINS") && !settings.mentions && settings.replyTo == "" {
+	if !combined && !settings.mentions && settings.replyTo == "" {
 		pins, err := checkPins(ctx, client, followed, store, c.noteLive)
 		if err != nil {
 			return err
 		}
 		headers = append(headers, pins...)
 	}
-	if !combined && client.Supports("TOPIC") && !settings.mentions && settings.replyTo == "" {
+	if !combined && !settings.mentions && settings.replyTo == "" {
 		for _, target := range followed {
 			text, err := fetchTopic(ctx, client, target.name, c.noteLive)
 			if err != nil {
@@ -408,7 +397,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 			}
 		}
 	}
-	if !combined && client.Supports("CHARTER") && !settings.mentions && settings.replyTo == "" {
+	if !combined && !settings.mentions && settings.replyTo == "" {
 		charters, err := checkCharters(ctx, client, followed, store, c.noteLive)
 		if err != nil {
 			return err

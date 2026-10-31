@@ -32,9 +32,6 @@ func (b *Backend) Directory(ctx context.Context, grant *store.ReadGrant) (Direct
 	}
 	var snapshot DirectorySnapshot
 	err = b.withRead(ctx, a, false, func(ctx context.Context, client *irc.Client) error {
-		if !client.Supports("DIRECTORY") {
-			return ErrReadUnsupported
-		}
 		if err := client.Directory(a.Request.Query); err != nil {
 			return ErrReadUnavailable
 		}

@@ -156,12 +156,8 @@ func pasteSourceOf(data []byte, name, language string) (*pasteSource, error) {
 	return &pasteSource{name: name, language: language, content: data}, nil
 }
 
-// uploadFor uploads src over client, which must serve PASTE, and returns the
-// paste as stored.
+// upload uploads src over client and returns the paste as stored.
 func (src *pasteSource) upload(ctx context.Context, client *irc.Client) (irc.PasteInfo, error) {
-	if !client.Supports("PASTE") {
-		return irc.PasteInfo{}, errors.New("this aircd lacks PASTE; share a smaller excerpt with --file, or upgrade when safe")
-	}
 	if limit := client.PasteLimit(); len(src.content) > limit {
 		return irc.PasteInfo{}, fmt.Errorf("%s is %d bytes; this aircd accepts pastes of at most %d", src.name, len(src.content), limit)
 	}
@@ -268,7 +264,7 @@ func runPasteSession(ctx context.Context, session *agentConnection, args []strin
 			return err
 		}
 	}
-	return chatRequestWithContext(ctx, *opt, "PASTE", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 		switch action {
 		case "put":
 			info, err := src.upload(ctx, client)

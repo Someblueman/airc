@@ -75,23 +75,12 @@ func TestChatCommandsRejectInvalidUpdatesAndOlderDaemons(t *testing.T) {
 	if got := mustCLI(t, address, "directory", "--json"); got != "" {
 		t.Fatalf("invalid updates created cards: %s", got)
 	}
-	for _, args := range [][]string{
-		{"directory"}, {"profile", "--nick", "alice", "--about", "reviewer"},
-		{"presence", "--nick", "alice", "--set", "thinking"},
-		{"search", "needle"}, {"react", strings.Repeat("a", 32), "seen", "--nick", "alice"},
-	} {
-		old, _ := olderDaemon(t, false)
-		if _, _, err := cli(t, old, args...); err == nil || !strings.Contains(err.Error(), "DIRECTORY") && !strings.Contains(err.Error(), "SEARCH") && !strings.Contains(err.Error(), "REACTIONS") {
-			t.Fatalf("old daemon accepted %v: %v", args, err)
-		}
-	}
 }
 
-func TestLacksCapabilityNamesTheFlagOrTheUpgrade(t *testing.T) {
+func TestLacksCapabilityNamesTheFlag(t *testing.T) {
 	for capability, want := range map[string]string{
-		"ADMIN":     "this aircd lacks ADMIN: it runs without --admin-token-file",
-		"WAKE":      "this aircd lacks WAKE: it runs without --wake-allow (and an accounts file)",
-		"DIRECTORY": "this aircd lacks DIRECTORY; upgrade when safe",
+		"ADMIN": "this aircd lacks ADMIN: it runs without --admin-token-file",
+		"WAKE":  "this aircd lacks WAKE: it runs without --wake-allow (and an accounts file)",
 	} {
 		if got := lacksCapability(capability); got != want {
 			t.Errorf("lacksCapability(%s) = %q, want %q", capability, got, want)

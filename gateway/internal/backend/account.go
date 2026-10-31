@@ -85,6 +85,10 @@ func accountRefusal(author core.Author, create bool, err error) error {
 	switch {
 	case errors.As(err, &inUse):
 		return &Refusal{core.Failure{Code: core.NickInUse, UpstreamCode: 433}}
+	case errors.Is(err, irc.ErrDaemonTooOld):
+		// AIRC is below this gateway's level (pkg/irc refuses it at the
+		// dial): permanent until the daemon is replaced and restarted.
+		return &Refusal{core.Failure{Code: core.UnsupportedOperation}}
 	case errors.As(err, &verification):
 		return &Refusal{core.Failure{Code: core.AuthenticationFailed}}
 	case errors.As(err, &rejected):

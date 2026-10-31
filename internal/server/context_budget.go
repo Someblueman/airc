@@ -11,7 +11,7 @@ import (
 
 // Encode only admitted records plus the first rejected candidate in each group.
 // Stage the bounded response before enqueueing so a protected-record failure
-// cannot leave a partial context on the connection. Zero preserves legacy reads.
+// cannot leave a partial context on the connection. A zero budget is unbounded.
 func (s *Server) sendContextLocked(client *session, messages, pins []Message, names []string, protected map[string]bool, summary *protocol.ContextSummary, budget int) error {
 	nick := client.client.Nick
 	if nick == "" {

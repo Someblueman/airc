@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 // fakeServer registers one client and then answers its PINGs while answer
@@ -31,7 +33,7 @@ func fakeServer(t *testing.T, answer bool) string {
 				for scanner.Scan() {
 					line := scanner.Text()
 					if strings.HasPrefix(line, "USER ") {
-						fmt.Fprint(conn, ":server 001 me :Welcome\r\n")
+						fmt.Fprintf(conn, ":server 005 me AIRC=%d :features\r\n:server 001 me :Welcome\r\n", protocol.Level)
 					}
 					if token, ok := strings.CutPrefix(line, "PING :"); ok && answer {
 						fmt.Fprintf(conn, ":server PONG server :%s\r\n", token)
@@ -151,7 +153,7 @@ func TestProbeSettlesOnAnyLine(t *testing.T) {
 				break
 			}
 		}
-		fmt.Fprint(conn, ":server 001 me :Welcome\r\n")
+		fmt.Fprintf(conn, ":server 005 me AIRC=%d :features\r\n:server 001 me :Welcome\r\n", protocol.Level)
 		go func() {
 			for scanner.Scan() { // PINGs go unanswered
 			}

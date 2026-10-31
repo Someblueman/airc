@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -261,7 +262,7 @@ func TestPeriodicRefreshOnlyWhenConnected(t *testing.T) {
 	connected := true
 	m.update(statusIn{connected: &connected})
 	cmds, _ := m.update(tickIn{})
-	if len(cmds) != 2 || cmds[0].kind != "channels" || cmds[1].kind != "names" || cmds[1].target != "#a" {
+	if len(cmds) != 4 || cmds[0].kind != "channels" || cmds[1].kind != "names" || cmds[1].target != "#a" || cmds[2].kind != "decisions" || cmds[3].kind != "directory" {
 		t.Fatalf("refresh = %v", cmds)
 	}
 	if cmds, _ := m.update(tickIn{}); len(cmds) != 0 {
@@ -455,26 +456,28 @@ func TestHelpViewReflectsDaemonCapabilities(t *testing.T) {
 			t.Errorf("help lacks %s", c.name)
 		}
 	}
-	m.update(capabilitiesIn{features: map[string]string{"CHAT": "1", "REPLIES": "1", "SEARCH": "1", "TOPIC": "1"}})
+	// Every feature of this client's level comes with the daemon; only
+	// what depends on its configuration (ADMIN) can be unavailable.
+	m.update(capabilitiesIn{features: map[string]string{"AIRC": fmt.Sprint(protocol.Level), "HISTORY": "8"}})
 	text = helpText(m.find("help").help)
 	if strings.Contains(text, "Not connected") {
 		t.Fatalf("the daemon has spoken:\n%s", text)
 	}
 	for line := range strings.SplitSeq(text, "\n") {
 		switch {
-		case strings.HasPrefix(line, "/pin "), strings.HasPrefix(line, "/thread "), strings.HasPrefix(line, "/quit"):
+		case strings.HasPrefix(line, "/pin "), strings.HasPrefix(line, "/thread "), strings.HasPrefix(line, "/context "), strings.HasPrefix(line, "/op "), strings.HasPrefix(line, "/quit"):
 			if strings.Contains(line, "unavailable") {
 				t.Errorf("supported command marked unavailable: %s", line)
 			}
-		case strings.HasPrefix(line, "/context "), strings.HasPrefix(line, "/mute "), strings.HasPrefix(line, "/op "):
-			if !strings.Contains(line, "unavailable") {
-				t.Errorf("unsupported command not marked: %s", line)
-			}
-			// ADMIN is a matter of configuration, the others of age.
-			if admin := strings.HasPrefix(line, "/mute "); admin != strings.Contains(line, "runs without --admin-token-file") || admin == strings.Contains(line, "upgrade") {
-				t.Errorf("wrong reason for an unavailable command: %s", line)
+		case strings.HasPrefix(line, "/mute "):
+			if !strings.Contains(line, "unavailable") || !strings.Contains(line, "runs without --admin-token-file") {
+				t.Errorf("an unconfigured command was not marked with its flag: %s", line)
 			}
 		}
+	}
+	m.update(capabilitiesIn{features: map[string]string{"AIRC": fmt.Sprint(protocol.Level), "ADMIN": "1"}})
+	if text = helpText(m.find("help").help); strings.Contains(text, "unavailable") {
+		t.Fatalf("a daemon configured with ADMIN has everything:\n%s", text)
 	}
 	for _, width := range []int{120, 70, 30} {
 		m.update(resizeIn{width, 40})

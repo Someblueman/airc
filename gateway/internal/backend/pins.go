@@ -16,9 +16,6 @@ import (
 // terminator has been received.
 func (b *Backend) Pins(ctx context.Context, grant *store.ReadGrant) (core.PinsResult, error) {
 	return readSnapshot(ctx, b, grant, roomRead(core.PinsRead), core.MaxPinsBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.PinsResult, error) {
-		if !client.Supports("PINS") {
-			return core.PinsResult{}, ErrReadUnsupported
-		}
 		pins, err := boundedPinsRequest(ctx, client, r.Target.Name)
 		return core.PinsResult{Target: *r.Target, Pins: pins}, err
 	})

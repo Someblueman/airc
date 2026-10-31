@@ -155,6 +155,9 @@ func superviseSessions(ctx context.Context, opt options, session func(ctx contex
 		if err := outage(err); err != nil {
 			return err
 		}
+		if errors.Is(err, irc.ErrDaemonTooOld) {
+			return err // no reconnect cures a daemon below this client's level
+		}
 		if bridge != nil {
 			if ready = bridgeUntilNative(ctx, opt, bridge, retry); ready == nil {
 				return nil

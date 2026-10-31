@@ -41,7 +41,7 @@ func runFollowSession(ctx context.Context, session *agentConnection, action stri
 	}
 	defer store.close()
 	if action == "follow" {
-		err = chatRequestWithContext(ctx, *opt, "REPLIES", func(ctx context.Context, c *irc.Client) error {
+		err = chatRequestWithContext(ctx, *opt, func(ctx context.Context, c *irc.Client) error {
 			page, err := fetchHistory(ctx, c, "thread:"+id, "*", 1, nil)
 			if err != nil {
 				return err

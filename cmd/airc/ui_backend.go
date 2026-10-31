@@ -11,10 +11,9 @@ import (
 )
 
 const (
-	observeChunk    = 16 // the server accepts at most this many targets per OBSERVE
-	maxObserved     = 44 // leave room for 16 threads, inbox and DM audit
-	inboxBacklog    = 50
-	needNewerServer = "airc ui needs a current aircd (it has no channel directory); restart the server from a current build"
+	observeChunk = 16 // the server accepts at most this many targets per OBSERVE
+	maxObserved  = 44 // leave room for 16 threads, inbox and DM audit
+	inboxBacklog = 50
 )
 
 // uiBackend owns the connection for the UI. It discovers channels, subscribes,
@@ -50,8 +49,17 @@ func (b *uiBackend) inboxKey() string { return "@" + b.nick }
 func (b *uiBackend) run(ctx context.Context) {
 	b.last = map[string]string{}
 	b.threads = map[string]bool{}
+	refused := false
 	err := superviseSessions(ctx, b.opt, b.session, func(err error) error {
 		offline := false
+		if errors.Is(err, irc.ErrDaemonTooOld) {
+			// The daemon was replaced by one below this client's level:
+			// no reconnect cures it, so the status line says so and the
+			// backend stops rather than retrying.
+			refused = true
+			b.emit(ctx, statusIn{text: err.Error(), isError: true, connected: &offline})
+			return nil
+		}
 		reason := "disconnected"
 		if err != nil {
 			reason = err.Error()
@@ -59,20 +67,16 @@ func (b *uiBackend) run(ctx context.Context) {
 		b.emit(ctx, statusIn{text: "connection lost (" + reason + "); retrying", isError: true, connected: &offline})
 		return nil
 	}, b.bridge)
-	if err != nil {
+	if err != nil && !refused {
 		b.emit(ctx, fatalIn{err})
 	}
 }
 
 func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool) (bool, error) {
 	defer closeOnCancel(ctx, client)()
-	if !client.Ephemeral() || !client.Supports("CHANNELS") {
-		return false, errors.New(needNewerServer)
-	}
 	b.observed, b.names, b.pending, b.fresh = map[string]bool{}, map[string][]string{}, nil, nil
 	translate := func(event irc.Event) { b.translate(ctx, event) }
-	audit := client.Supports("DM_AUDIT")
-	b.emit(ctx, auditIn{available: audit})
+	b.emit(ctx, auditIn{})
 	b.emit(ctx, capabilitiesIn{features: client.Features()})
 
 	list, err := fetchChannels(client, translate)
@@ -87,9 +91,7 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	names = uniqueFirst(names, maxObserved)
 
 	targets := append([]string{b.inboxKey()}, names...)
-	if audit {
-		targets = append(targets, irc.AllDirectMessages)
-	}
+	targets = append(targets, irc.AllDirectMessages)
 	if err := b.subscribe(ctx, client, targets, translate); err != nil {
 		return false, err
 	}
@@ -98,17 +100,11 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 			return false, err
 		}
 	}
-	inbox := b.inboxKey()
-	if !client.Supports("MENTIONS") {
-		inbox = b.nick // older servers only know direct messages
-	}
-	if err := b.load(ctx, client, inbox, b.inboxKey(), first, translate); err != nil {
+	if err := b.load(ctx, client, b.inboxKey(), b.inboxKey(), first, translate); err != nil {
 		return false, err
 	}
-	if audit {
-		if err := b.load(ctx, client, irc.AllDirectMessages, irc.AllDirectMessages, first, translate); err != nil {
-			return false, err
-		}
+	if err := b.load(ctx, client, irc.AllDirectMessages, irc.AllDirectMessages, first, translate); err != nil {
+		return false, err
 	}
 	for _, refresh := range []func(context.Context, *irc.Client, func(irc.Event)) error{b.refreshDecisions, b.refreshDirectory} {
 		if err := refresh(ctx, client, translate); err != nil {
@@ -226,9 +222,6 @@ func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, tra
 // refreshDecisions gives the model the open decisions that concern this
 // user, so the status bar can say who is waiting. other sees unrelated events.
 func (b *uiBackend) refreshDecisions(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
-	if !client.Supports("DECISION") {
-		return nil
-	}
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "decisions"}, other)
@@ -241,9 +234,6 @@ func (b *uiBackend) refreshDecisions(ctx context.Context, client *irc.Client, ot
 
 // refreshDirectory gives the model every card, so humans are drawn as such.
 func (b *uiBackend) refreshDirectory(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
-	if !client.Supports("DIRECTORY") {
-		return nil
-	}
 	if err := client.Directory(""); err != nil {
 		return err
 	}
@@ -311,7 +301,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 	after := b.last[key]
 	limit := 1000
 	initial := after == ""
-	if initial && !first && key == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+	if initial && !first && key == irc.AllDirectMessages {
 		after, initial = "*", false
 	}
 	if initial {
@@ -331,7 +321,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 		messages, status := page.messages, page.status
 		if status == "expired" {
 			b.emit(ctx, statusIn{text: "some messages from while the UI was disconnected are no longer available", isError: true})
-			if key == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+			if key == irc.AllDirectMessages {
 				page, err = fetchHistory(ctx, client, target, "*", limit, translate)
 				if err != nil {
 					return err

@@ -91,9 +91,6 @@ func (b *Backend) withReadOptions(ctx context.Context, a store.ReadAttempt, opts
 		}
 		_ = client.Close()
 	}()
-	if !client.Ephemeral() {
-		return ErrReadUnsupported
-	}
 	err = read(overall, client)
 	// Only a read that finished is kept: a refused or abandoned one may
 	// leave replies unread.

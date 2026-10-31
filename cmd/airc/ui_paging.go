@@ -74,7 +74,7 @@ func (b *uiBackend) pageQuery(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			// The room's messages under one run label, oldest first.
 			return fetchHistoryWith(ctx, c, q.Target, after, 50, irc.HistoryOptions{Run: q.Text}, forward)
 		}
-		if err := c.SearchWith(q.Target, q.Text, "", after, 50, irc.SearchOptions{Terms: c.Supports("SEARCH_TERMS")}); err != nil {
+		if err := c.SearchWith(q.Target, q.Text, "", after, 50, irc.SearchOptions{Terms: true}); err != nil {
 			return historyPage{}, err
 		}
 		return awaitHistory(ctx, c, q.Target, forward)

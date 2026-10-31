@@ -48,13 +48,6 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 	}
 	var page HistoryPage
 	err = b.withRead(ctx, a, emit != nil, func(overall context.Context, client *irc.Client) error {
-		feature := "CHECK"
-		if a.Request.Operation == core.Search {
-			feature = "SEARCH"
-		}
-		if !client.Supports(feature) {
-			return ErrReadUnsupported
-		}
 		r := a.Request
 		if !r.Operation.IsWatch() || emit == nil {
 			r, err = prepareSelector(overall, client, r)

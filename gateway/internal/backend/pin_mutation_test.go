@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/store"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -162,7 +163,7 @@ func pinMutationScriptFixture(t *testing.T, respond func(net.Conn, string) bool)
 				return
 			}
 			if strings.HasPrefix(line, "USER ") {
-				_, _ = fmt.Fprint(conn, ":server 005 reader CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 :features\r\n:server 001 reader :welcome\r\n")
+				_, _ = fmt.Fprintf(conn, ":server 005 reader AIRC=%d :features\r\n:server 001 reader :welcome\r\n", protocol.Level)
 			}
 			if strings.Contains(line, `"action":"pin"`) || strings.Contains(line, `"action":"unpin"`) {
 				commands <- line

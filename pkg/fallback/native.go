@@ -164,12 +164,7 @@ func (c *Client) nativeLookup(ctx context.Context, k *Conn, requestID string) (*
 func (c *Client) nativeHistory(ctx context.Context, k *Conn, room string, limit int) (*Page, error) {
 	client, stop := native(ctx, k)
 	defer stop()
-	// Ephemeral sessions read without joining; older servers need a member.
-	if !client.Ephemeral() {
-		if err := client.Join(room); err != nil {
-			return nil, err
-		}
-	}
+	// An ephemeral session reads without joining.
 	if err := client.HistoryAfter(room, "", limit); err != nil {
 		return nil, err
 	}

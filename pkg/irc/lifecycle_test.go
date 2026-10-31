@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func TestCloseInterruptsReconnectRegistration(t *testing.T) {
@@ -34,7 +36,7 @@ func TestCloseInterruptsReconnectRegistration(t *testing.T) {
 				}
 			}
 			if attempt == 0 {
-				fmt.Fprint(conn, ":server 001 me :Welcome\r\n")
+				fmt.Fprintf(conn, ":server 005 me AIRC=%d :features\r\n:server 001 me :Welcome\r\n", protocol.Level)
 				conn.Close()
 			} else {
 				close(reconnecting)

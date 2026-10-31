@@ -17,10 +17,8 @@ import (
 
 const requestTimeout = 10 * time.Second
 
-// dialOneShot connects for a single request. On current servers the session is
-// ephemeral: it claims no nickname and leaves no join/quit traffic behind. On
-// older servers the request is ignored and the session behaves as before, which
-// callers detect with client.Ephemeral().
+// dialOneShot connects for a single request. The session is ephemeral: it
+// claims no nickname and leaves no join/quit traffic behind.
 func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
 	if opt.session != nil && opt.session.client != nil {
 		select {
@@ -142,8 +140,11 @@ func hints(err error) []string {
 	if strings.Contains(message, "dial airc") {
 		out = append(out, "hint: the server did not answer; tell the user, and do not start, stop or restart aircd yourself (airc doctor --json shows what is reachable).")
 	}
-	if strings.Contains(message, "predates") || strings.Contains(message, "this aircd lacks") || strings.Contains(message, "a daemon with") {
-		out = append(out, "hint: airc doctor --json lists what the running daemon supports; a binary upgrade does not change it, so tell the user and leave its restart until active work is finished.")
+	if errors.Is(err, irc.ErrDaemonTooOld) {
+		out = append(out, "hint: aircd, airc and airc-gateway are replaced together (scripts/install.sh); tell the user to upgrade aircd and restart it when active work is finished, and never restart it yourself (airc doctor shows both levels).")
+	}
+	if strings.Contains(message, "this aircd lacks") {
+		out = append(out, "hint: airc doctor --json lists what the running daemon is configured with; tell the user, who reconfigures and restarts it when active work is finished, and never restart it yourself.")
 	}
 	if strings.Contains(message, "flag needs an argument: -channel") {
 		out = append(out, "hint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)")
@@ -154,9 +155,9 @@ func hints(err error) []string {
 	return out
 }
 
-// capabilityFlags names the aircd flags behind the 005 capabilities a daemon
-// advertises only when it is configured for them; every other capability
-// comes with the daemon's version.
+// capabilityFlags names the aircd flags behind the 005 tokens a daemon
+// advertises only when it is configured for them; every other feature comes
+// with the daemon's version, which the dial checks (irc.ErrDaemonTooOld).
 var capabilityFlags = map[string]string{
 	"ACCESS":      "--access-token-file",
 	"ACCOUNTS":    "--state-dir, --accounts-file or --admin-token-file",
@@ -168,13 +169,12 @@ var capabilityFlags = map[string]string{
 }
 
 // lacksCapability says why the connected daemon has no capability: the flags
-// it runs without, or, for a capability every current daemon has, its age.
-// The "this aircd lacks" opening is what the hints recognise.
+// it runs without. The "this aircd lacks" opening is what the hints recognise.
 func lacksCapability(capability string) string {
 	if flags, configured := capabilityFlags[capability]; configured {
 		return fmt.Sprintf("this aircd lacks %s: it runs without %s", capability, flags)
 	}
-	return fmt.Sprintf("this aircd lacks %s; upgrade when safe", capability)
+	return fmt.Sprintf("this aircd lacks %s", capability)
 }
 
 // addressedTo reports whether a message needs nick's attention: it is a direct

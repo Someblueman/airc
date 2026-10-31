@@ -187,9 +187,6 @@ func proveChatParent(ctx context.Context, client *irc.Client, request core.Reque
 }
 
 func proveDirectChatParent(ctx context.Context, client *irc.Client, request core.Request) (string, error) {
-	if !client.Supports("DIRECTORY") {
-		return "", ErrReadUnsupported
-	}
 	cardCtx := ctx
 	if err := client.Directory(client.Nick()); err != nil {
 		return "", ErrReadUnavailable

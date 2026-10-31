@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -17,92 +16,53 @@ import (
 const LevelToken = "AIRC"
 
 // Level is the AIRC level this build speaks: the daemon advertises it, and a
-// client knows every feature up to it. A new feature bumps it and adds its
-// row to Features; a feature is never removed from a level.
+// client requires at least it (irc.Dial refuses a daemon below it, so every
+// feature up to Level is guaranteed once connected) and knows every feature
+// up to it. A new feature bumps it and adds its row to Features; a feature
+// is never removed from a level.
 const Level = 1
 
-// Feature is one row of Features: the AIRC level that introduced the feature,
-// and the 005 token a daemon that predates levels advertised it under, so a
-// client still reads an older daemon right. A token that names another
-// feature (PINS, POLLS and ROOM were part of CHAT=1 from the start) means
-// that token implied it; "" means no older daemon is taken to have it.
-type Feature struct {
-	Level int
-	Token string
-}
-
-// Features is every version-only feature by name. Supports answers from it
-// when the daemon sent AIRC=N, and from the literal tokens otherwise, so one
-// table both gates a client's features and tells the user what an older
-// daemon lacks.
-var Features = map[string]Feature{
+// Features is every version-only feature by name, with the AIRC level that
+// introduced it. A client checks Supports for a feature above its own level
+// only; those at or below it come with any daemon it is connected to.
+var Features = map[string]int{
 	// Level 1: everything a daemon that advertised one token per feature had.
-	"BOT_REPLIES":       {Level: 1, Token: "BOT_REPLIES"},
-	"CHANNEL_OPERATORS": {Level: 1, Token: "CHANNEL_OPERATORS"},
-	"CHANNELS":          {Level: 1, Token: "CHANNELS"},
-	"CHAT":              {Level: 1, Token: "CHAT"},
-	"CHECK":             {Level: 1, Token: "CHECK"},
-	"CONTEXT":           {Level: 1, Token: "CONTEXT"},
-	"CONTEXT_BYTES":     {Level: 1, Token: "CONTEXT_BYTES"},
-	"CUSTOM_REACTIONS":  {Level: 1, Token: "CUSTOM_REACTIONS"},
-	"DECISION":          {Level: 1, Token: "DECISION"},
-	"DIRECTORY":         {Level: 1, Token: "DIRECTORY"},
-	"DM_AUDIT":          {Level: 1, Token: "DM_AUDIT"},
-	"HANDOFF":           {Level: 1, Token: "HANDOFF"},
-	"HISTORY_START":     {Level: 1, Token: "HISTORY_START"},
-	"MENTIONS":          {Level: 1, Token: "MENTIONS"},
-	"MULTILINE":         {Level: 1, Token: "MULTILINE"},
-	"PASTE":             {Level: 1, Token: "PASTE"},
-	"REACTIONS":         {Level: 1, Token: "REACTIONS"},
-	"RECEIPTS":          {Level: 1, Token: "RECEIPTS"},
-	"REPLIES":           {Level: 1, Token: "REPLIES"},
-	"RESUME":            {Level: 1, Token: "RESUME"},
-	"RUN":               {Level: 1, Token: "RUN"},
-	"SEARCH":            {Level: 1, Token: "SEARCH"},
-	"SEARCH_TERMS":      {Level: 1, Token: "SEARCH_TERMS"},
-	"STATUS":            {Level: 1, Token: "STATUS"}, // the STATUS command (770)
-	"TOPIC":             {Level: 1, Token: "TOPIC"},
-	// Level 1, CHAT actions that had no token of their own: the first CHAT=1
-	// daemon served pins, polls and room settings, so that token implies
-	// them; statuses, resolutions and charters came later, so an older
-	// daemon is taken to lack them.
-	"CHARTER":      {Level: 1},
-	"PINS":         {Level: 1, Token: "CHAT"},
-	"POLLS":        {Level: 1, Token: "CHAT"},
-	"RESOLVE":      {Level: 1},
-	"ROOM":         {Level: 1, Token: "CHAT"},
-	"STATUS_POSTS": {Level: 1}, // the status and statuses CHAT actions
-}
-
-// ChatFeature is the feature a CHAT action is advertised under: CHAT itself
-// for the actions the first CHAT=1 daemon served without a token of their
-// own, and the feature named after each later family.
-func ChatFeature(action string) string {
-	switch {
-	case action == "context":
-		return "CONTEXT"
-	case action == "pin", action == "unpin", action == "pins":
-		return "PINS"
-	case action == "room":
-		return "ROOM"
-	case action == "status", action == "statuses":
-		return "STATUS_POSTS"
-	case action == "resolve":
-		return "RESOLVE"
-	case action == "poll", action == "vote", action == "results", action == "close-poll":
-		return "POLLS"
-	case strings.HasPrefix(action, "handoff"):
-		return "HANDOFF"
-	case strings.HasPrefix(action, "decision"):
-		return "DECISION"
-	case strings.HasPrefix(action, "paste"):
-		return "PASTE"
-	}
-	return "CHAT"
+	"BOT_REPLIES":       1,
+	"CHANNEL_OPERATORS": 1,
+	"CHANNELS":          1,
+	"CHAT":              1,
+	"CHECK":             1,
+	"CONTEXT":           1,
+	"CONTEXT_BYTES":     1,
+	"CUSTOM_REACTIONS":  1,
+	"DECISION":          1,
+	"DIRECTORY":         1,
+	"DM_AUDIT":          1,
+	"HANDOFF":           1,
+	"HISTORY_START":     1,
+	"MENTIONS":          1,
+	"MULTILINE":         1,
+	"PASTE":             1,
+	"REACTIONS":         1,
+	"RECEIPTS":          1,
+	"REPLIES":           1,
+	"RESUME":            1,
+	"RUN":               1,
+	"SEARCH":            1,
+	"SEARCH_TERMS":      1,
+	"STATUS":            1, // the STATUS command (770)
+	"TOPIC":             1,
+	// Level 1, the CHAT action families that had a token of their own.
+	"CHARTER":      1,
+	"PINS":         1,
+	"POLLS":        1,
+	"RESOLVE":      1,
+	"ROOM":         1,
+	"STATUS_POSTS": 1, // the status and statuses CHAT actions
 }
 
 // LevelOf is the AIRC level a daemon's 005 tokens advertise, 0 when it sent
-// none (a daemon that advertised one token per feature).
+// none or a malformed one.
 func LevelOf(features map[string]string) int {
 	level, err := strconv.Atoi(features[LevelToken])
 	if err != nil || level < 0 {
@@ -115,33 +75,12 @@ func LevelOf(features map[string]string) int {
 // named feature. A literal token decides first: KEY or KEY=VALUE grants it
 // and KEY=0 withdraws it, even one the level would grant (how a proxy or a
 // test takes a feature away). Otherwise a feature in Features is had when
-// its level is at most the daemon's, or, from a daemon that sent no level,
-// when the token that implied it is there. Names are case-insensitive.
+// its level is at most the daemon's. Names are case-insensitive.
 func Supports(features map[string]string, name string) bool {
 	name = strings.ToUpper(name)
 	if value, ok := features[name]; ok {
 		return value != "0"
 	}
-	feature, known := Features[name]
-	if !known {
-		return false
-	}
-	if level := LevelOf(features); level > 0 {
-		return feature.Level <= level
-	}
-	return feature.Token != "" && feature.Token != name && Supports(features, feature.Token)
-}
-
-// Missing lists, in name order, the features of Features up to level that
-// a daemon's 005 tokens do not grant: what a user of this client gives up
-// against that daemon.
-func Missing(features map[string]string, level int) []string {
-	var missing []string
-	for name, feature := range Features {
-		if feature.Level <= level && !Supports(features, name) {
-			missing = append(missing, name)
-		}
-	}
-	slices.Sort(missing)
-	return missing
+	level, known := Features[name]
+	return known && level <= LevelOf(features)
 }

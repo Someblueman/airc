@@ -62,8 +62,7 @@ func TestRunLabelsPostsAndFiltersHistoryAndSearch(t *testing.T) {
 		t.Fatalf("thread rows %+v", thread)
 	}
 
-	// A bad label is refused before connecting; an older daemon refuses
-	// the filters and takes a labelled send without the label.
+	// A bad label is refused before connecting.
 	for _, args := range [][]string{
 		{"send", "--nick", "alice", "--channel", "room", "--message", "x", "--run", strings.Repeat("r", 65)},
 		{"send", "--nick", "alice", "--channel", "room", "--message", "x", "--run", "a/b"},
@@ -72,13 +71,6 @@ func TestRunLabelsPostsAndFiltersHistoryAndSearch(t *testing.T) {
 	} {
 		if _, _, err := cli(t, "127.0.0.1:1", args...); err == nil || strings.Contains(err.Error(), "dial") {
 			t.Fatalf("invalid args %v: %v", args, err)
-		}
-	}
-	// The stub daemon lacks SEARCH as well as RUN; history reaches the RUN check.
-	for _, args := range [][]string{{"history", "#room", "--run", "run-1"}, {"search", "x", "--target", "#room", "--run", "run-1"}} {
-		older, _ := olderDaemon(t, false)
-		if _, _, err := cli(t, older, args...); err == nil || !strings.Contains(err.Error(), "RUN") && !strings.Contains(err.Error(), "lacks SEARCH") {
-			t.Fatalf("older daemon for %v: %v", args, err)
 		}
 	}
 }

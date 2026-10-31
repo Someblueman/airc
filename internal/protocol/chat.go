@@ -262,7 +262,7 @@ type ChatRequest struct {
 	// MaxCharterBytes, or "" to clear it; nil leaves it as it is.
 	Charter *string `json:"charter,omitempty"`
 	// Run is the +airc/run label a post carries; it travels in the tag, not
-	// the JSON, so an older daemon ignores it.
+	// the JSON.
 	Run string `json:"-"`
 }
 

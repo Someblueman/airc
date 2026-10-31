@@ -78,9 +78,6 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 	}
 	defer client.Close()
 	defer closeOnCancel(ctx, client)()
-	if !client.Supports("TOPIC") {
-		return errors.New("this aircd predates channel topics; restart it from a current build")
-	}
 	var topic string
 	if changing {
 		if err := client.SetTopic(channel, strings.TrimSpace(*set)); err != nil {

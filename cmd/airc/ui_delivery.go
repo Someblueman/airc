@@ -49,9 +49,6 @@ func (m *uiModel) delivery(result deliveryIn) {
 func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd, translate func(irc.Event)) (status, uncertain string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if !c.Supports("RECEIPTS") {
-		return "", "", errors.New("sending from the UI requires daemon receipts; draft kept")
-	}
 	if !c.Supports("SAFE_RETRY") {
 		return "", "", errors.New("UI recovery requires SAFE_RETRY; draft kept")
 	}

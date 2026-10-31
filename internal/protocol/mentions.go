@@ -201,8 +201,7 @@ func MentionsNick(body, nick string) bool {
 // addresses it, the message is for it (a handoff or decision step), or one
 // of its group tags resolved to it (the message's metadata mentions). A
 // client needs no directory or room membership of its own, because the
-// server resolved the groups when the message was posted; against an older
-// daemon that records none, only the names in the body count.
+// server resolved the groups when the message was posted.
 func MentionedBy(body, forNick string, resolved []string, nick string) bool {
 	if strings.EqualFold(forNick, nick) || MentionsNick(body, nick) {
 		return true

@@ -13,18 +13,26 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// A minimal older daemon deliberately has no STATUS, topics or mentions.
-// It can also withhold HISTORY to exercise cancellation at the wire boundary.
-func olderDaemon(t *testing.T, holdHistory bool) (string, <-chan struct{}) {
+// olderDaemon is a daemon from before AIRC levels: one token per feature and
+// no level, which a current client refuses at the dial.
+func olderDaemon(t *testing.T) (string, <-chan struct{}) {
 	t.Helper()
-	return tokenDaemon(t, "MULTILINE=1", holdHistory)
+	return tokenDaemon(t, "MULTILINE=1 CHAT=1 HISTORY=8", false)
 }
 
-// tokenDaemon is a daemon from before AIRC levels that advertises the given
-// 005 tokens, answers every CHAT request with an empty response, and knows
-// no STATUS.
+// stubDaemon is a daemon at this client's level that answers every CHAT
+// request with an empty response and knows no STATUS. It can withhold
+// HISTORY to exercise cancellation at the wire boundary.
+func stubDaemon(t *testing.T, holdHistory bool) (string, <-chan struct{}) {
+	t.Helper()
+	return tokenDaemon(t, fmt.Sprintf("AIRC=%d HISTORY=8", protocol.Level), holdHistory)
+}
+
+// tokenDaemon is a fake daemon that advertises the given 005 tokens, answers
+// every CHAT request with an empty response, and knows no STATUS.
 func tokenDaemon(t *testing.T, tokens string, holdHistory bool) (string, <-chan struct{}) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -88,50 +96,55 @@ func TestDoctorReportsCapabilitiesRetentionAndLockOwner(t *testing.T) {
 	if report.Cursor == nil || !report.Cursor.Locked || report.Cursor.Owner == nil || report.Cursor.Owner.PID != os.Getpid() {
 		t.Fatalf("missing lock ownership: %s", out)
 	}
-	if report.Level != protocol.Level || report.Features["AIRC"] != "1" || report.Features["HISTORY"] != "16" || report.Process.SoftLimit == nil {
+	if report.Level != protocol.Level || report.ClientLevel != protocol.Level || report.Features["AIRC"] != fmt.Sprint(protocol.Level) || report.Features["HISTORY"] != "16" || report.Process.SoftLimit == nil {
 		t.Fatalf("missing diagnostics: %s", out)
 	}
 	if _, literal := report.Features["HISTORY_START"]; literal {
 		t.Fatalf("a version-only feature is still a token of its own: %s", out)
 	}
 	for _, warning := range report.Warnings {
-		if strings.Contains(warning, "Daemon lacks") || strings.Contains(warning, "AIRC level") {
+		if strings.Contains(warning, "AIRC level") {
 			t.Fatalf("a current daemon lacks nothing: %s", out)
 		}
 	}
 	text := mustCLI(t, address, "doctor", "--nick", "me")
-	if !strings.Contains(text, fmt.Sprintf("Level: AIRC %d (this airc %d)", protocol.Level, protocol.Level)) || !strings.Contains(text, "Features: AIRC=1 ") {
+	if !strings.Contains(text, fmt.Sprintf("Level: AIRC %d (this airc %d)", protocol.Level, protocol.Level)) || !strings.Contains(text, fmt.Sprintf("Features: AIRC=%d ", protocol.Level)) {
 		t.Fatalf("doctor text = %s", text)
 	}
 }
 
-func TestDoctorRemainsUsableAgainstOlderDaemon(t *testing.T) {
+// doctor still reports a daemon below this client's level: the dial reads
+// its level before refusing it, and the report says both levels and why.
+func TestDoctorReportsADaemonBelowTheClientsLevel(t *testing.T) {
 	agentEnv(t)
-	address, closed := olderDaemon(t, false)
-	out := mustCLI(t, address, "doctor", "--json")
+	address, closed := olderDaemon(t)
+	out, _, err := cli(t, address, "doctor", "--json")
+	if !errors.Is(err, irc.ErrDaemonTooOld) {
+		t.Fatalf("doctor against an older daemon = %v", err)
+	}
 	var report doctorReport
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
-		t.Fatal(err)
+		t.Fatal(err, out)
 	}
-	if !report.Connected || report.Server != nil || report.Level != 0 || report.Features["MULTILINE"] != "1" {
-		t.Fatalf("older daemon diagnostics = %s", out)
-	}
-	// One warning names everything the table says the daemon lacks, and one
-	// that the daemon's build is unknown; the table's names are what the
-	// commands themselves refuse with.
-	if len(report.Warnings) != 2 || !strings.HasPrefix(report.Warnings[0], "Daemon lacks BOT_REPLIES, CHANNELS, CHANNEL_OPERATORS, CHARTER, CHAT, ") || !strings.Contains(report.Warnings[0], fmt.Sprintf(", STATUS_POSTS, TOPIC (AIRC level 0, this airc expects %d)", protocol.Level)) || strings.Contains(report.Warnings[0], "MULTILINE") || !strings.Contains(report.Warnings[1], "predates STATUS") {
-		t.Fatalf("older daemon warnings = %q", report.Warnings)
+	refusal := (&irc.DaemonTooOldError{Need: protocol.Level}).Error()
+	if report.Connected || report.Level != 0 || report.ClientLevel != protocol.Level || report.Fallback != "" || !strings.HasPrefix(report.Error, refusal) || !strings.Contains(report.Error, "never restart it yourself") {
+		t.Fatalf("older daemon report = %s", out)
 	}
 	select {
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Fatal("doctor left its connection open")
 	}
+	address, _ = olderDaemon(t)
+	text, _, err := cli(t, address, "doctor")
+	if !errors.Is(err, irc.ErrDaemonTooOld) || !strings.Contains(text, fmt.Sprintf("Level: AIRC 0 (this airc %d)\n", protocol.Level)) || !strings.Contains(text, "connected: false") {
+		t.Fatalf("doctor text = %s (%v)", text, err)
+	}
 }
 
 func TestCheckWaitDeadlineCancelsHistoryAndReleasesCursorLock(t *testing.T) {
 	agentEnv(t)
-	address, closed := olderDaemon(t, true)
+	address, closed := stubDaemon(t, true)
 	start := time.Now()
 	if _, _, err := cli(t, address, "check", "--nick", "me", "--wait", "150ms"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected history timeout, got %v", err)

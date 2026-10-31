@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -27,16 +28,18 @@ func TestAllDMWatchShowsBacklogAndLiveTrafficOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestAuditCommandsRejectAnOlderDaemonClearly(t *testing.T) {
+// A watcher and a history read refuse a daemon below this client's level
+// at the dial: the watcher does not start retrying against it.
+func TestWatchAndHistoryRefuseADaemonBelowTheClientsLevel(t *testing.T) {
 	agentEnv(t)
-	address, _ := olderDaemon(t, false)
+	address, _ := olderDaemon(t)
 	err := runWatchContext(context.Background(), []string{"--all-dms", "--addr", address}, io.Discard, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "DM_AUDIT") {
-		t.Fatalf("audit watcher against older daemon = %v", err)
+	if !errors.Is(err, irc.ErrDaemonTooOld) {
+		t.Fatalf("audit watcher against an older daemon = %v", err)
 	}
-	address, _ = olderDaemon(t, false)
+	address, _ = olderDaemon(t)
 	_, _, err = cli(t, address, "history", irc.AllDirectMessages)
-	if err == nil || !strings.Contains(err.Error(), "DM_AUDIT") {
-		t.Fatalf("audit history against older daemon = %v", err)
+	if !errors.Is(err, irc.ErrDaemonTooOld) {
+		t.Fatalf("audit history against an older daemon = %v", err)
 	}
 }

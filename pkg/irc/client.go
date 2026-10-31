@@ -29,8 +29,7 @@ type Config struct {
 	// Ephemeral asks the server for a one-shot session: the nickname is not
 	// claimed, the connection never appears in presence listings, channel
 	// messages can be sent without joining, and history can be read freely.
-	// Use it for short-lived commands. Servers that predate the mode ignore the
-	// request; check Client.Ephemeral after Dial.
+	// Use it for short-lived commands.
 	Ephemeral     bool
 	IdentityToken string // saved account credential; SASL PLAIN login unless CreateAccount; never sent as chat
 	CreateAccount bool   // idempotent registration with the same credential
@@ -60,6 +59,31 @@ type Config struct {
 
 // ErrStalled is the connection error after a probe went unanswered.
 var ErrStalled = errors.New("server stopped answering")
+
+// ErrDaemonTooOld is what a dial ends with when the daemon advertised no AIRC
+// level, or one below protocol.Level: this client needs every feature of its
+// own level, so it refuses the daemon and closes the connection instead of
+// running without them, and a Reconnect client stops reconnecting. The error
+// is a *DaemonTooOldError, which carries both levels. A daemon at a higher
+// level is fine. aircd, airc and airc-gateway are replaced together, so the
+// cure is to upgrade aircd and restart it.
+var ErrDaemonTooOld = errors.New("aircd is older than this client")
+
+// DaemonTooOldError is ErrDaemonTooOld with the daemon's AIRC level (0 when it
+// advertised none) and the level this client needs.
+type DaemonTooOldError struct {
+	Level int
+	Need  int
+}
+
+func (e *DaemonTooOldError) Error() string {
+	if e.Level == 0 {
+		return "aircd advertises no AIRC level: upgrade aircd and restart it"
+	}
+	return fmt.Sprintf("aircd advertises AIRC level %d; this client needs %d: upgrade aircd and restart it", e.Level, e.Need)
+}
+
+func (e *DaemonTooOldError) Is(target error) bool { return target == ErrDaemonTooOld }
 
 // AnswerWait and AnswerProbeTimeout suit ProbeAfter for a command whose answer
 // a live server sends at once: a silent server is detected in 1.3s.
@@ -206,6 +230,15 @@ func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner)
 			newConn, newScanner, connectErr := c.connect(ctx)
 			if connectErr != nil {
 				c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: connectErr.Error()})
+				if errors.Is(connectErr, ErrDaemonTooOld) {
+					// No reconnect cures a daemon below this client's
+					// level: the connection ends as it would without
+					// Reconnect, and Err says why.
+					c.mu.Lock()
+					c.ended = connectErr
+					c.mu.Unlock()
+					return
+				}
 				backoff = growBackoff(backoff, c.cfg.MaxBackoff)
 				continue
 			}
@@ -476,10 +509,10 @@ func (c *Client) addFeatures(params []string) {
 	}
 }
 
-// Supports reports whether the server has a feature, such as "MULTILINE" or
-// "MENTIONS": one its AIRC level grants (protocol.Features), or one it
-// advertised as a token of its own, which is how a daemon that predates
-// levels said everything and how every daemon says what depends on its
+// Supports reports whether the server has a feature: one its AIRC level
+// grants (protocol.Features; every feature of this client's own level is
+// guaranteed, since Dial refuses a daemon below it), or one it advertised as
+// a token of its own, which is how a daemon says what depends on its
 // configuration (ADMIN, WAKE, IDEMPOTENCY, ...). Features are known once
 // Dial returns.
 func (c *Client) Supports(feature string) bool {
@@ -488,8 +521,8 @@ func (c *Client) Supports(feature string) bool {
 	return protocol.Supports(c.features, feature)
 }
 
-// Level is the AIRC level the server advertised (AIRC=N), 0 for a daemon
-// that advertised one token per feature instead.
+// Level is the AIRC level the server advertised (AIRC=N), at least
+// protocol.Level once Dial has returned; 0 before 005 has been read.
 func (c *Client) Level() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -509,7 +542,7 @@ func (c *Client) Features() map[string]string {
 }
 
 // Multiline reports whether the server accepts and delivers messages that
-// contain line breaks.
+// contain line breaks, which every daemon a client is connected to does.
 func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
 
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }

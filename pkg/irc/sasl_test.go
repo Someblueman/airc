@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -56,7 +58,7 @@ func TestAccountLoginIsSentWithRegistration(t *testing.T) {
 		replies []string
 		refused string
 	}{
-		{"confirmed", []string{":server CAP * ACK :sasl", "AUTHENTICATE +", ":server 903 agent :SASL authentication successful", ":server 001 agent :Welcome"}, ""},
+		{"confirmed", []string{":server CAP * ACK :sasl", "AUTHENTICATE +", ":server 903 agent :SASL authentication successful", fmt.Sprintf(":server 005 agent AIRC=%d :features", protocol.Level), ":server 001 agent :Welcome"}, ""},
 		{"refused", []string{":server CAP * ACK :sasl", "AUTHENTICATE +", ":server 904 agent :Invalid SASL credentials", ":server 001 agent :Welcome"}, "Invalid SASL credentials"},
 		{"unsupported", []string{":server CAP * NAK :sasl", ":server 001 agent :Welcome"}, "not support SASL"},
 		{"unconfirmed", []string{":server CAP * ACK :sasl", "AUTHENTICATE +", ":server 001 agent :Welcome"}, "without confirming its login"},
