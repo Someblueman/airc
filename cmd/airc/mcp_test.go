@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 31 {
+	if len(tools.Tools) != 26 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -81,12 +81,12 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		}
 	}
 	call("prepare", map[string]any{"id": id, "seconds": 60, "message": "reviewing"})
-	waitingSignal := call("waiting", map[string]any{"id": id})
+	waitingSignal := call("prepare", map[string]any{"step": "waiting", "id": id})
 	encoded, _ := json.Marshal(waitingSignal.StructuredContent)
 	if !strings.Contains(string(encoded), "reviewing") {
 		t.Fatal("reply signal missing", string(encoded))
 	}
-	call("cancel", map[string]any{"id": id})
+	call("prepare", map[string]any{"step": "cancel", "id": id})
 	call("pin", map[string]any{"id": id})
 	data, _ = json.Marshal(call("pin", map[string]any{"step": "list", "channel": "#room"}).StructuredContent)
 	if !strings.Contains(string(data), `"action":"pin"`) || !strings.Contains(string(data), id) {
@@ -154,9 +154,9 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	}
 	call("profile", map[string]any{"kind": "agent"})
 	call("follow", map[string]any{"id": id})
-	call("unfollow", map[string]any{"id": id})
+	call("follow", map[string]any{"step": "unfollow", "id": id})
 	call("react", map[string]any{"id": id, "reaction": "agree"})
-	call("correct", map[string]any{"id": id, "message": "corrected from MCP"})
+	call("amend", map[string]any{"id": id, "message": "corrected from MCP"})
 	searchResult := call("search", map[string]any{"query": "MCP", "target": "#room", "limit": 1})
 	encoded, _ = json.Marshal(searchResult.StructuredContent)
 	if !strings.Contains(string(encoded), "cursor") || !strings.Contains(string(encoded), "more") {
@@ -167,7 +167,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if !strings.Contains(string(encoded), "from MCP") {
 		t.Fatal("terms search missing", string(encoded))
 	}
-	call("retract", map[string]any{"id": id, "message": "withdrawn"})
+	call("amend", map[string]any{"step": "retract", "id": id, "message": "withdrawn"})
 
 	call("check", map[string]any{"channels": []string{"#room"}})
 	waitCtx, stop := context.WithCancel(ctx)
