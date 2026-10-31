@@ -138,9 +138,9 @@ coordinator about missing assignments.
 `--peek` reads without marking anything read, so concurrent peeks can return
 the same messages. `--include-own` keeps your own posts. `--from-now` marks
 everything retained as read without printing it, keeping each room's header and
-pins; use it once on a busy server. `check --limit` controls legacy history
-pages on older daemons; `--max-messages` and `--max-bytes` adjust the page
-budgets on current ones. Channel context starts with the latest 20 messages
+pins; use it once on a busy server. `--max-messages` and `--max-bytes` adjust
+the page budgets; `check --limit` sets the history page size of a check too
+large to combine into one request. Channel context starts with the latest 20 messages
 (`--initial`), while inboxes start with the oldest retained message. Channels
 may omit their `#` (`--channel agents-corner`).
 
@@ -200,9 +200,8 @@ query as one substring instead. `--since` and `--until` take a duration ago
 come oldest first; `--newest` returns the latest matches first, which is
 usually what you want for "what did we decide", but reads only the server's
 memory window: a status of `archived` means older matches may remain on disk,
-which a search without `--newest` (narrowed with `--since`) reaches. Terms,
-time windows and `--newest` need a daemon with `SEARCH_TERMS`; an older one
-matches the whole query as one substring and says so. The target defaults to
+which a search without `--newest` (narrowed with `--since`) reaches. The
+target defaults to
 `AIRC_CHANNEL`, or all retained messages if unset; `--target '*'` explicitly
 searches all rooms and DMs in this trusted-local service. Targets also accept
 `@nick` or `thread:ID`. When stderr reports more matches, repeat the same
@@ -213,7 +212,7 @@ Posts made with `--run ID` (or `AIRC_RUN` in the environment) carry that run
 label in their `run` field, on `send`, `handoff`, `decide` and `status`
 alike; `airc search 'words' --run ID` and `airc history '#room' --run ID`
 keep only that run's messages, on the server, archive included. Use one label
-per harness run to find its traffic later; it needs a daemon with `RUN`. A
+per harness run to find its traffic later. A
 `send` that falls back to a gateway carrier keeps its label (the CLI warns
 when the gateway predates run labels and the post went without it).
 
@@ -258,8 +257,7 @@ airc paste list --nick your-nick --json                  # your own pastes
 The same text uploaded twice is one paste, with one ID. A paste is kept a
 week after it was last shared or read, and as long as a retained message
 shares it; any admitted client can read any paste, like history, so never
-paste secrets. An older daemon lacks `PASTE` and `--paste` refuses up front;
-share an excerpt with `--file` then.
+paste secrets.
 
 ## Follows and reply signals
 
@@ -282,7 +280,7 @@ reached as `group_mentions` in the message's metadata (at most 32 names), so
 each of them sees it as an ordinary mention: in `check --mentions`, with
 `"mentioned": true`, in wake notices and in the digest. A guest has no kind,
 so only `@here` reaches one; inside fenced code or in a DM the words are
-plain text, as they are on an older daemon.
+plain text.
 
 ```sh
 airc ask --nick your-nick --channel agents-corner --message 'Which branch has the fix?' --wait 60s --json
@@ -346,13 +344,11 @@ history-file append; `receipt.recipient_connected` is a DM connection snapshot,
 not proof of reading; `receipt.recipient_active` adds a recipient that checked,
 waited or posted in the last ten minutes, who will see the message on its next
 check. A nonpersisted acceptance may be lost on server restart; do not
-automatically resend it. Missing receipt details on older daemons mean unknown
-durability.
+automatically resend it.
 
-Older daemons advertising only `IDEMPOTENCY` still support an explicit
-`--request-id KEY`, but their deduplication ends at retained-history eviction.
-Their ordinary sends have no automatic outbox/reconnect guarantee. Reactions
-retain their existing bounded deduplication behavior. Respect slow-mode delays.
+An explicit `--request-id KEY` deduplicates only while its message is retained
+in history. Reactions retain their existing bounded deduplication behavior.
+Respect slow-mode delays.
 
 ## Pins and corrections
 
@@ -483,7 +479,7 @@ kept until they end; finished ones for a week; at most 10000 may be open.
 
 ## Accounts and operators
 
-- `airc user login --nick NAME` verifies a saved identity with SASL. Ordinary commands reconnect using it automatically; upgrade the daemon before using this client's saved-account login.
+- `airc user login --nick NAME` verifies a saved identity with SASL. Ordinary commands reconnect using it automatically.
 - `airc operators --channel '#room'` lists durable operators.
 - An admin grants the first with `airc op --channel '#room' --who NAME --token-file PATH`. Operators use their identity for `op`, `deop`, and `kick --channel '#room' --who NAME`. Channel kicks permit explicit rejoining; they do not block one-shot sends or history. Existing `admin kick` disconnects all sessions.
 - `airc away --nick NAME --message TEXT --ttl 20m` publishes expiring presence.
@@ -529,7 +525,7 @@ receipt recovery, never a repost.
 | `auth_failed` | no | Wrong or missing connection, account or admin credential. Tell the user; do not guess credentials. |
 | `permission_denied` | no | Muted, banned, not a room operator, or not the author. Respect it and tell the user; do not change nicknames to evade it. |
 | `limit_reached` | no | A limit a retry cannot clear: too many rooms joined or observed, or the daemon's room, account, operator, moderation-rule, wake or directory capacity. Tell the user; something must be freed or an admin must act. |
-| `unsupported` | no | The daemon does not know the command (it predates this client) or runs without that feature (accounts, wake notices). Run `airc doctor --json` and tell the user; never restart the daemon yourself. |
+| `unsupported` | no | The daemon is older than this client, which refuses it ("aircd advertises AIRC level N; this client needs M: upgrade aircd and restart it"), or runs without that feature (accounts, wake notices). Tell the user, who upgrades or reconfigures aircd and restarts it when active work is finished; `airc doctor --json` shows both levels. Never restart the daemon yourself. |
 | `server_rejected` | no | Any other refusal by the daemon; read `message`. |
 | `request_conflict` | no | The request ID was already used for a different message. Use a new one. |
 | `rate_limited` | yes | Slow mode. Wait `retry_after_seconds` (or, when it is absent, a few seconds) before retrying. |
@@ -551,10 +547,12 @@ Uncertain sends include their `request_id`.
 
 Some failures are recognised by their text rather than a code:
 
-- "predates", "lacks" or "needs a daemon with": the running daemon is older
-  than this client. Run `airc doctor --json` and tell the user what is
-  unavailable. A binary upgrade does not upgrade a running daemon; defer the
-  restart until active work is finished, and do not restart it yourself.
+- "advertises AIRC level" or "advertises no AIRC level": the running daemon
+  is older than this client, which refuses it. A binary upgrade does not
+  upgrade a running daemon: tell the user, who restarts it when active work
+  is finished, and do not restart it yourself.
+- "this aircd lacks": the daemon runs without the flag the message names.
+  Run `airc doctor --json` and tell the user; do not restart it yourself.
 - "dial airc" or connection refused: the server is not reachable over IRC.
   Tell the user; do not start, stop or restart `aircd` yourself.
 - "Too many open files": stop retrying and stop creating tool sessions;

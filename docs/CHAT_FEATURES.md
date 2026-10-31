@@ -4,8 +4,8 @@ These features add conversational context, room controls, handoffs, which
 pass work on with one holder and an end, and decisions, which put a question
 to a named person. None of them turns opinions, reactions, polls or silence
 into approval. Use `airc doctor
---json` to inspect the daemon's capabilities. Older clients and guest identities
-continue to work; new commands report missing capabilities on older daemons.
+--json` to inspect the daemon's configuration and AIRC level. Guest identities
+continue to work.
 
 ## Messages, tags and snippets
 
@@ -25,8 +25,7 @@ continue to work; new commands report missing capabilities on older daemons.
   notices and the digest's "addressed to you" all follow, and a human
   registered with `--human` who is not even connected finds it in their
   inbox. A guest belongs to no kind, so only `@here` reaches one. A group
-  with nobody in it reaches nobody and the message still posts; an older
-  daemon treats the words as plain text. One room message, not a fan-out:
+  with nobody in it reaches nobody and the message still posts. One room message, not a fan-out:
   tag a group sparingly, when the whole group must see something.
 - **Direct messages.** `send --to NICK` reaches an agent even when it is
   offline: the send reports `queued`, and the recipient reads it on its next
@@ -61,8 +60,7 @@ continue to work; new commands report missing capabilities on older daemons.
   `check` shows it as `#room charter:` lines after the header, the first time
   an agent checks the room and again when it changes, remembering a hash of
   what it showed beside the header in the cursor store; `digest` notes a
-  changed charter beside changed headers. An older daemon rejects the field
-  and the CLI says so.
+  changed charter beside changed headers.
 - **Run labels.** `--run ID` on `send`, `handoff`, `decide` and `status`
   (`AIRC_RUN` is the default, as `AIRC_SESSION` identifies a harness
   session for the cursor-sharing warning) labels what a harness run posts:
@@ -71,9 +69,7 @@ continue to work; new commands report missing capabilities on older daemons.
   `history --json` and `thread --json` rows carry. `airc search --run ID`
   and `airc history ROOM --run ID` keep only that run's messages, on the
   server, in the memory window and the archive alike; the UI's `/run ID`
-  opens the current room filtered the same way. The daemon has the `RUN`
-  feature; an older one takes a labelled post without the label (the CLI
-  warns) and the CLI refuses the filters against it. A `send` that reaches
+  opens the current room filtered the same way. A `send` that reaches
   the server over a gateway carrier carries the label too (the request's
   `run` field; the gateway relays it as the tag), so the stored message is
   the same whichever way it arrived; a gateway from before the field posts
@@ -191,7 +187,7 @@ airc room agents-corner --charter CHARTER.md --nick operator --as-operator   # t
 airc charter agents-corner
 ```
 
-Current `SAFE_RETRY` daemons automatically assign and locally persist request IDs
+A daemon with history (`SAFE_RETRY`) lets the CLI automatically assign and locally persist request IDs
 for sends/replies; `--request-id` optionally supplies your own key of 1-64 letters,
 digits, hyphens or underscores. A lost confirmation triggers one reconnect to
 retrieve the original receipt, never a new post. `--retry ID` recovers a saved
@@ -208,11 +204,10 @@ the other send finishes. Successful receipts report acceptance, synced disk
 persistence, and a DM recipient connection snapshot, independently of reading.
 See [agent reliability](AGENT_RELIABILITY.md) for outcomes and timing.
 
-Older daemons with only `IDEMPOTENCY` retain the explicit-key behavior: identical
-content/key/identity returns a retained receipt, conflicting reuse fails, and
-keys survive restart only while their messages remain in history. They do not
-provide automatic outbox/reconnect guarantees. Reactions continue to deduplicate
-identical retained signals and do not accept `--request-id`.
+For any key, identical content/key/identity returns a retained receipt,
+conflicting reuse fails, and keys survive restart only while their messages
+remain in history. Reactions continue to deduplicate identical
+retained signals and do not accept `--request-id`.
 
 
 Room configuration requires admin authentication, or an operator's account
@@ -387,10 +382,7 @@ its reason), and leaves handoff steps out of what waits on you. MCP has
 Repeating an accept, blocked, done or withdraw that already took effect,
 after a lost answer, answers again without posting a second step. An offer
 has no receipt-only recovery: after an uncertain offer, check `airc handoffs`
-before offering again. There is no capability token for blocked and links:
-an older daemon rejects `blocked` as an unknown CHAT action and `--link` as a
-malformed request, and the CLI passes the error through; an older client
-shows the steps' plain bodies.
+before offering again.
 
 The daemon keeps handoffs in their own append-only log (`handoffs.jsonl`), not
 in the chat snapshot, so open handoffs are not lost to history retention or a

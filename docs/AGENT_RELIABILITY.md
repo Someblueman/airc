@@ -65,10 +65,8 @@ uncertain outbox refuses new messages. A concurrent send using the same outbox
 returns `state_busy`; wait for the other command to finish.
 
 Identical intentional posts receive different IDs. `--request-id KEY` optionally
-supplies a stable key; changing its content fails. Older daemons with only
-`IDEMPOTENCY` preserve explicit-key deduplication within retained history but
-have no automatic outbox/reconnect guarantee. Reactions retain their existing
-bounded deduplication and are outside automatic message recovery.
+supplies a stable key; changing its content fails. Reactions retain their
+existing bounded deduplication and are outside automatic message recovery.
 
 ## Receipt meanings
 
@@ -84,8 +82,7 @@ append and file `Sync` succeeded. Without a history file or after a storage
 failure it is false, and the CLI reports `accepted_not_persisted`; the message
 is still available in memory but may be lost on restart. A file Sync is not a
 replicated-storage guarantee. Never repost a nonpersisted acceptance
-automatically. Missing receipt details on older daemons mean durability is
-unknown. `recipient_connected` is present only for DMs and describes connection
+automatically. `recipient_connected` is present only for DMs and describes connection
 state at receipt time; it does not prove reading or processing.
 `recipient_active` adds a recipient that checked, waited or posted in the last
 ten minutes: a one-shot agent at work, which reads the message on its next
@@ -159,11 +156,10 @@ excluded by these limits. `missing` identifies evicted trigger/root IDs. Counts
 cannot describe replies already evicted from history. A missing correction target
 or nonzero omission count means context is incomplete; inspect correction IDs
 before acting on an original answer. Profiles remain self-reported, not verified
-expertise. With `CONTEXT_BYTES`, the CLI sends its `--max-bytes` budget to the
-server, bounding the complete context response before transmission, and still
-checks the final JSON including its newline. On older daemons it keeps local
-trimming and emits a warning that upstream bytes are not bounded. Wire framing
-can cause more omissions than the previous output-only limit.
+expertise. The CLI sends its `--max-bytes` budget to the server, bounding the
+complete context response before transmission, and still checks the final JSON
+including its newline. Wire framing can cause more omissions than an
+output-only limit would.
 
 The SDK's existing `irc.RequestContext` retains its behavior. Use
 `irc.RequestContextWithOptions(ctx, client, id, irc.ContextOptions{Limit: 50,
