@@ -13,6 +13,7 @@ import (
 // This is a native contract probe, not gateway DM-read acceptance. The gateway
 // must not attribute old incoming messages to a new owner using a nickname alone.
 func TestNativeDirectHistoryCannotIdentifyRecipientAccount(t *testing.T) {
+	t.Parallel()
 	socket := fixtureWithAdmin(t, true)
 	const oldToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	const newToken = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"

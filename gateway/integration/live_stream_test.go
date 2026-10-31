@@ -43,6 +43,7 @@ func mustJSON(t *testing.T, value any) []byte {
 }
 
 func TestEventsWatchFramedAndWebSocketStreams(t *testing.T) {
+	t.Parallel()
 	t.Run("framed", func(t *testing.T) {
 		f := newReactionTransportFixture(t)
 		defer f.framed.Close()

@@ -14,6 +14,7 @@ import (
 )
 
 func TestRPCReadMatrixAndReplyFacts(t *testing.T) {
+	t.Parallel()
 	f := newRPCHTTPFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "rpc-matrix-parent")
@@ -100,6 +101,7 @@ func TestRPCReadMatrixAndReplyFacts(t *testing.T) {
 }
 
 func TestRPCAllMutationOperationsReachAccepted(t *testing.T) {
+	t.Parallel()
 	f := newRPCHTTPFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	call := func(request core.Request) core.Result {

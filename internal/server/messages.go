@@ -192,7 +192,7 @@ func (s *Server) newMessage(from, target, body string, parent *Message) Message 
 
 func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
-	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" || message.Run != "" || message.Paste != nil {
+	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" || message.Run != "" || message.Paste != nil || len(message.GroupMentions) > 0 {
 		tags += ";" + protocol.ChatTag + "=" + protocol.EncodeChat(message.ChatMetadata)
 	}
 	if message.ReplyTo != "" {

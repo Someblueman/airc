@@ -13,6 +13,7 @@ import (
 )
 
 func TestWebTransportSessionCloseJoinsOpenAndPartialStreams(t *testing.T) {
+	t.Parallel()
 	f := newWebTransportFixture(t)
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)

@@ -15,6 +15,8 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// Opt-in native-browser probe; it drives the host's one browser, so it is
+// not parallel.
 func TestBrowserJSONRPCFetchAndLiveWatch(t *testing.T) {
 	if os.Getenv("AGW_BROWSER_PROBE") != "1" {
 		t.Skip("requires interactive real browser")

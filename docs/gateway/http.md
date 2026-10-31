@@ -190,7 +190,7 @@ mutation with its original `request_id` and read its receipt.
 
 ## Browsers
 
-`http`, `http3`, `webtransport`, `websocket`, `mcp_http` and `webrtc` take
+`http`, `http3`, `webtransport`, `websocket` and `mcp_http` take
 `allowed_origins`: up to 16 exact origins such as `https://app.example`
 (plain `http` only for loopback). The default refuses every request that
 carries an `Origin`. An allowed origin grants visibility only; the request

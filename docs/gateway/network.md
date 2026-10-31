@@ -1,14 +1,13 @@
 # Network carriers
 
-Packet, QUIC, CoAP, WebRTC and message-socket carriers. All take the
+Packet, QUIC, CoAP and message-socket carriers. All take the
 [contract](contract-v1.md) request, usually inside a
 [frame](streams.md#frames), and apply the listener access policy. AIRC sees
 the client's IP address (without port) as its source. Connection-oriented
-carriers (a QUIC connection, a DTLS association, a ZeroMQ or NNG
-connection, a WebRTC peer) are one author session, where
-`account.identify` sets the default author; datagram carriers have no
-session, so every request names its author. Cleartext carriers expose
-tokens to anyone on the path, as plain IRC does.
+carriers (a QUIC connection, a ZeroMQ or NNG connection) are one author
+session, where `account.identify` sets the default author; datagram
+carriers have no session, so every request names its author. Cleartext
+carriers expose tokens to anyone on the path, as plain IRC does.
 
 ## Datagram fragments
 
@@ -58,54 +57,23 @@ unique per stream or per datagram channel; match responses by them, not by
 arrival order. Idle connections close after thirty seconds; the listener's
 [keepalive](configuration.md#keepalive) settings change that and add PINGs.
 
-## DTLS
-
-`protocol: "dtls"` uses DTLS 1.2 (Pion DTLS v3) with ALPN
-`airc-gateway-dtls/1`, ECDHE, AES-128-GCM and extended master secret. The
-server certificate must be RSA or ECDSA; client certificates are not AIRC
-credentials. Each DTLS record carries one fragment.
-
 ## CoAP
 
-| `protocol` | Transport | Security |
-|---|---|---|
-| `coap_udp` | UDP, CON or NON (RFC 7252) | none; no TLS settings allowed |
-| `coaps` | DTLS 1.2, ALPN `coap` | certificate required |
-
-`POST /v1/coap/rpc` with Content-Format `application/json` carries one frame
-(no `stream`); the response is the response frame (Bad Request for an
-error frame). Block1 and Block2 move whole bodies in blocks of at most
-1024 bytes. Over UDP the source is unverified, so there is no session, and
-each request packet gets at most one 1 KiB block back; fetch the rest with
-Block2.
+`protocol: "coap_udp"` is CoAP over UDP (RFC 7252), confirmable or
+non-confirmable, cleartext: no TLS settings are allowed. `POST /v1/coap/rpc`
+with Content-Format `application/json` carries one frame (no `stream`); the
+response is the response frame (Bad Request for an error frame). Block1 and
+Block2 move whole bodies in blocks of at most 1024 bytes. The source is
+unverified, so there is no session, and each request packet gets at most one
+1 KiB block back; fetch the rest with Block2.
 
 Watches use Observe in two steps, because a GET payload cannot carry a
 request: POST the watch frame with `stream: true` to
 `/v1/coap/observe/register`, which answers an `observation_token` (16 hex
 digits) valid for ten seconds; then GET `/v1/coap/observe` with Observe=0
-and that eight-byte token as the CoAP token. Notifications carry
-fragments. Observe=1 with the token, a Reset or a closed connection
-cancels.
-
-## WebRTC
-
-`protocol: "webrtc"` needs a certificate (it serves HTTPS signaling) and
-usually `allowed_origins`. Signal with `POST /v1/webrtc/offer`:
-
-```json
-{"version": 1, "sdp": "<complete offer>", "mode": "reliable_ordered"}
-```
-
-The answer is `{"version": 1, "sdp": "..."}`; there is no trickle ICE. The
-offer has one data-only section and the peer opens one channel labelled
-`airc-gateway-v1` with protocol `agd1`. `mode` is `reliable_ordered`,
-`reliable_unordered`, `unreliable_ordered` or `unreliable_unordered`
-(unreliable modes use `maxRetransmits: 0`). Each binary message is one
-fragment. Optional `webrtc.ice_servers` (`urls`, and for TURN `username`
-and an owner-only `credential_file`) and `ice_transport_policy` (`all` or
-`relay`, which needs a TURN server) configure ICE. Peers are limited per
-source address and each holds a session slot. Only loopback paths have been
-exercised.
+and that eight-byte token as the CoAP token, from the same source.
+Notifications carry fragments. Observe=1 with the token or a Reset cancels;
+a source quiet for thirty seconds is forgotten with its observations.
 
 ## ZeroMQ and NNG
 

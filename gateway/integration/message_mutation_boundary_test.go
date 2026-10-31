@@ -12,6 +12,7 @@ import (
 )
 
 func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	foreignTarget := core.Target{Kind: "room", Name: "#post-private"}
@@ -55,6 +56,7 @@ func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
 }
 
 func TestMessageMutationDirectOutgoingAndNonAuthor(t *testing.T) {
+	t.Parallel()
 	peerTarget := core.Target{Kind: "direct", Name: "post-peer"}
 	f := newReactionFixture(t, false, []core.Target{peerTarget}, true)
 	peer := newReplySignalObserver(t, f.socket, peerTarget)

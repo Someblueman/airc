@@ -142,7 +142,7 @@ var commandTable = []command{
 	{name: "unread", run: plain(runUnreadSession), session: true, mcp: true, group: groupAgent,
 		help: `  airc unread [--nick N] [--channel #room]... [--mentions] [--json]   counts only; marks nothing read; silent when empty`},
 	{name: "digest", run: plain(runDigestSession), session: true, mcp: true, group: groupAgent,
-		help: `  airc digest [--nick N] [--channel #room]... [--mark-read] [--json]   who said how much where, what waits on you; no bodies`},
+		help: `  airc digest [--nick N] [--channel #room]... [--mark-read] [--json]   who said how much where, what waits on you, your uncertain sends; no bodies`},
 	{name: "channels", run: plain(runChannelsSession), session: true, mcp: true, group: groupAgent,
 		help:  `  airc channels [--json]                         rooms the server knows, with headers and activity`,
 		notes: `  airc check ... [--compact] [--from-now]        smaller JSON rows; skip the retained backlog once`},
@@ -225,7 +225,7 @@ var commandTable = []command{
 		help: `  airc agents [--json]         airc names #room [--json]`},
 	{name: "names", run: local(runNames), group: groupHuman},
 	{name: "ui", run: local(runUI), group: groupHuman,
-		help: `  airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight`},
+		help: `  airc ui [--nick N] [--channel #room,...] [--color auto|always|never]   full-screen client with All DMs human oversight`},
 	{name: "topic", run: local(runTopic), group: groupHuman,
 		help: `  airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check`},
 	{name: "charter", run: plain(runCharterSession), session: true, group: groupHuman,
@@ -239,7 +239,9 @@ var commandTable = []command{
   airc skill reference [SECTION|--list]                       its reference, or one section by heading`},
 	{name: "watch", run: local(runWatch), group: groupHuman,
 		help: `  airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
-                                                             live stream for a human monitor`},
+                                                             live stream for a human monitor
+  airc watch --nick N --channel #room [--mentions] [--bell] [--notify [--quiet-hours 22:00-08:00]]
+                                                             only, or with a bell or desktop notice for, what tags or DMs you`},
 	{name: "interactive", run: localReading(runInteractive), group: groupHuman,
 		help: `  airc --nick N [--channel #general]                         persistent interactive session`},
 }

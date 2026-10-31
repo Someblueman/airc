@@ -342,8 +342,8 @@ func TestDecisionsSurviveRestartsAndAgeOut(t *testing.T) {
 	if err := restored.RestoreDecisions(path); err != nil {
 		t.Fatal(err)
 	}
-	if d := restored.decisions[finished.ID]; len(restored.decisions) != 2 || d.State != decisionAnswered || d.Answer == nil || d.Answer.From != "sws" || d.Answer.AccountID != answered.Answer.AccountID || d.Answer.Body != "with the simple one" {
-		t.Fatalf("restored %+v", restored.decisions)
+	if d := restored.decisions.all[finished.ID]; len(restored.decisions.all) != 2 || d.State != decisionAnswered || d.Answer == nil || d.Answer.From != "sws" || d.Answer.AccountID != answered.Answer.AccountID || d.Answer.Body != "with the simple one" {
+		t.Fatalf("restored %+v", restored.decisions.all)
 	}
 	// A crash mid-append leaves a torn last line.
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
@@ -362,8 +362,8 @@ func TestDecisionsSurviveRestartsAndAgeOut(t *testing.T) {
 	if err := second.RestoreDecisions(path); err != nil {
 		t.Fatal(err)
 	}
-	if d := second.decisions[kept.ID]; len(second.decisions) != 1 || d.State != decisionOpen || strings.Join(d.Offer.Choices, "|") != "a|b" {
-		t.Fatalf("restored %+v", second.decisions)
+	if d := second.decisions.all[kept.ID]; len(second.decisions.all) != 1 || d.State != decisionOpen || strings.Join(d.Offer.Choices, "|") != "a|b" {
+		t.Fatalf("restored %+v", second.decisions.all)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -399,17 +399,17 @@ func TestDecisionLogIsRewrittenAfterAFailedAppend(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The append fails, as on a full disk, after writing part of a line.
-	if _, err := s.decisionLog.file.WriteString(`{"partial`); err != nil {
+	if _, err := s.decisions.log.file.WriteString(`{"partial`); err != nil {
 		t.Fatal(err)
 	}
-	_ = s.decisionLog.file.Close()
+	_ = s.decisions.log.file.Close()
 	if err := ask("two"); err == nil {
 		t.Fatal("an append to a closed log succeeded")
 	}
 	if err := ask("three"); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := readDecisions(path)
+	loaded, err := decisionLedger.read(path)
 	if err != nil || len(loaded) != 2 {
 		t.Fatalf("after a failed append the log holds %d decisions: %v", len(loaded), err)
 	}
@@ -460,7 +460,7 @@ func TestTooManyOpenDecisionsAreRefused(t *testing.T) {
 	for range maxLiveDecisions {
 		m := s.newMessage("builder", "#work", "question", nil)
 		m.Kind, m.For = "decision", "sws"
-		s.decisions[m.ID] = decision{Offer: m, State: decisionOpen, Updated: m.Timestamp}
+		s.decisions.all[m.ID] = decision{Offer: m, State: decisionOpen, Updated: m.Timestamp}
 	}
 	err := s.offerDecisionLocked(actor, protocol.ChatRequest{Action: "decision", Target: "#work", For: "sws", Text: "one more"})
 	if err == nil || !strings.Contains(err.Error(), "10000 decisions are open") {

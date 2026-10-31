@@ -51,6 +51,12 @@ func TestParseKeys(t *testing.T) {
 		{"\x1b[3~\x1b[H\x1b[F\x1b[1~\x1b[4~", []key{{kind: keyDelete}, {kind: keyHome}, {kind: keyEnd}, {kind: keyHome}, {kind: keyEnd}}},
 		{"\x03\x04\x0e\x10", []key{{keyCtrl, 'c'}, {keyCtrl, 'd'}, {keyCtrl, 'n'}, {keyCtrl, 'p'}}},
 		{"\x1b", []key{{kind: keyEsc}}},
+		{"\x1b\x1b", []key{{kind: keyEsc}, {kind: keyEsc}}},
+		{"\x1bb\x1bf\x1b\x7f\x1b ", []key{{keyAlt, 'b'}, {keyAlt, 'f'}, {keyAlt, 0x7f}, {keyAlt, ' '}}}, // Alt as Meta is never Esc
+		{"\x1b\x01", []key{{kind: keyEsc}, {keyCtrl, 'a'}}},
+		{"\x1b\r", []key{{keyNewline, '\n'}}},                                                             // Alt-Enter as Meta
+		{"\x1b[27;2;13~\x1b[27;3;13~", []key{{keyNewline, '\n'}, {keyNewline, '\n'}}},                     // xterm modifyOtherKeys Shift- and Alt-Enter
+		{"\x1b[13;2u\x1b[13;3u\x1b[13u", []key{{keyNewline, '\n'}, {keyNewline, '\n'}, {kind: keyEnter}}}, // kitty
 		{"\x1b[99;99X", nil}, // an unrecognised sequence is dropped, not typed
 		{"\x00\x1b[200~", nil},
 	}
@@ -138,10 +144,39 @@ func TestTypingEditingAndSending(t *testing.T) {
 	if string(m.input) != "one " {
 		t.Fatalf("ctrl-w left %q", string(m.input))
 	}
+	m.input, m.cursor = []rune("one two\nthree"), 13
+	m.update(keyIn{keyAlt, 'b'})
+	m.update(keyIn{keyAlt, 'b'})
+	if m.cursor != 4 {
+		t.Fatalf("Alt-b twice stopped at %d", m.cursor)
+	}
+	m.update(keyIn{keyAlt, 'f'})
+	if m.cursor != 7 {
+		t.Fatalf("Alt-f stopped at %d", m.cursor)
+	}
+	m.update(keyIn{keyAlt, 'x'})
+	m.update(keyIn{keyAlt, ' '})
+	if string(m.input) != "one two\nthree" || m.cursor != 7 {
+		t.Fatalf("an unbound Alt key changed the draft to %q at %d", string(m.input), m.cursor)
+	}
+	m.update(keyIn{keyAlt, 0x7f})
+	if string(m.input) != "one \nthree" || m.cursor != 4 {
+		t.Fatalf("Alt-Backspace left %q at %d", string(m.input), m.cursor)
+	}
 	m.update(keyIn{kind: keyEsc})
 	if len(m.input) != 0 {
 		t.Fatal("escape should clear the input")
 	}
+	m.connected = true
+	m.update(keyIn{kind: keyRune, r: 'a'})
+	if cmds, _ := m.update(keyIn{keyNewline, '\n'}); len(cmds) != 0 || string(m.input) != "a\n" || m.cursor != 2 {
+		t.Fatalf("Alt-Enter sent %v and left %q at %d", cmds, string(m.input), m.cursor)
+	}
+	m.update(keyIn{kind: keyRune, r: 'b'})
+	if cmds, _ := m.update(keyIn{kind: keyEnter}); len(cmds) != 1 || cmds[0].text != "a\nb" {
+		t.Fatalf("a two-line draft sent %+v", cmds)
+	}
+	m.update(deliveryIn{cmd: *m.pending})
 	cmds, quit := typeText(m, "  hello room  ")
 	if quit || len(cmds) != 1 || cmds[0] != (uiCmd{kind: "send", target: "#alpha", text: "hello room"}) {
 		t.Fatalf("send = %#v quit=%v", cmds, quit)
@@ -435,6 +470,10 @@ func TestHelpViewReflectsDaemonCapabilities(t *testing.T) {
 			if !strings.Contains(line, "unavailable") {
 				t.Errorf("unsupported command not marked: %s", line)
 			}
+			// ADMIN is a matter of configuration, the others of age.
+			if admin := strings.HasPrefix(line, "/mute "); admin != strings.Contains(line, "runs without --admin-token-file") || admin == strings.Contains(line, "upgrade") {
+				t.Errorf("wrong reason for an unavailable command: %s", line)
+			}
 		}
 	}
 	for _, width := range []int{120, 70, 30} {
@@ -455,5 +494,87 @@ func TestHelpViewReflectsDaemonCapabilities(t *testing.T) {
 	typeText(m, "/close")
 	if m.current != "#a" || m.find("help") != nil {
 		t.Fatalf("/close should return to #a, current %s", m.current)
+	}
+}
+
+func TestUpAndDownRecallSentLinesOrScroll(t *testing.T) {
+	m := newTestModel("#alpha")
+	m.update(resizeIn{100, 10})
+	for i := range 30 {
+		m.update(msgIn{event: uiMessage(fmt.Sprint("m", i), "bob", "#alpha", "line", time.Duration(i)*time.Second)})
+	}
+	m.view()
+	up, down := keyIn{kind: keyUp}, keyIn{kind: keyDown}
+	m.update(up)
+	if m.find("#alpha").scroll != 1 {
+		t.Fatal("with nothing sent, Up scrolls the log")
+	}
+	m.update(down)
+	typeText(m, "first line")
+	typeText(m, "/topic second")
+	typeText(m, "/topic second") // a repeat of the newest line is remembered once
+	m.update(up)
+	if string(m.input) != "/topic second" || m.cursor != len(m.input) {
+		t.Fatalf("Up recalled %q at %d", string(m.input), m.cursor)
+	}
+	m.update(up)
+	if string(m.input) != "first line" {
+		t.Fatalf("second Up recalled %q", string(m.input))
+	}
+	m.update(up)
+	if string(m.input) != "first line" || m.find("#alpha").scroll != 0 {
+		t.Fatalf("Up past the oldest line changed %q or scrolled %d", string(m.input), m.find("#alpha").scroll)
+	}
+	m.update(down)
+	m.update(down)
+	if len(m.input) != 0 {
+		t.Fatalf("Down past the newest line left %q", string(m.input))
+	}
+	m.update(down)
+	if m.find("#alpha").scroll != 0 {
+		t.Fatal("Down on an empty composer scrolls, and the log is at the newest")
+	}
+	// An edited recall is the user's own draft again, so Up scrolls instead.
+	m.update(up)
+	m.update(keyIn{kind: keyRune, r: '!'})
+	m.update(up)
+	if string(m.input) != "/topic second!" || m.find("#alpha").scroll != 1 {
+		t.Fatalf("Up on an edited line left %q, scroll %d", string(m.input), m.find("#alpha").scroll)
+	}
+	m.update(keyIn{kind: keyEsc})
+	m.update(down)
+	// On a multi-line recall only the first line goes back, and only the last forward.
+	history := m.find("#alpha").history
+	history[len(history)-1] = "one\ntwo"
+	m.update(up)
+	if string(m.input) != "one\ntwo" {
+		t.Fatalf("Up recalled %q", string(m.input))
+	}
+	m.update(up)
+	if string(m.input) != "one\ntwo" || m.find("#alpha").scroll != 1 {
+		t.Fatalf("Up on the second line of a recall left %q, scroll %d", string(m.input), m.find("#alpha").scroll)
+	}
+	m.cursor = 0
+	m.update(down)
+	if string(m.input) != "one\ntwo" || m.find("#alpha").scroll != 0 {
+		t.Fatalf("Down on the first line of a recall left %q, scroll %d", string(m.input), m.find("#alpha").scroll)
+	}
+	m.update(up)
+	if string(m.input) != "first line" {
+		t.Fatalf("Up on the first line recalled %q", string(m.input))
+	}
+	// History is per view and bounded.
+	m.update(keyIn{kind: keyEsc})
+	m.switchTo("@me")
+	m.update(up)
+	if len(m.input) != 0 {
+		t.Fatalf("another view recalled %q", string(m.input))
+	}
+	m.switchTo("#alpha")
+	for i := range historyLimit + 5 {
+		typeText(m, fmt.Sprint("n", i))
+	}
+	if n := len(m.find("#alpha").history); n != historyLimit {
+		t.Fatalf("history holds %d lines", n)
 	}
 }

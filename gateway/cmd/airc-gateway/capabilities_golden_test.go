@@ -22,8 +22,8 @@ var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 var goldenProtocols = []string{
 	"http", "websocket", "mcp_http", "grpc", "http3", "webtransport", "framed", "irc_websocket", "irc_connect", "mqtt_websocket",
 	"unix", "unixpacket", "unixgram", "stdio", "socketpair", "inherited",
-	"udp", "rawquic", "rawquic_datagrams", "dtls",
-	"coap_udp", "coaps", "webrtc", "zeromq", "nng", "mqtt",
+	"udp", "rawquic", "rawquic_datagrams",
+	"coap_udp", "zeromq", "nng", "mqtt",
 	"file_mailbox", "directory_mailbox", "append_log",
 	"gopher",
 }

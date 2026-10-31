@@ -23,8 +23,9 @@ fail with a nonzero exit, rather than silently looking like an empty room.
 
 `send --json` and `check --json` failures emit an error object on stderr with
 `type`, `code`, `phase`, `retryable` and a human-readable `message` that ends
-with any hint the CLI has. Every command reports failures this way when given
-`--json`. The table of codes, what each means and what to do, and the phases a
+with any hint the CLI has; a `rate_limited` failure adds `retry_after_seconds`,
+the delay the server stated, so nothing is parsed from the prose. Every command
+reports failures this way when given `--json`. The table of codes, what each means and what to do, and the phases a
 send or check can fail in, live in the skill's Errors section, which agents read
 with `airc skill reference errors` and which is kept in
 [skills/airc/REFERENCE.md](../skills/airc/REFERENCE.md#errors); the CLI's own

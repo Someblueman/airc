@@ -108,6 +108,16 @@ type digestRoom struct {
 	Statuses []digestStatus  `json:"statuses,omitempty"` // the latest per nickname, newest first
 }
 
+// digestPending is a send of the digest's nick whose outcome is unknown: its
+// outbox entry has no receipt. send --pending lists them; send --retry
+// recovers a receipt without posting twice.
+type digestPending struct {
+	RequestID string    `json:"request_id"`
+	Target    string    `json:"target"`
+	Created   time.Time `json:"created,omitzero"`
+	Preview   string    `json:"preview"`
+}
+
 type digestHeader struct {
 	Type    string `json:"type"` // topic, charter or pin
 	Target  string `json:"target"`
@@ -136,6 +146,8 @@ type digestSummary struct {
 	Decisions     []digestDecision `json:"decisions,omitempty"`
 	DecisionsMore int              `json:"decisions_omitted,omitempty"`
 	Headers       []digestHeader   `json:"headers,omitempty"`
+	PendingSends  []digestPending  `json:"pending_sends,omitempty"`
+	PendingMore   int              `json:"pending_sends_omitted,omitempty"`
 	Gaps          []string         `json:"gaps,omitempty"`
 	Warnings      []string         `json:"warnings,omitempty"`
 }
@@ -192,11 +204,34 @@ func runDigestSession(ctx context.Context, session *agentConnection, args []stri
 		summary.DecisionsMore = len(summary.Decisions) - digestWaiting
 		summary.Decisions = summary.Decisions[:digestWaiting]
 	}
+	summary.PendingSends = pendingSends(*opt, &summary.Warnings)
+	if len(summary.PendingSends) > digestWaiting {
+		summary.PendingMore = len(summary.PendingSends) - digestWaiting
+		summary.PendingSends = summary.PendingSends[:digestWaiting]
+	}
 	summary.MarkedRead = *markRead
 	if opt.json {
 		return json.NewEncoder(stdout).Encode(summary)
 	}
 	return writeDigest(stdout, summary, time.Now())
+}
+
+// pendingSends lists this nick's sends to this endpoint whose outcome is
+// unknown, from the outbox send --pending reads, so an agent catching up
+// learns of them here rather than by knowing to ask. The digest reads the
+// outbox as it reads everything: it changes nothing. An unreadable outbox is
+// a warning, since the rest of the digest stands.
+func pendingSends(opt options, warnings *[]string) []digestPending {
+	entries, err := pendingOutbox(opt)
+	if err != nil {
+		*warnings = append(*warnings, "could not read the send outbox, so uncertain sends may be missing: "+err.Error())
+		return nil
+	}
+	var out []digestPending
+	for _, e := range entries {
+		out = append(out, digestPending{RequestID: e.RequestID, Target: e.Target, Created: e.Created, Preview: preview(e.Body)})
+	}
+	return out
 }
 
 // summarize builds a digest from check rows, own messages included: they
@@ -497,7 +532,7 @@ func unique(values []string) []string {
 // writeDigest prints a digest for a person or an agent without JSON. Like
 // unread, it prints nothing when there is nothing new, so a hook adds nothing.
 func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
-	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 && len(d.Handoffs) == 0 && len(d.Decisions) == 0 {
+	if d.Unread == 0 && len(d.Headers) == 0 && len(d.Gaps) == 0 && len(d.Handoffs) == 0 && len(d.Decisions) == 0 && len(d.PendingSends) == 0 {
 		return nil
 	}
 	var b strings.Builder
@@ -506,6 +541,11 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 		atLeast = "at least "
 	}
 	fmt.Fprintf(&b, "airc digest for %s: %s%d unread in %d %s, %d addressed to you (%d waiting on you)\n", d.Nick, atLeast, d.Unread, len(d.Rooms), plural(len(d.Rooms), "place", "places"), d.Addressed, len(d.Waiting)+d.WaitingMore)
+	// Before anything else: a send with no receipt is settled by recovering
+	// the receipt, never by posting again.
+	if n := len(d.PendingSends) + d.PendingMore; n > 0 {
+		fmt.Fprintf(&b, "%d uncertain %s; airc send --pending lists %s; --retry REQUEST_ID recovers a receipt\n", n, plural(n, "send", "sends"), plural(n, "it", "them"))
+	}
 	for _, r := range d.Rooms {
 		var people []string
 		for _, s := range r.Speakers {

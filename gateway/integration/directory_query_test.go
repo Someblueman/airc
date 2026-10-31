@@ -10,6 +10,7 @@ import (
 )
 
 func TestHTTPDirectoryNicknameNativeQueryAndUnknownCard(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, false)
 	for _, nick := range []string{"FiXtUrE-AuThOr", "fixture-observer", "unpublished-nick"} {
 		status, _, data := httpCall(t, f, http.MethodGet, "/v1/directory?limit=1&nick="+url.QueryEscape(nick), f.token, nil)
@@ -46,6 +47,7 @@ func TestHTTPDirectoryNicknameNativeQueryAndUnknownCard(t *testing.T) {
 }
 
 func TestDirectoryNicknameRejectsWrongOrMissingNativeCard(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"directory-wrong-nick", "directory-empty"} {
 		t.Run(mode, func(t *testing.T) {
 			f := gatewayHTTPFixture(t, true, mode)

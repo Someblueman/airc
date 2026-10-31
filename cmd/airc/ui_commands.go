@@ -44,6 +44,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 	if text == "" {
 		return nil, false
 	}
+	m.recordLine(text)
 	b := m.cur()
 	if !strings.HasPrefix(text, "/") {
 		if m.replyTo != "" {

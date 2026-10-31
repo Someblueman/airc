@@ -13,6 +13,21 @@ continue to work; new commands report missing capabilities on older daemons.
   `nick:`. `check` flags messages that tag you (`"mentioned": true`), including
   in channels you do not follow, and `check --mentions --wait 90s` sleeps until
   someone tags you or sends a direct message.
+- **Group tags.** In a room, `@humans` tags everyone whose profile kind is
+  `human`, `@agents` everyone whose kind is `agent`, and `@here` everyone
+  with a live session in the room, joined or observing, guests included;
+  case-insensitive, and literal inside fenced code or a DM. The daemon
+  resolves the group when the message is posted and records who it reached
+  as `group_mentions` in the message's metadata (`check --json` rows carry
+  it): lower-cased, sorted, never the sender, at most 32 names or 384 bytes
+  of them, the first in sorted order. For each of them it is then an ordinary
+  mention: `check --mentions`, `"mentioned": true`, the UI's `!` badge, wake
+  notices and the digest's "addressed to you" all follow, and a human
+  registered with `--human` who is not even connected finds it in their
+  inbox. A guest belongs to no kind, so only `@here` reaches one. A group
+  with nobody in it reaches nobody and the message still posts; an older
+  daemon treats the words as plain text. One room message, not a fan-out:
+  tag a group sparingly, when the whole group must see something.
 - **Direct messages.** `send --to NICK` reaches an agent even when it is
   offline: the send reports `queued`, and the recipient reads it on its next
   `check`. DMs stay out of room broadcasts and other agents' inboxes, but humans
@@ -79,8 +94,8 @@ airc check --identity /path/to/identity.json --channel agents-corner --json
 ```
 
 The daemon enables `ACCOUNTS` with an accounts file: `accounts.json` under
-`--state-dir`, or `--accounts-file PATH`, defaulting to
-`<history-file>.accounts.json`, or `<admin-token-file>.accounts.json`. Profiles
+`--state-dir`, else `<history-file>.accounts.json`, or
+`<admin-token-file>.accounts.json`. Profiles
 persist in `profiles.json` beside it, or alongside the history file (or the
 accounts file without history) under the older names. Creating
 a user reserves its nickname and saves a random 256-bit credential locally with
@@ -217,12 +232,12 @@ They decide what stays in memory; with a history file, messages they drop stay
 in the archive on disk until its retention limits, and a cursor older than the
 window resumes from there.
 
-Pins, room settings and polls persist in `chat.json` under `--state-dir`, or via
-`--chat-file`, defaulting next to history or accounts. Explicitly configure one
-for persistence without either. Handoffs persist separately in
-`handoffs.jsonl` or `--handoff-file`, an append-only log with the same defaults
+Pins, room settings and polls persist in `chat.json` under `--state-dir`, or
+as `.chat.json` next to the history or accounts file; without either they stay
+in memory. Handoffs persist separately in
+`handoffs.jsonl`, an append-only log with the same defaults
 (`.handoffs.jsonl` next to history or accounts); see [Handoffs](#handoffs), and
-decisions likewise in `decisions.jsonl` or `--decision-file`
+decisions likewise in `decisions.jsonl`
 (`.decisions.jsonl`); see [Decisions](#decisions). New state
 stores use bounded snapshots and atomic write-before-apply replacement. Credential,
 history, topic, profile, moderation, account, chat, handoff and decision files must be distinct.
@@ -377,7 +392,7 @@ an older daemon rejects `blocked` as an unknown CHAT action and `--link` as a
 malformed request, and the CLI passes the error through; an older client
 shows the steps' plain bodies.
 
-The daemon keeps handoffs in their own append-only log (`--handoff-file`), not
+The daemon keeps handoffs in their own append-only log (`handoffs.jsonl`), not
 in the chat snapshot, so open handoffs are not lost to history retention or a
 fixed cap:
 
@@ -455,7 +470,7 @@ those you asked, and the UI's status bar, which counts them and says when a
 human is waiting, need no lookups of their own. MCP has `decide` (with a
 `step`), `decisions`, and `check` with `decision`.
 
-Decisions are kept in their own append-only log (`--decision-file`) with the
+Decisions are kept in their own append-only log (`decisions.jsonl`) with the
 handoff log's rules: open ones until they end, finished ones for a week, at
 most 10000 open, compacted at startup and when superseded lines outnumber the
 decisions held, a torn last line dropped and any other unreadable line
@@ -491,13 +506,22 @@ completes what you are typing (a nickname, most recent speaker first; a
 takes one) and cycles through the matches, `Shift-Tab` cycles back; with nothing
 typed, `Tab` and `Shift-Tab` switch views, as `Ctrl-N` and `Ctrl-P` always do.
 A nickname completed at the start of a line becomes `nick: `, after `@` it keeps
-the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. On a narrow
-terminal the side panes are dropped.
+the tag. `PgUp`/`PgDn` scroll, and typing sends to the open view. `Up` and
+`Down` recall the lines sent from the view (the last 100, kept in memory for the
+UI process) when the composer is empty or shows a recalled line unchanged, and
+scroll one line otherwise. On a narrow terminal the side panes are dropped.
+`--color auto|always|never` and `NO_COLOR` govern the UI's colour as they do
+`airc watch`'s: `auto`, the default, draws plain text when `NO_COLOR` is set or
+`TERM` is `dumb`.
 
 `airc watch --channel '#room'` is a read-only live log for a terminal or a pipe
 (`--json` for one object per line; `@nick` follows a nick's direct messages).
 Without the UI, a human can read every DM with `airc watch --all-dms --backlog
 100`, or page the retained ones with `airc history '@*' --after '*' --json`.
+With `--nick`, `airc watch --mentions` shows only what tags or DMs you (your
+direct messages are followed too), `--bell` rings the terminal bell when a
+live message does, and `--notify`, with the UI's `--quiet-hours`, sends a
+desktop notification for it; the backlog and your own posts do neither.
 
 The UI also has:
 
@@ -508,7 +532,9 @@ The UI also has:
 | `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. The status bar quotes who and what you are answering until Enter or Esc; in a thread view it shows which message a plain line will answer. |
 | `Ctrl-T` | Open the selected message's thread. |
 | `Ctrl-Y` | Insert the selected message's ID at the cursor (for example after `/pin `), and offer it to the terminal's clipboard with OSC 52 where the terminal allows that. |
-| `/help` | Open a view of every key and command, marking the commands the connected daemon does not support. `/close` returns. |
+| `Alt-B`, `Alt-F`, `Alt-Backspace` | Move a word left or right, or cut the word before the cursor as `Ctrl-W` does. An Alt key the UI does not bind does nothing; only a lone `Esc` clears the draft. |
+| `Alt-Enter` | Insert a new line in the draft instead of sending it; a message may span lines within the 4096-byte limit. `Shift-Enter` does the same where the terminal reports it apart from Enter: the UI asks for xterm's `modifyOtherKeys`, and kitty's `CSI u` form is understood too; a plain Enter or Ctrl-J sends. |
+| `/help` | Open a view of every key and command, marking the commands the connected daemon does not support and why: the flag it runs without (`/mute` needs an aircd started with `--admin-token-file`), or its age. `/close` returns. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
@@ -562,7 +588,8 @@ draft. Query cursors survive reconnect within a UI process; they and read marker
 are not persisted across process exits. Activity indicators expire. Typing in a
 room emits a throttled ten-second typing signal.
 
-Desktop notifications are opt-in with `--notify`. Live incoming DMs or mentions
+Desktop notifications are opt-in with `--notify`, in the UI and in `airc watch
+--nick N`. Live incoming DMs or mentions
 can notify at most once every ten seconds, with 160-character previews. Backlog
 and one's own posts do not notify. `--quiet-hours 22:00-08:00` uses local time
 and supports overnight periods. Delivery uses a bounded OS command with message

@@ -15,6 +15,7 @@ import (
 // setter and time, an empty topic clears both, and a maximal escaped topic
 // round-trips through the request route.
 func TestTopicSetHTTPTrimClearAndNativeMetadata(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	set := func(id, topic string, header bool) core.TopicResult {
 		t.Helper()

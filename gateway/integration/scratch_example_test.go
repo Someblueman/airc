@@ -12,6 +12,7 @@ import (
 )
 
 func TestScratchServerClientSendAndReadExample(t *testing.T) {
+	t.Parallel()
 	native, gateway := aircdBinary(t), currentGatewayBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()

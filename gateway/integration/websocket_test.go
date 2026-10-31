@@ -10,6 +10,7 @@ import (
 )
 
 func TestWebSocketCLINativeIPv6(t *testing.T) {
+	t.Parallel()
 	testnet.RequireIPv6Loopback(t)
 	for _, secure := range []bool{false, true} {
 		f := websocketGatewayFixture(t, secure, "[::1]:0", nil)

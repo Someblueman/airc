@@ -29,6 +29,7 @@ func replyAttempt(t *testing.T, s *store.Store, b *backend.Backend, identity sto
 }
 
 func TestBackendAuthorizedRoomAndNestedReplies(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
@@ -96,6 +97,7 @@ func TestBackendAuthorizedRoomAndNestedReplies(t *testing.T) {
 }
 
 func TestBackendAuthorizedDirectRepliesBothDirections(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	peer := dial(t, socket, "fixture-peer", "", false, false)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

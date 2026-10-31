@@ -17,6 +17,7 @@ import (
 // AIRC, not the gateway, refuses a guest on a registered nickname and a bad
 // token, and those refusals are permanent and distinct.
 func TestBackendPostsAsJobAuthor(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 func TestEventsWatchUnixStreamReturnsNativeSignal(t *testing.T) {
+	t.Parallel()
 	conn, credentials, stop, _, upstream := unixStreamFixture(t)
 	defer conn.Close()
 	author := dial(t, upstream, "live-unix-author", "", false, true)
@@ -29,6 +30,7 @@ func TestEventsWatchUnixStreamReturnsNativeSignal(t *testing.T) {
 }
 
 func TestEventsWatchStdioReturnsNativeSignals(t *testing.T) {
+	t.Parallel()
 	for _, profile := range []string{"signed", "encrypted"} {
 		t.Run(profile, func(t *testing.T) {
 			socket, config, credentials, _ := stdioFixtureConfig(t)

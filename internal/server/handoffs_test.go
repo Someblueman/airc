@@ -292,8 +292,8 @@ func TestHandoffsSurviveRestartsAndAgeOut(t *testing.T) {
 	if err := restore(second); err != nil {
 		t.Fatal(err)
 	}
-	if len(second.handoffs) != 1 || second.handoffs[kept.ID].State != handoffAccepted || second.handoffs[kept.ID].Holder != "builder" {
-		t.Fatalf("restored %+v", second.handoffs)
+	if len(second.handoffs.all) != 1 || second.handoffs.all[kept.ID].State != handoffAccepted || second.handoffs.all[kept.ID].Holder != "builder" {
+		t.Fatalf("restored %+v", second.handoffs.all)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -327,17 +327,17 @@ func TestHandoffLogIsRewrittenAfterAFailedAppend(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The append fails, as on a full disk, after writing part of a line.
-	if _, err := s.handoffLog.file.WriteString(`{"partial`); err != nil {
+	if _, err := s.handoffs.log.file.WriteString(`{"partial`); err != nil {
 		t.Fatal(err)
 	}
-	_ = s.handoffLog.file.Close()
+	_ = s.handoffs.log.file.Close()
 	if err := s.offerHandoffLocked(actor, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "two"}); err == nil {
 		t.Fatal("an append to a closed log succeeded")
 	}
 	if err := s.offerHandoffLocked(actor, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "three"}); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := readHandoffs(path)
+	loaded, err := handoffLedger.read(path)
 	if err != nil || len(loaded) != 2 {
 		t.Fatalf("after a failed append the log holds %d handoffs: %v", len(loaded), err)
 	}
@@ -565,7 +565,7 @@ func TestBlockedHandoffsSurviveRestartsAndLeadTheListing(t *testing.T) {
 	if err := second.RestoreHandoffs(path); err != nil {
 		t.Fatal(err)
 	}
-	restored := second.handoffs[stuck.ID]
+	restored := second.handoffs.all[stuck.ID]
 	if restored.State != handoffBlocked || restored.Holder != "builder" || restored.BlockedReason != "needs a credential" || restored.BlockedAt.IsZero() {
 		t.Fatalf("restored %+v", restored)
 	}
@@ -583,8 +583,54 @@ func TestBlockedHandoffsSurviveRestartsAndLeadTheListing(t *testing.T) {
 	if err := <-served; err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := readHandoffs(path)
+	loaded, err := handoffLedger.read(path)
 	if err != nil || loaded[stuck.ID].State != handoffOpen || loaded[stuck.ID].BlockedReason != "" {
 		t.Fatalf("saved %+v: %v", loaded[stuck.ID], err)
+	}
+}
+
+// The ledger logs are read as the daemon has always written them: one JSON
+// object per line, the newest line for an offer winning, and compaction
+// rewrites each record in the same shape.
+func TestSavedLedgerLinesLoadUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
+	cfg := Config{HistoryLimit: 8, Now: func() time.Time { return now }}
+	offer := `"offer":{"account_id":"acct-1","kind":"handoff","for":"builder","id":"0123456789abcdef0123456789abcdef","seq":1,"from":"planner","target":"#work","message":"ship it","timestamp":"2026-10-01T09:00:00Z"}`
+	open := `{` + offer + `,"state":"open","updated":"2026-10-01T09:00:00Z"}` + "\n"
+	accepted := `{` + offer + `,"state":"accepted","holder":"builder","holder_account":"acct-2","updated":"2026-10-01T09:05:00Z"}` + "\n"
+	handoffs := filepath.Join(dir, "handoffs.jsonl")
+	if err := os.WriteFile(handoffs, []byte(open+accepted), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := New(cfg)
+	if err := s.RestoreHandoffs(handoffs); err != nil {
+		t.Fatal(err)
+	}
+	h := s.handoffs.all["0123456789abcdef0123456789abcdef"]
+	if len(s.handoffs.all) != 1 || h.State != handoffAccepted || h.Holder != "builder" || h.HolderAccount != "acct-2" || h.Offer.For != "builder" || h.Offer.Body != "ship it" || h.Offer.AccountID != "acct-1" {
+		t.Fatalf("loaded %+v", h)
+	}
+	if data, err := os.ReadFile(handoffs); err != nil || string(data) != accepted {
+		t.Fatalf("compacted to %q, %v", data, err)
+	}
+
+	ask := `"offer":{"account_id":"acct-1","kind":"decision","for":"sws","choices":["a","b"],"id":"fedcba9876543210fedcba9876543210","seq":2,"from":"builder","target":"#work","message":"which?","timestamp":"2026-10-01T09:10:00Z"}`
+	answer := `"answer":{"account_id":"acct-3","kind":"decision-answer","for":"builder","choice":2,"id":"00000000000000000000000000000001","reply_to":"fedcba9876543210fedcba9876543210","thread_id":"fedcba9876543210fedcba9876543210","seq":3,"from":"sws","target":"#work","message":"2. b","timestamp":"2026-10-01T09:20:00Z"}`
+	asked := `{` + ask + `,"state":"open","updated":"2026-10-01T09:10:00Z"}` + "\n"
+	answered := `{` + ask + `,"state":"answered",` + answer + `,"updated":"2026-10-01T09:20:00Z"}` + "\n"
+	decisions := filepath.Join(dir, "decisions.jsonl")
+	if err := os.WriteFile(decisions, []byte(asked+answered), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RestoreDecisions(decisions); err != nil {
+		t.Fatal(err)
+	}
+	d := s.decisions.all["fedcba9876543210fedcba9876543210"]
+	if len(s.decisions.all) != 1 || d.State != decisionAnswered || d.Answer == nil || d.Answer.Choice != 2 || d.Answer.From != "sws" || strings.Join(d.Offer.Choices, "|") != "a|b" {
+		t.Fatalf("loaded %+v", d)
+	}
+	if data, err := os.ReadFile(decisions); err != nil || string(data) != answered {
+		t.Fatalf("compacted to %q, %v", data, err)
 	}
 }

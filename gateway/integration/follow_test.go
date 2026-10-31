@@ -19,6 +19,7 @@ import (
 // result for each live message within milliseconds, empty results while
 // quiet, and a renewable end when the lease runs out.
 func TestBackendFollowStreamsNewsForItsLease(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	c.Limits.FollowSeconds, c.Limits.FollowKeepAliveSeconds = 3, 1
@@ -122,6 +123,7 @@ func TestBackendFollowStreamsNewsForItsLease(t *testing.T) {
 // then an end frame naming the lease, and a client that resumes from the
 // last positions sees nothing twice.
 func TestFollowOverAFramedStream(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "framed", Protocol: "framed"})
 	c.Limits.FollowSeconds, c.Limits.FollowKeepAliveSeconds = 2, 1
@@ -194,6 +196,7 @@ func TestFollowOverAFramedStream(t *testing.T) {
 // what arrives within follow_batch_ms of its last snapshot into the next
 // frame, so a burst costs one snapshot instead of one per message.
 func TestBackendFollowBatchesABurst(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	c.Limits.FollowSeconds, c.Limits.FollowKeepAliveSeconds, c.Limits.FollowBatchMilliseconds = 5, 2, 600

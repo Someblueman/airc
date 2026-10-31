@@ -319,6 +319,7 @@ func mqttRequest(nick, operation, room, message string) string {
 // 1; a session that resumes gets what it missed while away, and an
 // unacknowledged message again, and a taken-over connection is told so.
 func TestMQTT5RequestsSubscriptionsAndSessions(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"})
 	g := startAuthorGateway(t, c)
@@ -450,6 +451,7 @@ func TestMQTT5RequestsSubscriptionsAndSessions(t *testing.T) {
 // The listener's session caps hold: beyond sessions_per_author one author
 // is refused, and beyond sessions everyone is.
 func TestMQTT5SessionCaps(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt", MQTT: &config.MQTT{Sessions: 3, SessionsPerAuthor: 2}})
 	g := startAuthorGateway(t, c)
@@ -543,6 +545,7 @@ func drainMQTT5(t *testing.T, c *mqtt5Client, quiet time.Duration) []string {
 // that leaves hands its share to the rest, and one that resumes its
 // session rejoins.
 func TestMQTT5SharedSubscriptions(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"})
 	g := startAuthorGateway(t, c)

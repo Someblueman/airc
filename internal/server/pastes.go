@@ -191,7 +191,7 @@ func (st *pasteStore) saveIndexLocked() error {
 	slices.SortFunc(index.Pastes, func(a, b pasteRecord) int {
 		return cmp.Or(a.Created.Compare(b.Created), cmp.Compare(a.ID, b.ID))
 	})
-	return pasteSnapshot.write(st.indexAt, index, st.env.sync)
+	return st.env.saved("pastes", pasteSnapshot.write(st.indexAt, index, st.env.sync))
 }
 
 // readPaste returns a paste's content.

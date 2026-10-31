@@ -35,6 +35,7 @@ func awaitDelivery(t *testing.T, s *store.Store, identity store.Submission, id s
 }
 
 func TestDeliveryResumesOutageWithoutCaller(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

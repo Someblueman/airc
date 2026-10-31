@@ -17,6 +17,7 @@ import (
 )
 
 func TestDirectoryMailboxNativeExactSizeAndOverflowRecovery(t *testing.T) {
+	t.Parallel()
 	f := newDirectoryMailboxFixture(t)
 	request := core.Request{Version: 1, RequestID: "directory-size-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "exact directory input bound recovers after overflow 🙂"}
 	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})

@@ -104,6 +104,59 @@ func TestDigestSummarizesUnreadWithoutBodiesAndMarksNothingRead(t *testing.T) {
 	}
 }
 
+func TestDigestListsUncertainSendsWithoutTouchingThem(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServerWith(t, server.Config{HistoryLimit: 200})
+	send(t, address, "bob", "#build", "hello planner")
+	// A send that never got its receipt: the intent is in the outbox, the
+	// message is not on the server.
+	box, err := openOutbox(options{addr: address, nick: "planner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := box.add("#build", "", "did this land?\nsecond line", "lost-request"); err != nil {
+		t.Fatal(err)
+	}
+	box.close()
+
+	before := mustCLI(t, address, "unread", "--nick", "planner", "--channel", "build", "--json")
+	d := digestJSON(t, address)
+	if len(d.PendingSends) != 1 || d.PendingMore != 0 {
+		t.Fatalf("pending sends = %+v", d.PendingSends)
+	}
+	if p := d.PendingSends[0]; p.RequestID != "lost-request" || p.Target != "#build" || p.Preview != "did this land? second line" || p.Created.IsZero() || time.Since(p.Created) > time.Minute {
+		t.Fatalf("pending send = %+v", p)
+	}
+	text := mustCLI(t, address, "digest", "--nick", "planner", "--channel", "build")
+	if want := "1 uncertain send; airc send --pending lists it; --retry REQUEST_ID recovers a receipt"; !strings.Contains(text, want) {
+		t.Fatalf("text digest lacks %q:\n%s", want, text)
+	}
+	// The digest read the outbox as it reads everything: nothing marked
+	// read, nothing posted, the entry still there for send --pending.
+	if after := mustCLI(t, address, "unread", "--nick", "planner", "--channel", "build", "--json"); after != before {
+		t.Fatalf("a digest changed what is unread:\n%s\n%s", before, after)
+	}
+	if history := mustCLI(t, address, "history", "#build", "--json"); strings.Contains(history, "did this land") {
+		t.Fatal("a digest posted an uncertain send")
+	}
+	if pending := mustCLI(t, address, "send", "--nick", "planner", "--pending", "--json"); !strings.Contains(pending, "lost-request") {
+		t.Fatal(pending)
+	}
+	// Another nickname's digest does not list it; this one's does even
+	// with nothing unread, since it is the one thing to settle first.
+	if other := cliJSON[digestSummary](t, address, "digest", "--nick", "bob", "--channel", "build"); len(other.PendingSends) != 0 {
+		t.Fatalf("bob's digest lists planner's sends: %+v", other.PendingSends)
+	}
+	mustCLI(t, address, "digest", "--nick", "planner", "--channel", "build", "--mark-read")
+	if text := mustCLI(t, address, "digest", "--nick", "planner", "--channel", "build"); !strings.Contains(text, "1 uncertain send") {
+		t.Fatalf("an otherwise empty digest hid the uncertain send:\n%s", text)
+	}
+	mustCLI(t, address, "send", "--nick", "planner", "--forget", "lost-request")
+	if out := mustCLI(t, address, "digest", "--nick", "planner", "--channel", "build"); out != "" {
+		t.Fatalf("a settled outbox still printed: %s", out)
+	}
+}
+
 func TestDigestBoundsWhatItLists(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 200})

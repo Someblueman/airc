@@ -37,6 +37,9 @@ func (e *entry) size() int {
 	for _, option := range m.PollOptions {
 		n += 16 + len(option)
 	}
+	for _, nick := range m.GroupMentions { // the resolved group tags, shared with e.mentions
+		n += 16 + len(nick)
+	}
 	for _, nick := range e.mentions {
 		n += 40 + 2*len(nick)
 	}
@@ -164,7 +167,7 @@ func (h *historyRing) add(message Message) []string {
 func newEntry(message Message) *entry {
 	e := &entry{Message: message}
 	if protocol.IsChannel(message.Target) {
-		e.mentions = protocol.MessageMentions(message.Body, message.For)
+		e.mentions = protocol.MessageMentions(message.Body, message.For, message.GroupMentions)
 	}
 	e.bytes = e.size()
 	return e

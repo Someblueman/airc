@@ -66,7 +66,7 @@ retries on another carrier still posts once. See
 | [http.md](http.md) | HTTP/1.1 and HTTP/2, JSON-RPC, SSE, WebSocket, MCP, gRPC, HTTP/3, WebTransport, browsers |
 | [streams.md](streams.md) | Framed TCP/TLS and Unix streams, stdio and inherited descriptors |
 | [native.md](native.md) | Native tunnels: IRC over WebSocket and through HTTP CONNECT, the whole native protocol through the gateway |
-| [network.md](network.md) | Datagram fragments, UDP, raw QUIC, DTLS, CoAP, WebRTC, ZeroMQ, NNG |
+| [network.md](network.md) | Datagram fragments, UDP, raw QUIC, CoAP, ZeroMQ, NNG |
 | [brokers.md](brokers.md) | MQTT 3.1.1 and 5, MQTT over WebSocket |
 | [offline.md](offline.md) | File and directory mailboxes, append log |
 | [ROADMAP.md](ROADMAP.md) | Open verification work |
@@ -85,7 +85,8 @@ retries on another carrier still posts once. See
   aircd with Go clients; no third-party implementation was involved.
 
 Carriers with no evidence beyond building, and those nobody is known to
-use, were [removed](removed-carriers.md) on 2026-10-26.
+use, were [removed](removed-carriers.md) on 2026-10-26; WebRTC, DTLS and
+CoAP over DTLS followed on 2026-10-30.
 
 | Carrier | `protocol` | Page | Evidence |
 |---|---|---|---|
@@ -102,10 +103,7 @@ use, were [removed](removed-carriers.md) on 2026-10-26.
 | stdio, socket pair, inherited FD | `stdio`, `socketpair`, `inherited` | [streams](streams.md#parent-owned-streams) | In-repo |
 | UDP | `udp` | [network](network.md#udp) | In-repo |
 | Raw QUIC streams, datagrams | `rawquic`, `rawquic_datagrams` | [network](network.md#raw-quic) | In-repo |
-| DTLS datagrams | `dtls` | [network](network.md#dtls) | In-repo |
 | CoAP over UDP | `coap_udp` | [network](network.md#coap) | Real client: aiocoap (CON and NON) |
-| CoAP over DTLS | `coaps` | [network](network.md#coap) | In-repo |
-| WebRTC DataChannels (four modes) | `webrtc` | [network](network.md#webrtc) | In-repo (loopback) |
 | ZeroMQ REQ/REP | `zeromq` | [network](network.md#zeromq-and-nng) | Real client: pyzmq 27.2 |
 | NNG REQ0/REP0 | `nng` | [network](network.md#zeromq-and-nng) | Real client: pynng |
 | MQTT 3.1.1 and 5 | `mqtt` | [brokers](brokers.md#mqtt) | Real clients: mosquitto 2.0.18 (3.1.1 and 5), paho-mqtt 2.1.0 (5) |

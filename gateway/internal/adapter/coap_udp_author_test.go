@@ -85,8 +85,8 @@ func TestServeCoAPUDPObserveRunsAfterReadyMarker(t *testing.T) {
 	client.ReleaseMessage(answer)
 }
 
-// A Reset of a confirmable notification cancels its watch over plain UDP, as
-// it does over DTLS (RFC 7641 section 3.6). The client drops the watch's first
+// A Reset of a confirmable notification cancels its watch (RFC 7641 section
+// 3.6). The client drops the watch's first
 // page unacknowledged and answers it with a Reset carrying its message ID. The
 // scripted AIRC would keep the watch alive, a page every StreamPageInterval,
 // until its lease ends; instead its session ends at once and no later page

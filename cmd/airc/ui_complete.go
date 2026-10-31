@@ -93,9 +93,12 @@ var uiKeys = []helpLine{
 	{"Ctrl-R", "reply to the selected message; the status bar shows what you are answering"},
 	{"Ctrl-T", "open the selected message's thread"},
 	{"Ctrl-Y", "insert the selected message's ID at the cursor, and offer it to the clipboard"},
-	{"PgUp, PgDn", "scroll; Up and Down scroll one line"},
+	{"Up, Down", "recall a line sent from this view when nothing of yours is typed; otherwise scroll one line"},
+	{"PgUp, PgDn", "scroll"},
+	{"Alt-Enter", "a new line in the draft (Shift-Enter too, where the terminal tells it from Enter)"},
 	{"Esc", "clear the draft and the reply target"},
 	{"Ctrl-A/E/U/K/W", "line editing: start, end, cut to the start, cut to the end, cut the word"},
+	{"Alt-B, Alt-F", "a word left or right; Alt-Backspace cuts the word. Other Alt keys do nothing"},
 	{"Ctrl-C", "quit (Ctrl-D with nothing typed)"},
 }
 
@@ -126,7 +129,7 @@ func (m *uiModel) helpLines() []helpLine {
 		}
 		line := helpLine{head: strings.TrimSpace(c.name + " " + c.usage), body: c.help}
 		if !m.supports(c.needs) {
-			line.body += " [unavailable: the daemon lacks " + c.needs + "; upgrade and restart it when safe]"
+			line.body += " [unavailable: " + lacksCapability(c.needs) + "]"
 		}
 		lines = append(lines, line)
 	}
@@ -145,7 +148,7 @@ func helpText(lines []helpLine) string {
 // renderHelp lays the help out in width columns: headings in bold, then a
 // column of keys and commands with their descriptions wrapped beside them, or
 // under them when the terminal is narrow.
-func renderHelp(lines []helpLine, width int) []string {
+func renderHelp(lines []helpLine, width int, color bool) []string {
 	column := 0
 	for _, l := range lines {
 		if l.body != "" {
@@ -157,11 +160,11 @@ func renderHelp(lines []helpLine, width int) []string {
 	for _, l := range lines {
 		switch {
 		case l.body == "":
-			out = append(out, "", sty("1", fitPlain(l.head, width)))
+			out = append(out, "", styled(color, "1", fitPlain(l.head, width)))
 		case l.head == "":
 			out = append(out, wrapText(l.body, width)...)
 		case utf8.RuneCountInString(l.head)+2 > column: // too wide for the column
-			out = append(out, sty("1", fitPlain(l.head, width)))
+			out = append(out, styled(color, "1", fitPlain(l.head, width)))
 			for _, body := range wrapText(l.body, max(width-4, 10)) {
 				out = append(out, "    "+body)
 			}
@@ -169,7 +172,7 @@ func renderHelp(lines []helpLine, width int) []string {
 			for i, body := range wrapText(l.body, max(width-column, 10)) {
 				lead := strings.Repeat(" ", column)
 				if i == 0 {
-					lead = sty("1", l.head) + strings.Repeat(" ", column-utf8.RuneCountInString(l.head))
+					lead = styled(color, "1", l.head) + strings.Repeat(" ", column-utf8.RuneCountInString(l.head))
 				}
 				out = append(out, lead+body)
 			}

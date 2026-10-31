@@ -126,13 +126,6 @@ func (c Config) CheckFiles() error {
 		if err := share(l.TLSCertFile, false, "certificate"); err != nil {
 			return err
 		}
-		if l.WebRTC != nil {
-			for _, server := range l.WebRTC.ICEServers {
-				if err := check(server.CredentialFile, true); err != nil {
-					return err
-				}
-			}
-		}
 	}
 	// No path spelling is exempt from the aliasing check.
 	if err := pathcheck.Distinct(paths...); err != nil {

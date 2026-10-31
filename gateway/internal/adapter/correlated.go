@@ -15,7 +15,7 @@ import (
 )
 
 // correlatedTransport is the small protocol boundary shared by framed,
-// WebSocket, QUIC, WebRTC and datagram connections. The transport owns
+// WebSocket, QUIC and datagram connections. The transport owns
 // framing, deadlines, and closing; this loop owns validation, admission,
 // dispatch, and stream budgets.
 type correlatedTransport struct {

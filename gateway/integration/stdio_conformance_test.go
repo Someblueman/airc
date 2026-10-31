@@ -18,6 +18,7 @@ import (
 )
 
 func TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown(t *testing.T) {
+	t.Parallel()
 	shortGatewayTimer(t, readLeaseTimer)
 	_, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
@@ -50,6 +51,7 @@ func TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown(t *testing.T) {
 }
 
 func TestStdioPipeExecutesReadAndReactionOperations(t *testing.T) {
+	t.Parallel()
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)

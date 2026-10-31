@@ -40,6 +40,7 @@ func next[T irc.Event](t *testing.T, c *irc.Client, match func(T) bool) T {
 }
 
 func TestPinnedUpstream(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

@@ -25,6 +25,33 @@ func busyModel(width, height int) *uiModel {
 	return m
 }
 
+func TestColourOffDrawsPlainRows(t *testing.T) {
+	m := busyModel(120, 30)
+	if !strings.Contains(strings.Join(m.view(), "\n"), "\x1b[") {
+		t.Fatal("tests build their models with colour on")
+	}
+	m.color = false
+	for _, b := range m.buffers {
+		b.version++ // the rendering cache predates the change
+	}
+	typeText(m, "/help")
+	m.update(keyIn{kind: keySelectPrev})
+	for _, view := range []string{"help", "#agents-corner"} {
+		m.switchTo(view)
+		for _, row := range m.view() {
+			if strings.Contains(row, "\x1b[") {
+				t.Fatalf("%s drew an escape sequence with colour off: %q", view, row)
+			}
+			if visibleWidth(row) != 120 {
+				t.Fatalf("%s row is %d wide: %q", view, visibleWidth(row), row)
+			}
+		}
+	}
+	if text := strings.Join(m.view(), "\n"); !strings.Contains(text, "multi") || !strings.Contains(text, "Members") {
+		t.Fatalf("plain view lost its content:\n%s", text)
+	}
+}
+
 func TestEveryRowFillsTheTerminalExactly(t *testing.T) {
 	for _, size := range [][2]int{{140, 40}, {100, 30}, {90, 24}, {80, 24}, {70, 20}, {60, 12}, {50, 10}, {30, 6}} {
 		m := busyModel(size[0], size[1])

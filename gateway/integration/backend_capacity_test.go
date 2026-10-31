@@ -11,6 +11,7 @@ import (
 )
 
 func TestBackendSaturationAndDeadlineRelease(t *testing.T) {
+	t.Parallel()
 	proxy, peerDone, ready, _ := backendProxy(t, "", "stall", nil)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, identity := acceptanceJournalFixture(t, proxy, token)

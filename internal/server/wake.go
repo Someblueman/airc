@@ -272,7 +272,7 @@ func (w *wakes) saveWakesLocked(next map[string]*wakeState) error {
 	for id, state := range next {
 		saved[id] = savedWake{wakeRegistration: state.reg, Pending: state.pending, Latest: state.latest, NextAt: state.nextAt}
 	}
-	if err := writeState(w.path, saved, w.env.soft); err != nil {
+	if err := w.env.saved("wakes", writeState(w.path, saved, w.env.soft)); err != nil {
 		return err
 	}
 	w.dirty, w.saved = false, w.env.now()
@@ -295,7 +295,7 @@ func (w *wakes) flushWakesLocked() {
 func (s *Server) wakeLocked(client *session, command protocol.Command) {
 	w := s.wake
 	if w == nil {
-		s.numericLocked(client, "437", nil, "Wake notices are not enabled on this daemon")
+		s.numericLocked(client, "421", []string{"WAKE"}, "Wake notices are not enabled on this daemon")
 		return
 	}
 	if a, ok := s.accounts[client.authNick]; client.accountID == "" || !ok || a.ID != client.accountID {
@@ -351,7 +351,7 @@ func (s *Server) wakeLocked(client *session, command protocol.Command) {
 		}
 		old := w.byAccount[client.accountID]
 		if old == nil && len(w.byAccount) >= maxWakes {
-			s.numericLocked(client, "437", nil, "Wake registration limit reached")
+			s.numericLocked(client, "405", nil, "Wake registration limit reached")
 			return
 		}
 		state := &wakeState{reg: wakeRegistration{Account: client.accountID, Nick: client.authNick, URL: target, Secret: secret, QuietSeconds: int(quiet / time.Second), ExpiresAt: s.now().Add(wakeTTL), MentionsOnly: mentionsOnly, QuietHours: quietHours}}
@@ -427,11 +427,12 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 	} else if !strings.EqualFold(message.Target, message.From) {
 		nicks = append(nicks, nickKey(message.Target))
 	}
-	// tagged are the nicks the message's text names: what a mentions-only
-	// registration counts, besides a direct message and an offer with for.
+	// tagged are the nicks the message's text names, a group tag's members
+	// included: what a mentions-only registration counts, besides a direct
+	// message and an offer with for.
 	var tagged []string
 	if protocol.IsChannel(message.Target) {
-		tagged = protocol.Mentions(message.Body)
+		tagged = append(protocol.Mentions(message.Body), message.GroupMentions...)
 	}
 	woke := false
 	for _, key := range nicks {

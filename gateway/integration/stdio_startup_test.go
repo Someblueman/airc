@@ -18,6 +18,7 @@ import (
 )
 
 func TestStdioStartupRejectsBeforeJournal(t *testing.T) {
+	t.Parallel()
 	binary := gatewayBinary(t)
 	for _, name := range []string{"ordinary-serve", "file-input", "file-output"} {
 		t.Run(name, func(t *testing.T) {

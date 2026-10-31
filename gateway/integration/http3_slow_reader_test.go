@@ -20,6 +20,7 @@ import (
 )
 
 func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
+	t.Parallel()
 	f := newHTTP3GatewayFixture(t)
 	author := dial(t, f.config.Upstream.Address, "http3-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })

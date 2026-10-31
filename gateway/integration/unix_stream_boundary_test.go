@@ -20,6 +20,7 @@ import (
 )
 
 func TestUnixStreamFramingAndProfileBoundary(t *testing.T) {
+	t.Parallel()
 	conn, credentials, stop, address, _ := unixStreamFixture(t)
 	defer conn.Close()
 	discovery := core.Request{Version: 1, RequestID: "unix-discovery", Operation: core.CapabilitiesGet}

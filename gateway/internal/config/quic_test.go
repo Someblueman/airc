@@ -6,7 +6,7 @@ import (
 )
 
 func TestSecureTransportListenersRequireTLSAndReadPermissions(t *testing.T) {
-	for _, protocol := range []string{"rawquic", "rawquic_datagrams", "dtls", "coaps"} {
+	for _, protocol := range []string{"rawquic", "rawquic_datagrams"} {
 		t.Run(protocol, func(t *testing.T) {
 			listener := `"listeners":[{"id":"quic","protocol":"` + protocol + `","enabled":true,"tls_cert_file":"/private/gateway/cert.pem","tls_key_file":"/private/gateway/key.pem","operations":["send","receipt.get"]}]`
 			input := strings.Replace(emptyConfig, `"listeners":[]`, listener, 1)

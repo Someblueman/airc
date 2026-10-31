@@ -25,6 +25,7 @@ import (
 // requests or tunnels aircd's own protocol, and install's TLS form and
 // socket family for it are the registry's.
 func TestInstallerCarrierTableFollowsTheRegistry(t *testing.T) {
+	t.Parallel()
 	names := service.SupportedCarriers()
 	if len(names) == 0 {
 		t.Fatal("install offers no carriers")
@@ -77,6 +78,7 @@ func installed(t *testing.T, args []string, carriers string) service.Config {
 // and access token where the carrier needs TLS, parses as this gateway
 // reads it, and the settings install leaves out take their defaults.
 func TestInstallerConfigurationParsesForEveryCarrier(t *testing.T) {
+	t.Parallel()
 	cert := testtls.New(t)
 	access := filepath.Join(filepath.Dir(cert.KeyPath), "access.token")
 	if err := admin.CreateToken(access); err != nil {
@@ -133,6 +135,7 @@ func TestInstallerConfigurationParsesForEveryCarrier(t *testing.T) {
 // upstream on aircd's socket with the gateway credential, the listeners
 // in the operator's order, and the carrier list aircd advertises.
 func TestInstallerConfigurationLoadsFromDisk(t *testing.T) {
+	t.Parallel()
 	c := installed(t, []string{"--listen", "0.0.0.0:6667", "--unix", "/run/user/1/airc.sock"}, "framed,http=0.0.0.0:8080,websocket,unix")
 	data, err := c.GatewayConfig()
 	if err != nil {

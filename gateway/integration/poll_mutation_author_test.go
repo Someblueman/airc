@@ -12,6 +12,7 @@ import (
 )
 
 func TestPollMutationVotePreservesOtherAuthorAndCloseOwnership(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)

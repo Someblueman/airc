@@ -18,6 +18,7 @@ import (
 )
 
 func TestCoAPUDPActiveWatchJoinsOnSIGINT(t *testing.T) {
+	t.Parallel()
 	f := newPacketFixture(t, "coap_udp", nil)
 	client := coapUDPClient(t, f)
 	socket := f.config.Upstream.Address

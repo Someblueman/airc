@@ -43,7 +43,7 @@ func (s *Server) joinLocked(client *session, command protocol.Command) {
 		}
 		if s.channels[channel] == nil {
 			if len(s.channels) >= maxTotalChannels {
-				s.numericLocked(client, "437", []string{channel}, "Server channel limit reached")
+				s.numericLocked(client, "405", []string{channel}, "Server channel limit reached")
 				continue
 			}
 			s.channels[channel] = make(map[string]*session)

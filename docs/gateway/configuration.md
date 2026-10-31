@@ -113,8 +113,8 @@ Some listeners narrow `operations`:
 - Mutations only: `mqtt` 3.1.1 (a publication gets no reply).
 
 Enabled reads (history, search, directory, context, pins, room, waiting,
-poll, topic, members, channels, agents) and WebRTC need at least two global
-and per-author sessions; watches also need nonzero `watches` and
+poll, topic, members, channels, agents) need at least two global and
+per-author sessions; watches also need nonzero `watches` and
 `watches_per_author`.
 
 ### TLS
@@ -125,15 +125,14 @@ TLS is optional, on any address, for carriers with a plaintext form:
 IRC, account tokens sent without TLS can be read on the network. `unix`,
 `unixpacket`, `zeromq`, `nng` and the datagram carriers (`udp`, `coap_udp`)
 refuse TLS settings. Carriers that are encrypted by definition (`http3`,
-`webtransport`, `rawquic`, `rawquic_datagrams`, `dtls`, `coaps`, `webrtc`)
-require a certificate even on loopback.
+`webtransport`, `rawquic`, `rawquic_datagrams`) require a certificate even
+on loopback.
 
 ### Per-carrier options
 
 | Option object | Listener | Page |
 |---|---|---|
-| `allowed_origins` | `http`, `http3`, `webtransport`, `websocket`, `mcp_http`, `webrtc`, `mqtt_websocket` | [http](http.md#browsers) |
-| `webrtc` | `webrtc` | [network](network.md#webrtc) |
+| `allowed_origins` | `http`, `http3`, `webtransport`, `websocket`, `mcp_http`, `mqtt_websocket` | [http](http.md#browsers) |
 | `mqtt` | `mqtt`, `mqtt_websocket` | [brokers](brokers.md) |
 | `bound_author` | `file_mailbox`, `directory_mailbox`, `append_log` | [authentication](authentication.md#bound-authors) |
 | `keepalive` | `websocket`, `http3`, `webtransport`, `rawquic`, `rawquic_datagrams` | [below](#keepalive) |
