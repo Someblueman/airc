@@ -95,6 +95,10 @@ func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	if rejected.Code == "437" {
 		o = failed(a, core.CapacityExceeded, true, false)
 	}
+	if rejected.Code == "405" {
+		// A limit a retry cannot clear.
+		o = failed(a, core.CapacityExceeded, false, false)
+	}
 	if rejected.Code == "421" {
 		o = failed(a, core.UnsupportedOperation, false, false)
 	}

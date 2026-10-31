@@ -39,7 +39,7 @@ type ContextOptions struct {
 // exclusive ownership of the event stream, as RequestChat does.
 func RequestContextWithOptions(ctx context.Context, c *Client, id string, options ContextOptions, other func(Event)) (ConversationContext, error) {
 	result := ConversationContext{}
-	if !protocol.ValidMessageID(id) || options.Limit < 1 || options.Limit > 1000 {
+	if !protocol.ValidIDArgument(id) || options.Limit < 1 || options.Limit > 1000 {
 		return result, errors.New("context requires a message ID and limit 1-1000")
 	}
 	if options.MaxBytes != 0 && (options.MaxBytes < 1024 || options.MaxBytes > 1<<20) {

@@ -23,7 +23,7 @@ func contextMessage(m *irc.MessageMetadata) checkMessage {
 }
 
 func runContextSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || !protocol.ValidMessageID(args[0]) {
+	if len(args) == 0 || !protocol.ValidIDArgument(args[0]) {
 		return errors.New("usage: airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]")
 	}
 	fs := flag.NewFlagSet("airc context", flag.ContinueOnError)

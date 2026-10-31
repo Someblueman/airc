@@ -51,10 +51,11 @@ func (c *Client) Part(channel, reason string) error {
 func (c *Client) Send(target, message string) error { return c.sendText("PRIVMSG", target, message) }
 
 // Reply sends to the parent's room, or to the other participant in a DM.
-// The parent must still be retained.
+// The parent must still be retained. Its ID may be abbreviated to its first
+// 8 or more characters; the server resolves it and refuses an ambiguous one.
 func (c *Client) Reply(parent, message string) error {
-	if !protocol.ValidMessageID(parent) {
-		return errors.New("reply requires a 32-character message ID")
+	if !protocol.ValidIDArgument(parent) {
+		return errors.New("reply requires a message ID, or its first 8 or more characters")
 	}
 	return c.sendText("REPLY", parent, message)
 }
@@ -103,7 +104,7 @@ func (c *Client) SendWith(target, message string, options SendOptions) error {
 
 // ReplyWith is Reply with options.
 func (c *Client) ReplyWith(parent, message string, options SendOptions) error {
-	if !protocol.ValidMessageID(parent) {
+	if !protocol.ValidIDArgument(parent) {
 		return errors.New("reply needs a valid message ID")
 	}
 	return c.sendTagged("REPLY", parent, message, options)

@@ -67,15 +67,9 @@ func failure(err error, phase string) *commandFailure {
 		case "421":
 			e.Code = "unsupported"
 		case "437":
-			// A transient condition: a state write failed, a per-address
-			// window is in force, or transient state is full. REGISTER keeps
-			// 437 for its account limit too, since clients abort their
-			// registration on a pinned set of numerics; that one is told
-			// apart by its text, which no window shares.
+			// A transient condition: a state write failed, a per-address or
+			// per-connection window is in force, or transient state is full.
 			e.Code, e.Retryable = "server_busy", true
-			if strings.Contains(rejection.Message, "limit reached") && !strings.Contains(rejection.Message, "try again later") {
-				e.Code, e.Retryable = "limit_reached", false
-			}
 		case "486":
 			e.Code, e.Retryable = "rate_limited", true
 			e.RetryAfterSeconds = slowModeDelay(rejection.Message)

@@ -91,3 +91,29 @@ func TestAccountLoginIsSentWithRegistration(t *testing.T) {
 		})
 	}
 }
+
+// A REGISTER refused at a limit fails the dial, whether the limit passes
+// (437, a creation window) or not (405, the account limit); neither falls
+// through to a guest session under the name the client meant to create.
+func TestRegistrationAbortsOnLimits(t *testing.T) {
+	token := strings.Repeat("c", 64)
+	for _, numeric := range []string{"405", "437"} {
+		t.Run(numeric, func(t *testing.T) {
+			address, read := loginServer(t, ":server "+numeric+" agent :Account limit reached", ":server 001 agent :Welcome")
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			client, err := irc.DialContext(ctx, irc.Config{Nick: "agent", Addr: address, IdentityToken: token, CreateAccount: true, Ephemeral: true})
+			if lines := <-read; len(lines) == 0 || lines[0] != "REGISTER agent :"+token {
+				t.Fatalf("the client sent %q", lines)
+			}
+			if err == nil {
+				client.Close()
+				t.Fatal("a refused registration became a guest session")
+			}
+			var rejected *irc.RejectedError
+			if !errors.As(err, &rejected) || rejected.Code != numeric || !strings.Contains(err.Error(), "Account limit reached") || strings.Contains(err.Error(), token) {
+				t.Fatalf("registration error %v", err)
+			}
+		})
+	}
+}

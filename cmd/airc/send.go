@@ -91,10 +91,15 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	// parent, while gateway carriers need it named.
 	conversation := ""
 	if *replyTo != "" {
-		if !protocol.ValidMessageID(*replyTo) || *channel != "" && *to != "" {
+		if !protocol.ValidIDArgument(*replyTo) || *channel != "" && *to != "" {
 			return errors.New("--reply-to requires a message ID; name its conversation with at most one of --channel or --to")
 		}
 		conversation = *channel + *to
+		if !protocol.ValidMessageID(*replyTo) {
+			// The daemon resolves an abbreviated parent over native IRC;
+			// the gateway's carriers take only the full ID.
+			conversation = ""
+		}
 		target = "reply:" + *replyTo
 	} else if (*channel == "") == (*to == "") {
 		return errors.New("provide exactly one of --channel or --to")

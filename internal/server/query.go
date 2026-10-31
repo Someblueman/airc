@@ -178,7 +178,7 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 	selected, err := s.historyTarget(target)
 	if !ok || err != nil {
 		if strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:") {
-			s.numericLocked(client, "430", []string{target}, err.Error())
+			s.conversationErrorLocked(client, []string{target}, err)
 		} else {
 			s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel, nickname, @nickname or @*")
 		}

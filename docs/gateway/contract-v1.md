@@ -75,7 +75,9 @@ are errors.
 Field rules:
 
 - `message` normalizes CRLF and CR to LF, refuses NUL and fits 4096 UTF-8
-  bytes. `parent_id` and `poll_id` are 32 lowercase hex characters.
+  bytes. `parent_id` and `poll_id` are the full 32 lowercase hex characters:
+  the abbreviated IDs AIRC's own commands accept need native IRC, which is
+  where the `airc` CLI sends an abbreviated `--reply-to` or reaction.
 - `run` is a post's run label, 1–64 ASCII letters, digits, `.`, `_` or `-`
   (AIRC's grammar, [PROTOCOL.md](../PROTOCOL.md)). The gateway relays it as
   the `+airc/run` tag on the `PRIVMSG` or `REPLY`, so the message AIRC

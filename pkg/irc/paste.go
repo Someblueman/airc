@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -74,10 +75,11 @@ func UploadPaste(ctx context.Context, c *Client, name, language string, content 
 }
 
 // FetchPaste reads paste id: its description, as the server holds it, and
-// its content. other sees unrelated events meanwhile.
+// its content. The ID may be abbreviated to its first 8 or more characters;
+// the description names the full one. other sees unrelated events meanwhile.
 func FetchPaste(ctx context.Context, c *Client, id string, other func(Event)) (ChatEntry, []byte, error) {
-	if !protocol.ValidMessageID(id) {
-		return ChatEntry{}, nil, errors.New("a paste ID is 32 hex digits")
+	if !protocol.ValidIDArgument(id) {
+		return ChatEntry{}, nil, errors.New("a paste ID is 32 hex digits, or its first 8 or more")
 	}
 	var meta ChatEntry
 	var content []byte
@@ -112,7 +114,7 @@ func FetchPaste(ctx context.Context, c *Client, id string, other func(Event)) (C
 		}
 		offset = len(content)
 	}
-	if len(content) != meta.Paste.Size || protocol.PasteID(content) != id {
+	if len(content) != meta.Paste.Size || !strings.HasPrefix(meta.ID, id) || protocol.PasteID(content) != meta.ID {
 		return ChatEntry{}, nil, errors.New("paste content does not match its ID")
 	}
 	return meta, content, nil

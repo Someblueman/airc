@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -77,6 +78,7 @@ func TestRegistrationRefusalByAuthor(t *testing.T) {
 		{registered, "498", core.AuthenticationFailed},
 		{registered, "904", core.AuthenticationFailed},
 		{guest, "464", core.AuthenticationFailed},
+		{registered, "405", core.CapacityExceeded},
 	} {
 		o := registrationFailure(c.attempt, &irc.RejectedError{Code: c.numeric})
 		f := o.Completion.Failure
@@ -91,6 +93,29 @@ func TestRegistrationRefusalByAuthor(t *testing.T) {
 			if f := o.Completion.Failure; f.Code != core.CapacityExceeded || !f.Transient || o.Completion.MayHavePosted {
 				t.Fatalf("throttled %s for registered=%v: %+v", numeric, a.Job.Author.Registered, o.Completion)
 			}
+		}
+	}
+}
+
+// The synchronous account calls map AIRC's REGISTER refusals the same way:
+// the creation windows pass, the account limit does not.
+func TestAccountRefusalTellsWindowsFromTheLimit(t *testing.T) {
+	author := core.Author{Nick: "writer", Registered: true}
+	for _, c := range []struct {
+		rejected  *irc.RejectedError
+		code      core.ErrorCode
+		transient bool
+	}{
+		{&irc.RejectedError{Code: "437"}, core.CapacityExceeded, true},
+		{&irc.RejectedError{Code: "498", Throttled: true}, core.CapacityExceeded, true},
+		{&irc.RejectedError{Code: "405"}, core.CapacityExceeded, false},
+		{&irc.RejectedError{Code: "498"}, core.NickRegistered, false},
+		{&irc.RejectedError{Code: "464"}, core.AuthenticationFailed, false},
+	} {
+		var refusal *Refusal
+		err := accountRefusal(author, true, c.rejected)
+		if !errors.As(err, &refusal) || refusal.Failure.Code != c.code || refusal.Failure.Transient != c.transient || refusal.Failure.UpstreamCode == 0 {
+			t.Fatalf("%s throttled=%v: %v", c.rejected.Code, c.rejected.Throttled, err)
 		}
 	}
 }

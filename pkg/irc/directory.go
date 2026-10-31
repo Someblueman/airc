@@ -35,7 +35,7 @@ func (c *Client) SetPresence(state, note string, ttl time.Duration) error {
 }
 
 func (c *Client) React(parent, kind string) error {
-	if !protocol.ValidMessageID(parent) || !protocol.ValidReaction(kind) {
+	if !protocol.ValidIDArgument(parent) || !protocol.ValidReaction(kind) {
 		return errors.New("reaction requires a message ID and a single symbol")
 	}
 	return c.Raw("REACT " + parent + " :" + kind)

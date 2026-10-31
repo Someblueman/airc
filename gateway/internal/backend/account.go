@@ -76,7 +76,8 @@ func (b *Backend) account(ctx context.Context, author core.Author, credential co
 // accountRefusal maps AIRC's refusal the way registrationFailure does for
 // jobs: a guest on a registered nickname is nick_registered, a nickname a
 // connected client holds is nick_in_use, a bad token authentication_failed,
-// and AIRC's per-source creation and capacity limits capacity_exceeded.
+// and AIRC's creation windows and account limit capacity_exceeded: the
+// windows transient, the limit final.
 func accountRefusal(author core.Author, create bool, err error) error {
 	var rejected *irc.RejectedError
 	var inUse *irc.NickInUseError
@@ -97,6 +98,9 @@ func accountRefusal(author core.Author, create bool, err error) error {
 		case rejected.Code == "437" || rejected.Throttled:
 			// Rate limited by source: AIRC did not judge the credential.
 			failure.Code, failure.Transient = core.CapacityExceeded, true
+		case rejected.Code == "405":
+			// The account limit: a retry cannot clear it.
+			failure.Code = core.CapacityExceeded
 		case rejected.Code == "498" && (!author.Registered || create):
 			// A guest on a registered nickname, or REGISTER of a name
 			// another token already holds.
