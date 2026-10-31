@@ -137,7 +137,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				continue
 			}
 			if mode == "directory-feature-zero" {
-				line = strings.ReplaceAll(line, "DIRECTORY=1", "DIRECTORY=0")
+				line = withdraw(line, "DIRECTORY")
 			}
 			if mode == "directory-empty" && strings.Contains(line, " 773 ") {
 				continue
@@ -167,16 +167,16 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				}
 			}
 			if mode == "watch-no-check" {
-				line = strings.ReplaceAll(line, "CHECK=1", "CHECK=0")
+				line = withdraw(line, "CHECK")
 			}
 			if mode == "features" {
-				line = strings.ReplaceAll(line, "SAFE_RETRY=1", "SAFE_RETRY=0")
+				line = withdraw(line, "SAFE_RETRY")
 			}
 			if mode == "reaction-feature-zero" {
-				line = strings.ReplaceAll(line, " REACTIONS=1", " REACTIONS=0")
+				line = withdraw(line, "REACTIONS")
 			}
 			if mode == "custom-reaction-feature-zero" {
-				line = strings.ReplaceAll(line, "CUSTOM_REACTIONS=1", "CUSTOM_REACTIONS=0")
+				line = withdraw(line, "CUSTOM_REACTIONS")
 			}
 			if mode == "watch-overlap" && strings.Contains(line, " 785 ") {
 				held = line
@@ -231,4 +231,19 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		}
 	})
 	return l.Addr().String(), done, ready, replies
+}
+
+// withdraw takes feature away from a 005 line: the daemon's AIRC level grants
+// every version-only feature, so a lacking one is said with an explicit
+// FEATURE=0 token, which a client reads over the level; a token of its own
+// (SAFE_RETRY=1) is replaced the same way.
+func withdraw(line, feature string) string {
+	if !strings.Contains(line, " 005 ") {
+		return line
+	}
+	line = strings.ReplaceAll(line, " "+feature+"=1", "")
+	if i := strings.LastIndex(line, " :"); i >= 0 {
+		return line[:i] + " " + feature + "=0" + line[i:]
+	}
+	return line + " " + feature + "=0"
 }

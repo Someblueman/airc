@@ -17,16 +17,22 @@ import (
 )
 
 type doctorReport struct {
-	Type          string                 `json:"type"`
-	ClientVersion string                 `json:"client_version"`
-	Address       string                 `json:"address"`
-	Connected     bool                   `json:"connected"`
-	Ephemeral     bool                   `json:"ephemeral"`
-	Features      map[string]string      `json:"features,omitempty"`
-	Server        *protocol.ServerStatus `json:"server,omitempty"`
-	Process       processResources       `json:"process"`
-	AgentProcess  *processResources      `json:"agent_process,omitempty"`
-	Cursor        *cursorHealth          `json:"cursor,omitempty"`
+	Type          string `json:"type"`
+	ClientVersion string `json:"client_version"`
+	Address       string `json:"address"`
+	Connected     bool   `json:"connected"`
+	Ephemeral     bool   `json:"ephemeral"`
+	// Level is the AIRC level the daemon advertised, which grants every
+	// feature of protocol.Features up to it; 0 for a daemon from before
+	// levels, which advertised one token per feature. Features are the 005
+	// tokens as sent: the level, the tokens with a value and those that
+	// depend on the daemon's configuration.
+	Level        int                    `json:"level"`
+	Features     map[string]string      `json:"features,omitempty"`
+	Server       *protocol.ServerStatus `json:"server,omitempty"`
+	Process      processResources       `json:"process"`
+	AgentProcess *processResources      `json:"agent_process,omitempty"`
+	Cursor       *cursorHealth          `json:"cursor,omitempty"`
 	// Carriers are the fallback carriers tried when native IRC is
 	// unreachable; Fallback says which one answered when it was.
 	Carriers []string `json:"carriers,omitempty"`
@@ -86,11 +92,16 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	} else {
 		defer client.Close()
 		defer closeOnCancel(ctx, client)()
-		report.Connected, report.Ephemeral, report.Features = true, client.Ephemeral(), client.Features()
-		for _, feature := range []string{"CONTEXT", "CHAT", "CUSTOM_REACTIONS", "MENTIONS", "DM_AUDIT", "REPLIES", "REACTIONS", "DIRECTORY", "SEARCH", "SEARCH_TERMS", "TOPIC", "CHANNELS", "HISTORY_START"} {
-			if !client.Supports(feature) {
-				report.Warnings = append(report.Warnings, "Daemon lacks "+feature+"; upgrade/restart it when active work is finished")
-			}
+		report.Connected, report.Ephemeral, report.Features, report.Level = true, client.Ephemeral(), client.Features(), client.Level()
+		// The table says what this client knows how to use; the daemon's
+		// level and tokens say what it has. Configuration-dependent tokens
+		// (ADMIN, WAKE, ...) are not features a daemon lacks by age, so they
+		// are not warned about here.
+		if missing := protocol.Missing(report.Features, protocol.Level); len(missing) > 0 {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("Daemon lacks %s (AIRC level %d, this airc expects %d); upgrade/restart it when active work is finished", strings.Join(missing, ", "), report.Level, protocol.Level))
+		}
+		if report.Level > protocol.Level {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("Daemon speaks AIRC level %d, this airc level %d; replace airc to use the daemon's newer features", report.Level, protocol.Level))
 		}
 		if client.Supports("STATUS") {
 			report.Server, err = fetchStatus(ctx, client)
@@ -143,6 +154,9 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 			features = append(features, key+"="+value)
 		}
 		sort.Strings(features)
+		if report.Connected {
+			fmt.Fprintf(stdout, "Level: AIRC %d (this airc %d)\n", report.Level, protocol.Level)
+		}
 		fmt.Fprintln(stdout, "Features:", strings.Join(features, " "))
 		if len(report.Carriers) > 0 {
 			fmt.Fprintln(stdout, "Fallback carriers:", strings.Join(report.Carriers, ","))
