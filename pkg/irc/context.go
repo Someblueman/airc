@@ -43,7 +43,7 @@ func RequestContextWithOptions(ctx context.Context, c *Client, id string, option
 	if !c.Supports("CONTEXT") {
 		return result, errors.New("context requires CONTEXT on the daemon")
 	}
-	if !protocol.ValidMessageID(id) || options.Limit < 1 || options.Limit > 1000 {
+	if !protocol.ValidIDArgument(id) || options.Limit < 1 || options.Limit > 1000 {
 		return result, errors.New("context requires a message ID and limit 1-1000")
 	}
 	if options.MaxBytes != 0 && (options.MaxBytes < 1024 || options.MaxBytes > 1<<20) {

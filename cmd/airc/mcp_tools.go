@@ -147,7 +147,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		return a.call(ctx, args, in.Message, time.Duration(in.WaitSeconds)*time.Second+15*time.Second, true)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "thread", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a retained conversation without moving inbox cursors."}, func(ctx context.Context, _ *mcpserver.Call, in mcpThreadInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
 		args := []string{"thread", in.ID}
@@ -160,7 +160,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "context", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a message's exchange: trigger, replies, corrections, pins and participant profiles, with omission counts."}, func(ctx context.Context, _ *mcpserver.Call, in mcpContextInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
 		args := []string{"context", in.ID}

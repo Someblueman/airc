@@ -20,58 +20,61 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 
 // chatAction is one CHAT action: its handler, whether it never appends to
 // history (readOnly, so serializesPosts lets it skip messageMu; a test drives
-// each one and checks), and the feature it is advertised under: a row of
+// each one and checks), the feature it is advertised under (a row of
 // protocol.Features, which the AIRC level in 005 grants as a whole, so no
-// action is gated on its feature here. A test keeps it equal to
-// protocol.ChatFeature, which is what clients gate on.
+// action is gated on its feature here; a test keeps it equal to
+// protocol.ChatFeature, which is what clients gate on), and what kind of
+// ID its id field names, so chatLocked resolves an abbreviated one before
+// the handler reads it (0 for an action without an ID).
 type chatAction struct {
 	name     string
 	handler  func(s *Server, client *session, r protocol.ChatRequest) error
 	readOnly bool
 	requires string
+	ids      idStore
 }
 
 // chatActionTable is every CHAT action; chatLocked dispatches from it and
 // chatReadOnlyActions is derived from it, so nothing is kept in step by hand.
 var chatActionTable = []chatAction{
-	{name: "context", handler: typed(decodeContextRequest, (*Server).contextLocked), readOnly: true, requires: "CONTEXT"},
+	{name: "context", handler: typed(decodeContextRequest, (*Server).contextLocked), readOnly: true, requires: "CONTEXT", ids: messageIDStore},
 	{name: "pins", handler: typed(decodePinRequest, (*Server).pinsLocked), readOnly: true, requires: "PINS"},
-	{name: "pin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS"},
-	{name: "unpin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS"},
-	{name: "prepare", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
-	{name: "cancel", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
-	{name: "waiting", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
+	{name: "pin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS", ids: messageIDStore},
+	{name: "unpin", handler: typed(decodePinRequest, (*Server).pinsLocked), requires: "PINS", ids: messageIDStore},
+	{name: "prepare", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT", ids: messageIDStore},
+	{name: "cancel", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT", ids: messageIDStore},
+	{name: "waiting", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT", ids: messageIDStore},
 	{name: "typing", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
 	{name: "thinking", handler: (*Server).signalLocked, readOnly: true, requires: "CHAT"},
 	{name: "room", handler: typed(decodeRoomRequest, (*Server).roomLocked), requires: "ROOM"},
 	{name: "action", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
-	{name: "correct", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
-	{name: "retract", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT"},
+	{name: "correct", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT", ids: messageIDStore},
+	{name: "retract", handler: typed(decodePostRequest, (*Server).chatPostLocked), requires: "CHAT", ids: messageIDStore},
 	{name: "status", handler: typed(decodeStatusRequest, (*Server).postStatusLocked), requires: "STATUS_POSTS"},
 	{name: "statuses", handler: typed(decodeStatusRequest, (*Server).listStatusesLocked), readOnly: true, requires: "STATUS_POSTS"},
-	{name: "resolve", handler: typed(decodeResolveRequest, (*Server).resolveLocked), requires: "RESOLVE"},
+	{name: "resolve", handler: typed(decodeResolveRequest, (*Server).resolveLocked), requires: "RESOLVE", ids: messageIDStore},
 	{name: "poll", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
-	{name: "vote", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
-	{name: "results", handler: typed(decodePollRequest, (*Server).pollLocked), readOnly: true, requires: "POLLS"},
-	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS"},
+	{name: "vote", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS", ids: messageIDStore},
+	{name: "results", handler: typed(decodePollRequest, (*Server).pollLocked), readOnly: true, requires: "POLLS", ids: messageIDStore},
+	{name: "close-poll", handler: typed(decodePollRequest, (*Server).pollLocked), requires: "POLLS", ids: messageIDStore},
 	{name: "handoff", handler: (*Server).offerHandoffLocked, requires: "HANDOFF"},
-	{name: "handoff-accept", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
-	{name: "handoff-blocked", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
-	{name: "handoff-decline", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
-	{name: "handoff-done", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
-	{name: "handoff-withdraw", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF"},
-	{name: "handoffs", handler: typed(decodeHandoffRequest, (*Server).listHandoffsLocked), readOnly: true, requires: "HANDOFF"},
+	{name: "handoff-accept", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF", ids: messageIDStore},
+	{name: "handoff-blocked", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF", ids: messageIDStore},
+	{name: "handoff-decline", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF", ids: messageIDStore},
+	{name: "handoff-done", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF", ids: messageIDStore},
+	{name: "handoff-withdraw", handler: typed(decodeHandoffRequest, (*Server).stepHandoffLocked), requires: "HANDOFF", ids: messageIDStore},
+	{name: "handoffs", handler: typed(decodeHandoffRequest, (*Server).listHandoffsLocked), readOnly: true, requires: "HANDOFF", ids: messageIDStore},
 	{name: "decision", handler: (*Server).offerDecisionLocked, requires: "DECISION"},
-	{name: "decision-answer", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
-	{name: "decision-withdraw", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION"},
-	{name: "decisions", handler: typed(decodeDecisionRequest, (*Server).listDecisionsLocked), readOnly: true, requires: "DECISION"},
+	{name: "decision-answer", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION", ids: messageIDStore},
+	{name: "decision-withdraw", handler: typed(decodeDecisionRequest, (*Server).stepDecisionLocked), requires: "DECISION", ids: messageIDStore},
+	{name: "decisions", handler: typed(decodeDecisionRequest, (*Server).listDecisionsLocked), readOnly: true, requires: "DECISION", ids: messageIDStore},
 	// Pastes never append to history: an upload writes the paste store, and
 	// a message sharing a paste is an ordinary PRIVMSG.
 	{name: "paste-begin", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
 	{name: "paste-chunk", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
 	{name: "paste-end", handler: typed(decodePasteRequest, (*Server).uploadPasteLocked), readOnly: true, requires: "PASTE"},
-	{name: "paste-get", handler: typed(decodePasteRequest, (*Server).getPasteLocked), readOnly: true, requires: "PASTE"},
-	{name: "pastes", handler: typed(decodePasteRequest, (*Server).listPastesLocked), readOnly: true, requires: "PASTE"},
+	{name: "paste-get", handler: typed(decodePasteRequest, (*Server).getPasteLocked), readOnly: true, requires: "PASTE", ids: pasteIDStore},
+	{name: "pastes", handler: typed(decodePasteRequest, (*Server).listPastesLocked), readOnly: true, requires: "PASTE", ids: pasteIDStore},
 }
 
 // chatActions is chatActionTable by name. chatReadOnlyActions are the names
@@ -113,6 +116,15 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 	}
 	var err error
 	if action, known := chatActions[r.Action]; known {
+		if action.ids != 0 && r.ID != "" {
+			// An abbreviated id names the retained ID it is a prefix of;
+			// one nothing matches goes to the handler as given, whose
+			// lookup answers that it is not retained.
+			if r.ID, err = s.resolveIDLocked(r.ID, action.ids); err != nil {
+				s.numericLocked(client, "461", nil, err.Error())
+				return
+			}
+		}
 		err = action.handler(s, client, r)
 	} else {
 		err = errors.New("unknown CHAT action")

@@ -561,7 +561,11 @@ The UI also has:
 | `/close` | Close a room/query view; queries return to their source view, and closing a thread releases its live subscription. |
 
 `last` can replace a message ID, using the last message in the current view, e.g.
-`/thread last` or `/react last 🎉`. Up to 16 query views and 44 room subscriptions
+`/thread last` or `/react last 🎉`. An ID may also be abbreviated to its first 8 or
+more characters wherever a command takes one, in the UI and the CLI alike
+(`/thread 3a13b80f`, `airc paste get 3a13b80f`): the daemon resolves it among
+what it retains and refuses an ambiguous one, asking for more of it; what is
+printed and kept locally is always the full ID. Up to 16 query views and 44 room subscriptions
 keep UI buffers and server subscriptions bounded; each view retains 500 events.
 Thread/search views retain page cursors across connection loss. A complete thread
 catches up on reconnect; a partially loaded thread keeps its continuation for

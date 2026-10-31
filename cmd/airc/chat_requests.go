@@ -84,7 +84,7 @@ func (in handoffInput) request() (irc.ChatRequest, error) {
 		}
 		return r, nil
 	}
-	if !protocol.ValidMessageID(in.ID) {
+	if !protocol.ValidIDArgument(in.ID) {
 		return irc.ChatRequest{}, fmt.Errorf("handoff %s needs the handoff's ID", step)
 	}
 	if in.Channel != "" || in.To != "" {
@@ -164,7 +164,7 @@ func (in decisionInput) request() (irc.ChatRequest, error) {
 		}
 		return r, nil
 	}
-	if !protocol.ValidMessageID(in.ID) {
+	if !protocol.ValidIDArgument(in.ID) {
 		return irc.ChatRequest{}, fmt.Errorf("decide %s needs the decision's ID", step)
 	}
 	if in.Channel != "" || in.From != "" || in.To != "" || len(in.Options) > 0 {
@@ -246,7 +246,7 @@ type resolveInput struct {
 }
 
 func (in resolveInput) request() (irc.ChatRequest, error) {
-	if !protocol.ValidMessageID(in.ID) {
+	if !protocol.ValidIDArgument(in.ID) {
 		return irc.ChatRequest{}, errors.New("resolve needs a valid message ID")
 	}
 	note, err := messageText(in.Message, false)
@@ -300,7 +300,7 @@ func (in pollInput) request() (irc.ChatRequest, error) {
 		}
 		return irc.ChatRequest{Action: "poll", Target: room, Text: in.Question, Options: in.Options, Seconds: int64(cmp.Or(in.Seconds, 120))}, nil
 	}
-	if !protocol.ValidMessageID(in.ID) {
+	if !protocol.ValidIDArgument(in.ID) {
 		return irc.ChatRequest{}, fmt.Errorf("poll %s needs the poll's ID", step)
 	}
 	if in.Channel != "" || in.Question != "" || len(in.Options) > 0 || in.Seconds != 0 {
@@ -346,7 +346,7 @@ func (in pinInput) request() (irc.ChatRequest, error) {
 	step := cmp.Or(in.Step, "pin")
 	switch step {
 	case "pin", "unpin":
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return irc.ChatRequest{}, fmt.Errorf("%s needs the message's ID", step)
 		}
 		if in.Channel != "" {
@@ -386,7 +386,7 @@ func (in listingInput) request(action string) (irc.ChatRequest, error) {
 	if in.Channel != "" && in.ID != "" {
 		return irc.ChatRequest{}, errors.New("choose --channel or --id")
 	}
-	if in.ID != "" && !protocol.ValidMessageID(in.ID) {
+	if in.ID != "" && !protocol.ValidIDArgument(in.ID) {
 		return irc.ChatRequest{}, errors.New("--id needs a " + noun + " ID")
 	}
 	return irc.ChatRequest{Action: action, Target: channelName(in.Channel), ID: in.ID, Limit: in.Limit}, nil

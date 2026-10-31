@@ -235,7 +235,7 @@ func runPasteSession(ctx context.Context, session *agentConnection, args []strin
 	}
 	switch action {
 	case "get", "info":
-		if !protocol.ValidMessageID(id) {
+		if !protocol.ValidIDArgument(id) {
 			return fmt.Errorf("usage: airc paste %s PASTE_ID", action)
 		}
 		if *out != "" && action != "get" {

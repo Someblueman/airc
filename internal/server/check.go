@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 
@@ -36,10 +37,10 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 		var err error
 		selected[i], err = s.historyTarget(t.Target)
 		if err != nil {
-			if strings.HasPrefix(t.Target, "thread:") {
+			if strings.HasPrefix(t.Target, "thread:") && !errors.As(err, new(ambiguousIDError)) {
 				warnings[i] = "Followed " + t.Target + " expired; use airc unfollow to remove it"
 			} else {
-				s.numericLocked(client, "430", nil, err.Error())
+				s.conversationErrorLocked(client, nil, err)
 				return
 			}
 		}

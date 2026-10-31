@@ -16,7 +16,7 @@ import (
 // on it. The root's author, whoever it addresses, or an admin may resolve it.
 func runResolveSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	in := resolveInput{}
-	if len(args) > 0 && protocol.ValidMessageID(args[0]) {
+	if len(args) > 0 && protocol.ValidIDArgument(args[0]) {
 		in.ID, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("airc resolve", flag.ContinueOnError)
