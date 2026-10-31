@@ -244,6 +244,13 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 		c.Listeners[i].Limits = &config.ListenerLimits{RequestsPerMinute: 10000, AuthorRequestsPerMinute: 10000}
 	}
 	p := startGateway(t, gatewayBinary(t), c)
+	// A failed test shows what the gateway logged, so a slow or refused
+	// exchange explains itself.
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("gateway stderr:\n%s", p.stderr.String())
+		}
+	})
 	ready := reactionGatewayReady(t, p, len(c.Listeners))
 	transport := &http.Transport{TLSClientConfig: cert.Client.Clone()}
 	t.Cleanup(transport.CloseIdleConnections)
