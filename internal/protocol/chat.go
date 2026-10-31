@@ -55,6 +55,11 @@ type ChatMetadata struct {
 	// the +airc/run tag: 1-64 letters, digits, '.', '_' or '-'. SEARCH and
 	// HISTORY filter by it.
 	Run string `json:"run,omitempty"`
+	// GroupMentions are the nicknames a room message's group tags (@humans,
+	// @agents, @here) resolved to when it was posted: lower-cased, sorted,
+	// at most MaxGroupMentions, never the sender. They count as mentions
+	// beside the names the body tags (MessageMentions).
+	GroupMentions []string `json:"group_mentions,omitempty"`
 }
 
 // RunTag carries a post's run label from the client; the daemon keeps it in

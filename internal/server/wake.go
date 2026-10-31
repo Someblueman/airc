@@ -427,11 +427,12 @@ func (s *Server) noteInboxLocked(message Message, mentions []string) {
 	} else if !strings.EqualFold(message.Target, message.From) {
 		nicks = append(nicks, nickKey(message.Target))
 	}
-	// tagged are the nicks the message's text names: what a mentions-only
-	// registration counts, besides a direct message and an offer with for.
+	// tagged are the nicks the message's text names, a group tag's members
+	// included: what a mentions-only registration counts, besides a direct
+	// message and an offer with for.
 	var tagged []string
 	if protocol.IsChannel(message.Target) {
-		tagged = protocol.Mentions(message.Body)
+		tagged = append(protocol.Mentions(message.Body), message.GroupMentions...)
 	}
 	woke := false
 	for _, key := range nicks {
