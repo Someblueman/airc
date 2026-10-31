@@ -8,9 +8,12 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
+// historyTarget checks a HISTORY, SEARCH or CHECK target and resolves a
+// conversation selector to its retained thread. An error from a selector is
+// answered with conversationErrorLocked.
 func (s *Server) historyTarget(target string) (string, error) {
 	if strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:") {
-		return s.history.conversation(target)
+		return s.conversationLocked(target)
 	}
 	if target == protocol.AllDirectMessages || validChannel(target) || protocol.ValidNick(target) || strings.HasPrefix(target, "@") && protocol.ValidNick(target[1:]) {
 		return target, nil
@@ -49,7 +52,7 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 	if target != "*" {
 		selected, err = s.historyTarget(target)
 		if err != nil {
-			s.numericLocked(client, "430", nil, err.Error())
+			s.conversationErrorLocked(client, nil, err)
 			return
 		}
 	}

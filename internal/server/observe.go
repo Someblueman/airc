@@ -32,9 +32,9 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 		case target == protocol.AllDirectMessages:
 		case strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:"):
 			var err error
-			key, err = s.history.conversation(target)
+			key, err = s.conversationLocked(target)
 			if err != nil {
-				s.numericLocked(client, "430", []string{target}, err.Error())
+				s.conversationErrorLocked(client, []string{target}, err)
 				continue
 			}
 		case strings.HasPrefix(target, "@") && protocol.ValidNick(target[1:]):

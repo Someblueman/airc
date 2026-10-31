@@ -18,7 +18,7 @@ type contextRequest struct {
 }
 
 func decodeContextRequest(_ Config, r protocol.ChatRequest) (contextRequest, error) {
-	if !protocol.ValidMessageID(r.ID) || r.Limit < 1 || r.Limit > 1000 {
+	if !protocol.ValidIDArgument(r.ID) || r.Limit < 1 || r.Limit > 1000 {
 		return contextRequest{}, errors.New("context requires a message ID and limit 1-1000")
 	}
 	if r.MaxBytes != 0 && (r.MaxBytes < 1024 || r.MaxBytes > 1<<20) {

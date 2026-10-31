@@ -22,7 +22,7 @@ type resolveRequest struct {
 }
 
 func decodeResolveRequest(_ Config, r protocol.ChatRequest) (resolveRequest, error) {
-	if !protocol.ValidMessageID(r.ID) {
+	if !protocol.ValidIDArgument(r.ID) {
 		return resolveRequest{}, errors.New("resolve names the message whose thread is settled")
 	}
 	return resolveRequest{ID: r.ID, Text: r.Text}, nil
