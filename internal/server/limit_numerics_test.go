@@ -80,4 +80,18 @@ func TestPermanentLimitsAndDisabledFeaturesAreNotRetryable(t *testing.T) {
 	}
 	s.authLocked(registrant, protocol.Command{Name: "REGISTER", Params: []string{"newbie"}, Trailing: testAdminToken})
 	expectNumeric(t, registrant, "437", "Account creation limit for this address reached; try again later")
+
+	// The account limit is permanent, so it is a 405 like the others; the
+	// per-connection window is checked first and stays a 437.
+	full := &session{out: make(chan string, 4), done: make(chan struct{}), remoteKey: "203.0.113.10"}
+	s.accounts = make(map[string]account, maxAccounts)
+	for i := range maxAccounts {
+		nick := fmt.Sprintf("holder%d", i)
+		s.accounts[nickKey(nick)] = account{ID: newID(), Nick: nick}
+	}
+	s.authLocked(full, protocol.Command{Name: "REGISTER", Params: []string{"newbie"}, Trailing: testAdminToken})
+	expectNumeric(t, full, "405", "Account limit reached")
+	full.accountsMade = maxRegistrationsPerConnection
+	s.authLocked(full, protocol.Command{Name: "REGISTER", Params: []string{"newbie"}, Trailing: testAdminToken})
+	expectNumeric(t, full, "437", "Account creation limit for this connection reached")
 }

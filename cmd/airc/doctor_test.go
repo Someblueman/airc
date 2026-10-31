@@ -19,6 +19,14 @@ import (
 // It can also withhold HISTORY to exercise cancellation at the wire boundary.
 func olderDaemon(t *testing.T, holdHistory bool) (string, <-chan struct{}) {
 	t.Helper()
+	return tokenDaemon(t, "MULTILINE=1", holdHistory)
+}
+
+// tokenDaemon is a daemon from before AIRC levels that advertises the given
+// 005 tokens, answers every CHAT request with an empty response, and knows
+// no STATUS.
+func tokenDaemon(t *testing.T, tokens string, holdHistory bool) (string, <-chan struct{}) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +47,9 @@ func olderDaemon(t *testing.T, holdHistory bool) (string, <-chan struct{}) {
 			}
 			switch command.Name {
 			case "USER":
-				fmt.Fprint(conn, ":server 766 observer :Ephemeral session\r\n:server 005 observer MULTILINE=1 :supported\r\n:server 001 observer :Welcome\r\n")
+				fmt.Fprintf(conn, ":server 766 observer :Ephemeral session\r\n:server 005 observer %s :supported\r\n:server 001 observer :Welcome\r\n", tokens)
+			case "CHAT":
+				fmt.Fprint(conn, ":server 778 observer :End of chat response\r\n")
 			case "OBSERVE":
 				for target := range strings.SplitSeq(command.Params[0], ",") {
 					fmt.Fprintf(conn, ":server 765 observer %s :Now observing\r\n", target)
@@ -78,8 +88,20 @@ func TestDoctorReportsCapabilitiesRetentionAndLockOwner(t *testing.T) {
 	if report.Cursor == nil || !report.Cursor.Locked || report.Cursor.Owner == nil || report.Cursor.Owner.PID != os.Getpid() {
 		t.Fatalf("missing lock ownership: %s", out)
 	}
-	if report.Features["HISTORY_START"] != "1" || report.Process.SoftLimit == nil {
+	if report.Level != protocol.Level || report.Features["AIRC"] != "1" || report.Features["HISTORY"] != "16" || report.Process.SoftLimit == nil {
 		t.Fatalf("missing diagnostics: %s", out)
+	}
+	if _, literal := report.Features["HISTORY_START"]; literal {
+		t.Fatalf("a version-only feature is still a token of its own: %s", out)
+	}
+	for _, warning := range report.Warnings {
+		if strings.Contains(warning, "Daemon lacks") || strings.Contains(warning, "AIRC level") {
+			t.Fatalf("a current daemon lacks nothing: %s", out)
+		}
+	}
+	text := mustCLI(t, address, "doctor", "--nick", "me")
+	if !strings.Contains(text, fmt.Sprintf("Level: AIRC %d (this airc %d)", protocol.Level, protocol.Level)) || !strings.Contains(text, "Features: AIRC=1 ") {
+		t.Fatalf("doctor text = %s", text)
 	}
 }
 
@@ -91,8 +113,14 @@ func TestDoctorRemainsUsableAgainstOlderDaemon(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &report); err != nil {
 		t.Fatal(err)
 	}
-	if !report.Connected || report.Server != nil || len(report.Warnings) < 4 || report.Features["MULTILINE"] != "1" {
+	if !report.Connected || report.Server != nil || report.Level != 0 || report.Features["MULTILINE"] != "1" {
 		t.Fatalf("older daemon diagnostics = %s", out)
+	}
+	// One warning names everything the table says the daemon lacks, and one
+	// that the daemon's build is unknown; the table's names are what the
+	// commands themselves refuse with.
+	if len(report.Warnings) != 2 || !strings.HasPrefix(report.Warnings[0], "Daemon lacks BOT_REPLIES, CHANNELS, CHANNEL_OPERATORS, CHARTER, CHAT, ") || !strings.Contains(report.Warnings[0], fmt.Sprintf(", STATUS_POSTS, TOPIC (AIRC level 0, this airc expects %d)", protocol.Level)) || strings.Contains(report.Warnings[0], "MULTILINE") || !strings.Contains(report.Warnings[1], "predates STATUS") {
+		t.Fatalf("older daemon warnings = %q", report.Warnings)
 	}
 	select {
 	case <-closed:

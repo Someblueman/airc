@@ -103,10 +103,10 @@ func TestLimitsAndDisabledFeaturesAreNotRetryable(t *testing.T) {
 		{"421", "Unknown command", "unsupported", false},
 		{"437", "Slow-mode state full; retry later", "server_busy", true},
 		{"437", "Unable to save moderation; no change applied", "server_busy", true},
-		// REGISTER refusals are all 437 (pkg/irc aborts registration on a
-		// pinned set of numerics), so the account limit is told by its text.
+		// REGISTER's creation windows pass; its account limit does not.
 		{"437", "registration rejected: Account creation limit for this address reached; try again later", "server_busy", true},
-		{"437", "registration rejected: Account limit reached", "limit_reached", false},
+		{"437", "registration rejected: Account creation limit for this connection reached", "server_busy", true},
+		{"405", "registration rejected: Account limit reached", "limit_reached", false},
 	} {
 		e := failure(&irc.RejectedError{Code: c.code, Message: c.text}, "request")
 		if e.Code != c.want || e.Retryable != c.retryable {

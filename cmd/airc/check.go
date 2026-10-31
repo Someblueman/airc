@@ -390,7 +390,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		data, _ := json.Marshal(c.combinedRequest(store, followed))
 		combined = len(data)+len("CHECK :") <= protocol.MaxLineLength
 	}
-	if !combined && client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
+	if !combined && client.Supports("PINS") && !settings.mentions && settings.replyTo == "" {
 		pins, err := checkPins(ctx, client, followed, store, c.noteLive)
 		if err != nil {
 			return err
@@ -408,7 +408,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 			}
 		}
 	}
-	if !combined && client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
+	if !combined && client.Supports("CHARTER") && !settings.mentions && settings.replyTo == "" {
 		charters, err := checkCharters(ctx, client, followed, store, c.noteLive)
 		if err != nil {
 			return err

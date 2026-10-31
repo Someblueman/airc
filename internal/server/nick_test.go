@@ -95,7 +95,7 @@ func TestMultilineTagValidation(t *testing.T) {
 	conn, reader := rawConn(t, address)
 	io.WriteString(conn, "EPHEMERAL\r\nNICK tagger\r\nUSER u 0 * :u\r\n")
 	line := expectLine(t, reader, conn, " 005 ")
-	if !strings.Contains(line, "MULTILINE=1") {
+	if !strings.Contains(line, "AIRC=1") {
 		t.Fatalf("capability line = %q", line)
 	}
 	expectLine(t, reader, conn, " 001 ")

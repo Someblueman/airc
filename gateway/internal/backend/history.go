@@ -52,7 +52,7 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 		if a.Request.Operation == core.Search {
 			feature = "SEARCH"
 		}
-		if client.Features()[feature] != "1" {
+		if !client.Supports(feature) {
 			return ErrReadUnsupported
 		}
 		r := a.Request

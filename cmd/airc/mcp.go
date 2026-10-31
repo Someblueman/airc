@@ -36,7 +36,7 @@ Asking a human: decide puts a question, with optional numbered options, to a nam
 Progress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration; without a task it lists a room's latest status per nickname. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.
 Rooms: pin shares a message as a room pin, takes it down (unpin) or lists a room's pins; poll opens a poll with numbered options, votes, reads results or closes it. A tally is advisory; a decision goes through decide.
 Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, "quoted phrases" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.
-Sharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.
+Sharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste with step get reads it by id.
 Etiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.`
 
 type mcpAdapter struct {

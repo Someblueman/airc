@@ -155,7 +155,13 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	if *wait > 0 {
 		return waitForAnswer(*opt, r.ID, *wait, stdout, stderr)
 	}
-	return chatRequestWithContext(ctx, *opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+	// Gated on the action's own feature, so an older daemon is told what it
+	// lacks (pins, polls, room settings or charters) rather than CHAT.
+	capability := protocol.ChatFeature(r.Action)
+	if r.Charter != nil {
+		capability = "CHARTER"
+	}
+	return chatRequestWithContext(ctx, *opt, capability, func(ctx context.Context, client *irc.Client) error {
 		if changingRoom && !*asOperator {
 			path := *tokenFile
 			if path == "" {
@@ -240,7 +246,7 @@ func runCharterSession(ctx context.Context, session *agentConnection, args []str
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, "CHARTER", func(ctx context.Context, client *irc.Client) error {
 		entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}, nil)
 		if err != nil {
 			return err

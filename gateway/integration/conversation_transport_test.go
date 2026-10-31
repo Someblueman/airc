@@ -203,7 +203,7 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 	f := newReactionHTTPFixture(t)
 	root, direct, nested, _ := seedRetentionChain(t, f, false)
 	beforeRequest := core.Request{Version: 1, RequestID: "conversation-root-before-eviction", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, ThreadMode: "thread", Limit: 1}
-	beforeStatus, beforeResult := reactionHTTPCall(t, f, f.cred.token(t, beforeRequest, true))
+	beforeStatus, beforeResult := settledHTTPRead(t, f, beforeRequest, evictionReadWithin)
 	if beforeStatus != http.StatusOK || beforeResult.Page == nil || beforeResult.Page.Cursor == "" {
 		t.Fatalf("failed to capture pre-eviction thread cursor: status=%d result=%+v", beforeStatus, beforeResult)
 	}
@@ -216,8 +216,12 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 		next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == id })
 	}
 	_ = author.Close()
+	// Each receipt arrived after its message was in the window, in the
+	// history file and in the file's in-memory index, so the root is
+	// evicted and the archive holds the cursor before the reads below; only
+	// the exchange with the gateway can still be slow on a loaded host.
 	r := core.Request{Version: 1, RequestID: "conversation-root-evicted", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, ThreadMode: "thread", Limit: 50}
-	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
+	status, result := settledHTTPRead(t, f, r, evictionReadWithin)
 	if status != http.StatusOK || result.Page == nil {
 		t.Fatalf("evicted-root thread read failed: status=%d result=%+v", status, result)
 	}
@@ -230,7 +234,7 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 	resume.Cursor = beforeResult.Page.Cursor
 	// The history file's archive still holds the cursor, so the thread
 	// resumes from it without a gap.
-	status, result = reactionHTTPCall(t, f, f.cred.token(t, resume, true))
+	status, result = settledHTTPRead(t, f, resume, evictionReadWithin)
 	if status != http.StatusOK || result.Page == nil || result.Page.Gap {
 		t.Fatalf("evicted-root cursor did not resume from the archive: status=%d page=%+v", status, result.Page)
 	}
@@ -253,7 +257,7 @@ func TestConversationRepliesRetainsChildrenOfEvictedParent(t *testing.T) {
 	}
 	_ = author.Close()
 	r := core.Request{Version: 1, RequestID: "conversation-parent-evicted", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: nested.ID, ThreadMode: "replies", Limit: 50}
-	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
+	status, result := settledHTTPRead(t, f, r, evictionReadWithin)
 	if status != http.StatusOK || result.Page == nil {
 		t.Fatalf("evicted-parent replies read failed: status=%d result=%+v", status, result)
 	}

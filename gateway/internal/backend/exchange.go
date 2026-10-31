@@ -95,6 +95,10 @@ func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	if rejected.Code == "437" {
 		o = failed(a, core.CapacityExceeded, true, false)
 	}
+	if rejected.Code == "405" {
+		// A limit a retry cannot clear.
+		o = failed(a, core.CapacityExceeded, false, false)
+	}
 	if rejected.Code == "421" {
 		o = failed(a, core.UnsupportedOperation, false, false)
 	}
@@ -122,7 +126,7 @@ func parentExchange(ctx context.Context, client *irc.Client, a store.Attempt) Ou
 }
 
 func reactionExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
-	if !builtinReaction(a.Job.Request.Reaction) && client.Features()["CUSTOM_REACTIONS"] != "1" {
+	if !builtinReaction(a.Job.Request.Reaction) && !client.Supports("CUSTOM_REACTIONS") {
 		return failed(a, core.UnsupportedOperation, false, false)
 	}
 	return parentExchange(ctx, client, a)

@@ -12,23 +12,23 @@ import (
 )
 
 type mcpSendInput struct {
-	Message   string `json:"message,omitempty" jsonschema:"Original message text, at most 4096 bytes"`
-	Channel   string `json:"channel,omitempty" jsonschema:"Room to post in, such as #agents-corner; give exactly one of channel, to or reply_to"`
-	To        string `json:"to,omitempty" jsonschema:"Nickname for a direct message; queued if the recipient is offline"`
+	Message   string `json:"message,omitempty" jsonschema:"Text to post, at most 4096 bytes"`
+	Channel   string `json:"channel,omitempty" jsonschema:"Room to post in; give exactly one of channel, to or reply_to"`
+	To        string `json:"to,omitempty" jsonschema:"Nickname for a direct message, queued if offline"`
 	ReplyTo   string `json:"reply_to,omitempty" jsonschema:"Message ID to reply to; the reply goes to that message's room or DM"`
-	RequestID string `json:"request_id,omitempty" jsonschema:"Optional stable send key for receipt recovery"`
-	Run       string `json:"run,omitempty" jsonschema:"Run label kept on the message (1-64 letters, digits, ., _ or -), which search and history can filter by; defaults to AIRC_RUN"`
+	RequestID string `json:"request_id,omitempty" jsonschema:"Stable send key for receipt recovery"`
+	Run       string `json:"run,omitempty" jsonschema:"Run label kept on the message (1-64 letters, digits, ., _ or -); defaults to AIRC_RUN"`
 	Pending   bool   `json:"pending,omitempty" jsonschema:"List saved sends with uncertain outcomes; omit other fields"`
-	Retry     string `json:"retry,omitempty" jsonschema:"Recover this saved request receipt without posting; omit message and targets"`
+	Retry     string `json:"retry,omitempty" jsonschema:"Recover this request ID's receipt without posting; omit other fields"`
 }
 type mcpCheckInput struct {
-	Channels    []string `json:"channels,omitempty" jsonschema:"Rooms to read besides the inbox; defaults to AIRC_CHANNEL from the adapter environment"`
+	Channels    []string `json:"channels,omitempty" jsonschema:"Rooms to read besides the inbox; defaults to AIRC_CHANNEL"`
 	ReplyTo     string   `json:"reply_to,omitempty" jsonschema:"Only immediate replies to this message ID, using a separate cursor"`
-	Decision    string   `json:"decision,omitempty" jsonschema:"Wait for this decision to be answered or withdrawn and return its row; combine with wait_seconds and nothing else"`
-	WaitSeconds int      `json:"wait_seconds,omitempty" jsonschema:"Total wait deadline, 0 through 3600 seconds"`
+	Decision    string   `json:"decision,omitempty" jsonschema:"Wait for this decision ID to be answered or withdrawn and return its row; only wait_seconds may accompany it"`
+	WaitSeconds int      `json:"wait_seconds,omitempty" jsonschema:"Wait deadline, 0-3600 seconds"`
 	Peek        bool     `json:"peek,omitempty" jsonschema:"Leave messages unread"`
-	Mentions    bool     `json:"mentions,omitempty" jsonschema:"Only direct messages and messages that tag this identity"`
-	IncludeOwn  bool     `json:"include_own,omitempty" jsonschema:"Also return this identity's own messages"`
+	Mentions    bool     `json:"mentions,omitempty" jsonschema:"Only direct messages and messages that tag you"`
+	IncludeOwn  bool     `json:"include_own,omitempty" jsonschema:"Also return your own messages"`
 	MaxMessages int      `json:"max_messages,omitempty" jsonschema:"Page size in messages; default 100"`
 	MaxBytes    int      `json:"max_bytes,omitempty" jsonschema:"Page size in output bytes; default 32768"`
 	Compact     bool     `json:"compact,omitempty" jsonschema:"Omit seq, request_id and account_id and shorten timestamps; IDs are kept"`
@@ -38,12 +38,12 @@ type mcpAskInput struct {
 	Message     string `json:"message" jsonschema:"The question, at most 4096 bytes"`
 	Channel     string `json:"channel,omitempty" jsonschema:"Room to ask in; give exactly one of channel or to"`
 	To          string `json:"to,omitempty" jsonschema:"Nickname to ask directly"`
-	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"How long to wait for the first reply, 1 through 3600 seconds; default 60. Keep it below the host's tool-call timeout"`
+	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"Wait for the first reply, 1-3600 seconds; default 60; keep it below the host's tool-call timeout"`
 	Run         string `json:"run,omitempty" jsonschema:"Run label kept on the question; defaults to AIRC_RUN"`
 }
 type mcpThreadInput struct {
 	ID    string `json:"id" jsonschema:"ID of the thread root or any retained reply"`
-	After string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
+	After string `json:"after,omitempty" jsonschema:"Message ID cursor from the previous page, exclusive"`
 	Limit int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1-1000; default 50"`
 }
 type mcpContextInput struct {
@@ -57,7 +57,7 @@ type mcpDirectoryInput struct {
 
 // addCoreTools registers the send, check, thread, context and directory tools.
 func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSendInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "send", Description: "Post text to one room, nickname or reply parent; retry recovers an uncertain send's receipt."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSendInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"send"}
 		if in.Retry != "" || in.Pending {
 			if in.Pending && in.Retry != "" || in.Retry != "" && !protocol.ValidRequestID(in.Retry) || in.Message != "" || in.Channel != "" || in.To != "" || in.ReplyTo != "" || in.RequestID != "" || in.Run != "" {
@@ -87,7 +87,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, in.Message, 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "check", Description: "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCheckInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "check", Description: "Read new messages and mark them read; peek leaves cursors unchanged. A wait reconnects within its deadline."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCheckInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.WaitSeconds < 0 || in.WaitSeconds > 3600 || len(in.Channels) > 63 {
 			return nil, mcpOutput{}, errors.New("wait_seconds must be 0-3600; at most 63 channels")
 		}
@@ -131,7 +131,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", timeout, in.WaitSeconds > 0)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "ask", Description: "Post a question to a room or a nickname through the normal send path and wait, in this one call, for the first textual reply from someone else (reactions and signals do not count). Returns the question's receipt, then the reply row, or a wait_expired status; the reply is marked read as a reply check marks it. For hosts that cannot run a check in the background; keep wait_seconds below the host's tool-call timeout, since a killed call reports nothing and the question stays posted."}, func(ctx context.Context, _ *mcpserver.Call, in mcpAskInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "ask", Description: "Post a question and wait in the same call for the first textual reply from someone else (reactions and signals do not count). Returns the receipt, then the reply row or a wait_expired status; the reply is marked read. A call the host kills reports nothing, but the question stays posted."}, func(ctx context.Context, _ *mcpserver.Call, in mcpAskInput) (*mcpserver.Result, mcpOutput, error) {
 		if (in.Channel == "") == (in.To == "") || in.Message == "" || len(in.Message) > 4096 || in.WaitSeconds < 0 || in.WaitSeconds > 3600 {
 			return nil, mcpOutput{}, errors.New("provide text up to 4096 bytes, exactly one of channel or to, and wait_seconds 0-3600")
 		}
@@ -146,7 +146,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, in.Message, time.Duration(in.WaitSeconds)*time.Second+15*time.Second, true)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "thread", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcpserver.Call, in mcpThreadInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "thread", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a retained conversation without moving inbox cursors."}, func(ctx context.Context, _ *mcpserver.Call, in mcpThreadInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
@@ -159,7 +159,7 @@ func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "context", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts."}, func(ctx context.Context, _ *mcpserver.Call, in mcpContextInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "context", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read a message's exchange: trigger, replies, corrections, pins and participant profiles, with omission counts."}, func(ctx context.Context, _ *mcpserver.Call, in mcpContextInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
