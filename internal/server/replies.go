@@ -34,6 +34,11 @@ func (h *historyRing) conversation(target string) (string, error) {
 
 func (s *Server) replyLocked(client *session, command protocol.Command) {
 	id, _ := command.Param(0)
+	id, err := s.resolveIDLocked(id, messageIDStore)
+	if err != nil {
+		s.numericLocked(client, "461", nil, err.Error())
+		return
+	}
 	parent, found := s.history.message(id)
 	if !protocol.ValidMessageID(id) || !found {
 		s.numericLocked(client, "430", []string{id}, "reply parent is not retained; read the conversation and reply to a retained message")

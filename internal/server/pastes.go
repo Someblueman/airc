@@ -334,14 +334,14 @@ func decodePasteRequest(cfg Config, r protocol.ChatRequest) (pasteRequest, error
 			request.Data = data
 		}
 	case "paste-get":
-		if !protocol.ValidMessageID(r.ID) {
+		if !protocol.ValidIDArgument(r.ID) {
 			return request, errors.New("paste-get needs the paste's ID")
 		}
 		if r.Offset < 0 || r.Limit < 0 || r.Limit > pastePage {
 			return request, fmt.Errorf("offset is not negative and limit is at most %d chunks", pastePage)
 		}
 	case "pastes":
-		if r.ID != "" && !protocol.ValidMessageID(r.ID) {
+		if r.ID != "" && !protocol.ValidIDArgument(r.ID) {
 			return request, errors.New("list one paste by its ID")
 		}
 		if r.Limit < 0 || r.Limit > maxHandoffPage {
