@@ -224,15 +224,20 @@ func waitReceipt(t *testing.T, base, id string, headers map[string]string) core.
 		if status := plainHTTP(t, http.MethodGet, base+"/v1/requests/"+id, nil, headers, &result); status != http.StatusOK {
 			t.Fatalf("receipt %s: HTTP %d", id, status)
 		}
-		switch result.State {
-		case core.Accepted, core.Blocked, core.Rejected, core.Expired, core.CredentialWait:
-			return true
-		}
-		return false
+		return receiptTerminal(result.State)
 	}) {
 		t.Fatalf("receipt %s still %s", id, result.State)
 	}
 	return result
+}
+
+// receiptTerminal: the job's state is final.
+func receiptTerminal(state core.State) bool {
+	switch state {
+	case core.Accepted, core.Blocked, core.Rejected, core.Expired, core.CredentialWait:
+		return true
+	}
+	return false
 }
 
 func authorHeaders(nick, token string) map[string]string {

@@ -5,24 +5,29 @@ package gateway_test
 // The cross-carrier suite runs one set of author scenarios against every
 // carrier in suiteCarriers, so a behaviour the contract promises on every
 // carrier is written once. Each carrier gets its own current-tree aircd and
-// an in-process gateway (startAuthorGateway) whose listeners admit the
-// scenario rooms: the carrier's plaintext listener, a twin that requires the
-// listener password, a TLS twin, and an HTTP listener the suite reads
-// receipts from. An independent IRC client in the scenario rooms observes
-// what AIRC posts, aircd's own history (CHECK) is the count of record, and
-// the journal is read directly to prove a refusal never reached intake.
-// Failures read TestCarrierSuite/<carrier>/<scenario>.
+// its own gateway: for most carriers an in-process gateway
+// (startAuthorGateway) whose listeners admit the scenario rooms (the
+// carrier's plaintext listener, a twin that requires the listener password,
+// a TLS twin, and an HTTP listener the suite reads receipts from); for a
+// carrier that runs as its own gateway process on a parent-owned endpoint
+// (stdio, socket pair, inherited stream, file mailbox), a child airc-gateway
+// built from this tree, which receipts are read through. An independent IRC
+// client in the scenario rooms observes what AIRC posts, aircd's own history
+// (CHECK) is the count of record, and the journal is read directly to prove
+// a refusal never reached intake. Failures read
+// TestCarrierSuite/<carrier>/<scenario>.
 //
 // Adding a carrier: register one suiteCarrier (append it here, or call
 // registerSuiteCarriers from a package-level var in the carrier family's own
-// file) with its listener, a dial
-// function returning a minimal independent client (a suiteClient, and a
-// suiteWatcher for streamed watches) and the flags saying which scenarios
-// apply. Wire behaviour no scenario covers (framing, acknowledgement frames,
-// refusal frames, protocol options) goes in the entry's wire hook, which runs
-// against the same listeners, in a carrier_suite_<carrier>_test.go file;
-// behaviour that needs its own gateway configuration or process keeps a
-// focused test in the carrier's own files.
+// file) with its listener, a dial function returning a minimal independent
+// client (a suiteClient, and a suiteWatcher for streamed watches) or, for a
+// process carrier, a process function starting the child, and the flags
+// saying which scenarios apply. Wire behaviour no scenario covers (framing,
+// acknowledgement frames, refusal frames, protocol options) goes in the
+// entry's wire hook, which runs against the same listeners, in a
+// carrier_suite_<carrier>_test.go file; behaviour that needs its own
+// gateway configuration or process keeps a focused test in the carrier's
+// own files.
 
 import (
 	"context"
@@ -59,6 +64,16 @@ type suiteCarrier struct {
 	listener config.Listener
 	// dial connects a client; a connect-time refusal is returned as an error.
 	dial func(*testing.T, suiteDial) (suiteClient, error)
+	// process, if set, runs the carrier as its own airc-gateway process on a
+	// parent-owned endpoint (a child on its parent's pipe, socket pair or
+	// inherited Unix stream, the one-shot file mailbox) instead of as a
+	// listener of the suite's in-process gateway, and starts that child in
+	// the environment's configuration; its close ends the child (EOF) and
+	// waits for its clean exit. The suite's dial returns the running child,
+	// starting one when none runs. The child owns the journal while it runs,
+	// so the carrier has no HTTP receipts listener, password twin or TLS
+	// twin: receipts travel over the carrier itself.
+	process func(t *testing.T, e *suiteEnv) suiteClient
 	// connectPassword: the password is checked once per connection (MQTT
 	// CONNECT), not per request.
 	connectPassword bool
@@ -85,6 +100,10 @@ type suiteCarrier struct {
 	// the carrier on a host that lacks the feature.
 	configure func(t *testing.T, l *config.Listener)
 }
+
+// listens: the carrier is a listener of the suite's gateway, beside the HTTP
+// receipts listener and its password twin.
+func (c suiteCarrier) listens() bool { return c.process == nil }
 
 // suiteDial is where and how a client connects. password is the listener
 // access password the client presents when it connects (connectPassword
@@ -150,16 +169,16 @@ var suiteScenarios = []struct {
 	run     func(*testing.T, *suiteEnv)
 }{
 	{"guest_post", nil, suiteGuestPost},
-	{"reply_after_commit", nil, suiteReplyAfterCommit},
+	{"reply_after_commit", suiteCarrier.listens, suiteReplyAfterCommit},
 	{"registered_post", nil, suiteRegisteredPost},
 	{"author_refusals", nil, suiteAuthorRefusals},
 	{"malformed_refused", nil, suiteMalformedRefused},
 	{"target_refused", nil, suiteTargetRefused},
 	{"conflicting_retry_refused", nil, suiteConflictingRetry},
 	{"retry_after_lost_reply", nil, suiteRetryAfterLostReply},
-	{"retry_on_another_carrier", nil, suiteRetryOnAnotherCarrier},
+	{"retry_on_another_carrier", suiteCarrier.listens, suiteRetryOnAnotherCarrier},
 	{"bounded_reads", func(c suiteCarrier) bool { return c.reads }, suiteBoundedReads},
-	{"listener_password", nil, suiteListenerPassword},
+	{"listener_password", suiteCarrier.listens, suiteListenerPassword},
 	{"tls_post", func(c suiteCarrier) bool { return c.tls }, suiteTLSPost},
 	{"tls_refusals", func(c suiteCarrier) bool { return c.tls }, suiteTLSRefusals},
 	{"identify_then_post", func(c suiteCarrier) bool { return c.session }, suiteIdentifyThenPost},
@@ -189,11 +208,12 @@ type suiteEnv struct {
 	carrier           suiteCarrier
 	socket, accountID string
 	config            config.Config
-	gateway           *authorGateway
-	address, guarded  string // the carrier's listener and its password twin
-	secure            string // its TLS twin
+	gateway           *authorGateway // the in-process gateway; nil for a process carrier
+	child             *suiteChild    // a process carrier's running child; nil when none runs
+	address, guarded  string         // the carrier's listener and its password twin
+	secure            string         // its TLS twin
 	cert              testtls.Certificate
-	receipts          string // base URL of the HTTP receipts listener
+	receipts          string // base URL of the HTTP receipts listener; "" for a process carrier
 	observed          *suiteObserver
 	statusClient      *irc.Client
 	sequence          int
@@ -222,6 +242,12 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	for _, room := range suiteRooms {
 		rooms = append(rooms, core.Target{Kind: "room", Name: room})
 	}
+	e := &suiteEnv{carrier: c, socket: socket, accountID: accountID, observed: observe(watcher)}
+	e.statusClient = nativeStatusClient(t, socket)
+	if c.process != nil {
+		e.config = processCarrierConfig(t, socket, gatewayToken, c, rooms)
+		return e
+	}
 	var cert testtls.Certificate
 	if c.secure {
 		cert = testtls.NewP256(t)
@@ -245,11 +271,67 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 		secure.TLSCertFile, secure.TLSKeyFile = cert.CertPath, cert.KeyPath
 		listeners = append(listeners, secure)
 	}
-	cfg := authorConfig(t, socket, gatewayToken, listeners...)
-	g := startAuthorGateway(t, cfg)
-	e := &suiteEnv{carrier: c, socket: socket, accountID: accountID, config: cfg, gateway: g, address: g.addresses["carrier"], guarded: g.addresses["guarded"], secure: g.addresses["tls"], cert: cert, receipts: "http://" + g.addresses["receipts"], observed: observe(watcher)}
-	e.statusClient = nativeStatusClient(t, socket)
+	e.config, e.cert = authorConfig(t, socket, gatewayToken, listeners...), cert
+	e.startGateway(t)
+	e.address, e.guarded, e.secure = e.gateway.addresses["carrier"], e.gateway.addresses["guarded"], e.gateway.addresses["tls"]
 	return e
+}
+
+// processCarrierConfig is a process carrier's configuration: the one
+// listener, admitting rooms, in a gateway root of its own.
+func processCarrierConfig(t *testing.T, socket, gatewayToken string, c suiteCarrier, rooms []core.Target) config.Config {
+	t.Helper()
+	cfg := authorConfig(t, socket, gatewayToken)
+	l := c.listener
+	l.ID, l.Enabled, l.Limits, l.Targets = c.name, true, fixtureListenerLimits(), rooms
+	if l.Operations == nil {
+		l.Operations = []core.Operation{} // every implemented operation; the file rejects null
+	}
+	if c.configure != nil {
+		c.configure(t, &l)
+	}
+	cfg.Listeners = []config.Listener{l}
+	return cfg
+}
+
+// startGateway starts the suite's in-process gateway on the environment's
+// configuration; a process carrier's child starts on its first dial.
+func (e *suiteEnv) startGateway(t *testing.T) {
+	t.Helper()
+	if e.carrier.process != nil {
+		return
+	}
+	e.gateway = startAuthorGateway(t, e.config)
+	e.receipts = "http://" + e.gateway.addresses["receipts"]
+}
+
+// stopGateway stops the gateway: the in-process one, or the running child.
+// Both join delivery and release the journal.
+func (e *suiteEnv) stopGateway(t *testing.T) {
+	t.Helper()
+	if e.carrier.process != nil {
+		if e.child != nil {
+			e.child.close()
+		}
+		return
+	}
+	e.gateway.stop(t)
+}
+
+// suiteChild is a process carrier's running child, ended once.
+type suiteChild struct {
+	suiteClient
+	e    *suiteEnv
+	once sync.Once
+}
+
+func (c *suiteChild) close() {
+	c.once.Do(func() {
+		c.suiteClient.close()
+		if c.e.child == c {
+			c.e.child = nil
+		}
+	})
 }
 
 // dial connects a client to the carrier's open listener.
@@ -269,8 +351,15 @@ func (e *suiteEnv) dialWith(t *testing.T, d suiteDial) suiteClient {
 }
 
 // connect dials a client; a secure carrier's client trusts the suite's
-// certificate.
+// certificate. A process carrier's client is its running child, started
+// when none runs.
 func (e *suiteEnv) connect(t *testing.T, d suiteDial) (suiteClient, error) {
+	if e.carrier.process != nil {
+		if e.child == nil {
+			e.child = &suiteChild{suiteClient: e.carrier.process(t, e), e: e}
+		}
+		return e.child, nil
+	}
 	if e.carrier.secure && d.tls == nil {
 		d.tls = e.cert.Client.Clone()
 	}
@@ -286,9 +375,10 @@ func (e *suiteEnv) id(name string) string {
 // guest is a guest nickname for this carrier.
 func (e *suiteEnv) guest(name string) string { return e.carrier.name + "-" + name }
 
-// text is a whole multi-line Unicode message body naming the carrier.
+// text is a whole multi-line Unicode message body naming the carrier, with
+// shell syntax no gateway command may execute.
 func (e *suiteEnv) text(name string) string {
-	return fmt.Sprintf("%s via %s\nwhole body café 🙂", name, e.carrier.name)
+	return fmt.Sprintf("%s via %s\nwhole body café 🙂 $(touch must-not-execute)", name, e.carrier.name)
 }
 
 func sendBody(t *testing.T, id, room, text, nick, token string) []byte {
@@ -323,10 +413,42 @@ func refused(t *testing.T, r suiteReply, code core.ErrorCode) {
 	}
 }
 
-// receipt waits for the job's terminal state, read over HTTP as the author.
+// receipt waits for the job's terminal state, read as the author over HTTP
+// or, where the carrier is the only one, over the carrier itself.
 func (e *suiteEnv) receipt(t *testing.T, id, nick, token string) core.Result {
 	t.Helper()
-	return waitReceipt(t, e.receipts, id, authorHeaders(nick, token))
+	if e.receipts != "" {
+		return waitReceipt(t, e.receipts, id, authorHeaders(nick, token))
+	}
+	client := e.dial(t)
+	var result core.Result
+	if !testwait.Poll(15*time.Second, 25*time.Millisecond, func() bool {
+		r := client.call(t, mustBody(t, plainRequest(map[string]any{"request_id": e.id("receipt"), "operation": core.ReceiptGet, "lookup_id": id}, nick, token)))
+		if r.result == nil || r.result.Result == nil {
+			t.Fatalf("receipt %s: %v", id, r)
+		}
+		result = *r.result.Result
+		return receiptTerminal(result.State)
+	}) {
+		t.Fatalf("receipt %s still %s", id, result.State)
+	}
+	return result
+}
+
+// seed posts text in room as guest nick, through the HTTP receipts listener
+// or over the carrier itself, and waits for AIRC to accept it.
+func (e *suiteEnv) seed(t *testing.T, room, text, nick string) {
+	t.Helper()
+	id := e.id("seed")
+	body := sendBody(t, id, room, text, nick, "")
+	if e.receipts != "" {
+		plainHTTP(t, http.MethodPost, e.receipts+"/v1/messages", body, nil, nil)
+	} else {
+		e.admitted(t, e.dial(t).call(t, body), id)
+	}
+	if r := e.receipt(t, id, nick, ""); r.State != core.Accepted {
+		t.Fatalf("seed %s: %+v", id, r)
+	}
 }
 
 // posted waits for the job to be accepted and checks what AIRC posted.
@@ -445,6 +567,8 @@ func suiteGuestPost(t *testing.T, e *suiteEnv) {
 
 // No reply (a result, a PUBACK) precedes committed intake: while another writer holds the journal the
 // carrier stays silent, and its reply follows the commit of exactly one job.
+// (A process carrier's child owns its journal alone, owner.lock, and treats
+// another writer as a fault, so the scenario is the suite gateway's.)
 func suiteReplyAfterCommit(t *testing.T, e *suiteEnv) {
 	client := e.dial(t)
 	db, err := sql.Open("sqlite", filepath.Join(e.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")
@@ -519,10 +643,16 @@ func suiteAuthorRefusals(t *testing.T, e *suiteEnv) {
 // A request that is not valid contract JSON, or names a member the contract
 // does not define, is refused before intake.
 func suiteMalformedRefused(t *testing.T, e *suiteEnv) {
-	for _, c := range []struct{ name, suffix string }{
+	cases := []struct{ name, suffix string }{
 		{"truncated", ``},
 		{"unknown-member", `,"account":"other"}`},
-	} {
+	}
+	if e.carrier.process != nil {
+		// A frame that is not JSON ends a parent-owned stream, which the
+		// carrier's own partial-frame tests cover; the child serves on here.
+		cases = cases[1:]
+	}
+	for _, c := range cases {
 		id := e.id(c.name)
 		valid := string(sendBody(t, id, "#malformed", "must not post", e.guest("malformed"), ""))
 		body := strings.TrimSuffix(valid, "}") + c.suffix
@@ -597,11 +727,7 @@ func suiteRetryOnAnotherCarrier(t *testing.T, e *suiteEnv) {
 // parent, each record equal to what aircd itself reports.
 func suiteBoundedReads(t *testing.T, e *suiteEnv) {
 	for i := range 2 {
-		id := e.id("seed")
-		plainHTTP(t, http.MethodPost, e.receipts+"/v1/messages", sendBody(t, id, "#reads", fmt.Sprintf("reads-seed %d\n", i)+strings.Repeat("世界 🙂", 200), "seeder", ""), nil, nil)
-		if r := e.receipt(t, id, "seeder", ""); r.State != core.Accepted {
-			t.Fatalf("seed %d: %+v", i, r)
-		}
+		e.seed(t, "#reads", fmt.Sprintf("reads-seed %d\n", i)+strings.Repeat("世界 🙂", 200), "seeder")
 	}
 	native := nativeWebTransportMessages(t, e.socket, "#reads")
 	if len(native) != 2 {
@@ -782,10 +908,10 @@ func suiteWatchThenCancel(t *testing.T, e *suiteEnv) {
 	waitNativeObserverCountAtMost(t, e.statusClient, baseline)
 }
 
-// The gateway stops promptly and cleanly with clients open (an active watch
-// where the carrier streams), releases aircd's read leases and its journal,
-// and the journal keeps the registered author's accepted job with the
-// account ID AIRC reported.
+// The gateway (a process carrier's child) stops promptly and cleanly with
+// clients open (an active watch where the carrier streams), releases
+// aircd's read leases and its journal, and the journal keeps the registered
+// author's accepted job with the account ID AIRC reported.
 func suiteShutdownJoins(t *testing.T, e *suiteEnv) {
 	baseline := nativeObserverCount(t, e.statusClient)
 	client := e.dial(t)
@@ -800,7 +926,7 @@ func suiteShutdownJoins(t *testing.T, e *suiteEnv) {
 		}
 		waitNativeObserverCount(t, e.statusClient, baseline+1)
 	}
-	e.gateway.stop(t)
+	e.stopGateway(t)
 	if t.Failed() {
 		return
 	}
@@ -821,11 +947,11 @@ func suiteShutdownJoins(t *testing.T, e *suiteEnv) {
 		t.Fatal(err)
 	}
 	// A restarted gateway keeps the accepted job and never redelivers it.
-	restarted := startAuthorGateway(t, e.config)
-	if r := waitReceipt(t, "http://"+restarted.addresses["receipts"], id, authorHeaders("alice", aliceToken)); r.State != core.Accepted || r.MessageID != seen.ID || r.SendAttempts != 1 {
+	e.startGateway(t)
+	if r := e.receipt(t, id, "alice", aliceToken); r.State != core.Accepted || r.MessageID != seen.ID || r.SendAttempts != 1 {
 		t.Fatalf("after restart: %+v", r)
 	}
-	restarted.stop(t)
+	e.stopGateway(t)
 	if n := e.nativeCount(t, "#shutdown", text); n != 1 {
 		t.Fatalf("AIRC holds %d messages after a restart", n)
 	}
