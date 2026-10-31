@@ -57,7 +57,12 @@ func TestMCPStatusAndResolve(t *testing.T) {
 	}
 
 	refused("status", "working, blocked or done", map[string]any{"channel": "#room", "task": "port the fix", "state": "idle"})
-	refused("status", "missing properties", map[string]any{"channel": "#room", "state": "working"})
+	refused("status", "go with --task", map[string]any{"channel": "#room", "state": "working"})
+	var listed struct{ Rows []statusRow }
+	rows(call("status", map[string]any{"channel": "#room"}), &listed)
+	if len(listed.Rows) != 0 {
+		t.Fatalf("statuses before any post %+v", listed.Rows)
+	}
 	refused("status", "absolute http(s) URL", map[string]any{"channel": "#room", "task": "port the fix", "state": "done", "link": "pr/54"})
 	var posted struct{ Rows []statusRow }
 	rows(call("status", map[string]any{"channel": "#room", "task": "port the fix", "state": "working", "message": "on branch work-7"}), &posted)
@@ -71,6 +76,10 @@ func TestMCPStatusAndResolve(t *testing.T) {
 	}
 	if listed := jsonLines[statusRow](t, mustCLI(t, address, "status", "--channel", "room", "--json")); len(listed) != 1 || listed[0].State != "done" || listed[0].Link != link {
 		t.Fatalf("the room's statuses %+v", listed)
+	}
+	rows(call("status", map[string]any{"channel": "#room"}), &listed)
+	if len(listed.Rows) != 1 || listed.Rows[0].Nick != "builder" || listed.Rows[0].State != "done" || listed.Rows[0].Link != link {
+		t.Fatalf("the room's statuses over MCP %+v", listed.Rows)
 	}
 	var directory struct {
 		Rows []struct {

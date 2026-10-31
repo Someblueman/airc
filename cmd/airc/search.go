@@ -178,9 +178,10 @@ func fallbackPage(read *fallback.Page) historyPage {
 	return page
 }
 
-func runReact(args []string, stdout, stderr io.Writer) error {
+// runReactSession adds a reaction to a message: it is a send with --reaction.
+func runReactSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) < 2 || !protocol.ValidMessageID(args[0]) || !protocol.ValidReaction(args[1]) {
 		return errors.New("usage: airc react MESSAGE_ID SYMBOL [--nick NICK] [--json]")
 	}
-	return runSessionCommand("send", append([]string{"--reply-to", args[0], "--reaction", args[1]}, args[2:]...), strings.NewReader(""), stdout, stderr)
+	return runSendSession(ctx, session, append([]string{"--reply-to", args[0], "--reaction", args[1]}, args[2:]...), stdin, stdout, stderr)
 }

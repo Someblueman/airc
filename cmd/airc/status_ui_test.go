@@ -80,8 +80,9 @@ func TestMemberPaneMarksStatusesAndInboxMarksResolved(t *testing.T) {
 	if cmds, _ = m.submit(); len(cmds) != 0 || !m.statusError {
 		t.Fatalf("/status from the inbox gave %+v", cmds)
 	}
-	m.input = []rune("/resolve q1 answered in person")
-	if cmds, _ = m.submit(); len(cmds) != 1 || cmds[0].request.Action != "resolve" || cmds[0].request.ID != "q1" || cmds[0].request.Text != "answered in person" {
+	settled := strings.Repeat("c", 32)
+	m.input = []rune("/resolve " + settled + " answered in person")
+	if cmds, _ = m.submit(); len(cmds) != 1 || cmds[0].request.Action != "resolve" || cmds[0].request.ID != settled || cmds[0].request.Text != "answered in person" {
 		t.Fatalf("/resolve gave %+v", cmds)
 	}
 	m.input = []rune("/resolve")

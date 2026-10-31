@@ -70,12 +70,6 @@ func (a *mcpAdapter) runCommand(ctx context.Context, args []string, input string
 	if len(args) == 0 {
 		return errors.New("missing agent command")
 	}
-	if args[0] == "thread" {
-		if len(args) < 2 {
-			return errors.New("thread ID required")
-		}
-		return runHistorySession(ctx, conn, append([]string{"thread:" + args[1]}, args[2:]...), stdout, stderr)
-	}
 	command, ok := commandsByName[args[0]]
 	if !ok || !command.mcp {
 		return errors.New("unsupported agent command")

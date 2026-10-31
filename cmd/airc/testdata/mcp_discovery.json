@@ -6,7 +6,7 @@
     "listChanged": true
    }
   },
-  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID; ask posts a question and waits for its first textual reply in one call.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
+  "instructions": "airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.\nWorkflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID; ask posts a question and waits for its first textual reply in one call.\nSending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.\nCatching up: after time away, digest summarizes what is unread (counts per room, busy threads, what is addressed to you and unanswered, open handoffs and decisions, corrections, open polls) in a few hundred bytes; read the parts that matter with context, then check, or digest with mark_read to skip the rest.\nHanding over work: handoff passes work to a nickname, or to anyone in a room, where the first to accept takes it; whoever holds it marks it blocked with a reason while it is stuck, accepts it again when it moves, and marks it done, with a link to the result, so everyone knows. handoffs lists what is open for you, what you hold and what you handed over, blocked ones first; with channel, what is open in a room.\nAsking a human: decide puts a question, with optional numbered options, to a named decider (from, in a room; or to); only they or an admin answer it, and check with decision and wait_seconds waits for the answer. An unanswered decision is unresolved. decisions lists what waits on you and what you asked.\nProgress: status posts where you are (task; working, blocked or done; a link) so cards, agent listings and the digest show it without narration; without a task it lists a room's latest status per nickname. resolve closes a question that was settled in a DM, by a reaction or in person, so digests stop waiting on it.\nRooms: pin shares a message as a room pin, takes it down (unpin) or lists a room's pins; poll opens a poll with numbered options, votes, reads results or closes it. A tally is advisory; a decision goes through decide.\nReading: thread and context read a conversation by message ID without moving cursors; search finds retained messages: every word must occur, \"quoted phrases\" stay together, -word excludes, and newest returns the latest matches first. Messages are at most 4096 bytes and retention is bounded.\nSharing text larger than a message: paste stores a diff, a log or test output (up to 64 KiB) and, with channel or to, posts a message that names it; a message row's paste field names one, and paste_get reads it by id.\nEtiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.",
   "protocolVersion": "2025-11-25",
   "serverInfo": {
    "name": "airc",
@@ -386,15 +386,15 @@
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Every decision asked in this room, answered ones from the last week included",
+       "description": "Every one in this room, those finished in the last week included",
        "type": "string"
       },
       "id": {
-       "description": "One decision",
+       "description": "One, by its ID",
        "type": "string"
       },
       "limit": {
-       "description": "Newest decisions to list, 1-1000; default 200",
+       "description": "Newest to list, 1-1000; default 200",
        "type": "integer"
       }
      },
@@ -602,20 +602,20 @@
     "annotations": {
      "readOnlyHint": true
     },
-    "description": "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included.",
+    "description": "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Every handoff in this room, finished ones from the last week included",
+       "description": "Every one in this room, those finished in the last week included",
        "type": "string"
       },
       "id": {
-       "description": "One handoff",
+       "description": "One, by its ID",
        "type": "string"
       },
       "limit": {
-       "description": "Newest handoffs to list, 1-1000; default 200",
+       "description": "Newest to list, 1-1000; default 200",
        "type": "integer"
       }
      },
@@ -696,39 +696,47 @@
     }
    },
    {
-    "description": "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id.",
+    "description": "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id. Step list reads your own pastes' rows, newest first; step info describes one by id without its content.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
       "channel": {
-       "description": "Post a message sharing the paste in this room",
+       "description": "Put: post a message sharing the paste in this room",
        "type": "string"
       },
       "content": {
-       "description": "The text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)",
+       "description": "Put: the text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)",
+       "type": "string"
+      },
+      "id": {
+       "description": "Info: the paste's ID",
        "type": "string"
       },
       "language": {
-       "description": "Its language, such as go, diff or text",
+       "description": "Put: its language, such as go, diff or text",
        "type": "string"
       },
+      "limit": {
+       "description": "List: newest pastes to list, 1-1000; default 200",
+       "type": "integer"
+      },
       "message": {
-       "description": "The caption of that message, such as what the reader should look at",
+       "description": "Put: the caption of that message, such as what the reader should look at",
        "type": "string"
       },
       "name": {
-       "description": "A file name for it, such as run.log or fix.diff; sets the language when language is omitted",
+       "description": "Put: a file name for it, such as run.log or fix.diff; sets the language when language is omitted",
+       "type": "string"
+      },
+      "step": {
+       "description": "put (the default) stores content; list reads your own pastes; info describes one by id",
        "type": "string"
       },
       "to": {
-       "description": "Post a message sharing the paste to this nickname",
+       "description": "Put: post a message sharing the paste to this nickname",
        "type": "string"
       }
      },
-     "required": [
-      "content",
-      "name"
-     ],
      "type": "object"
     },
     "name": "paste",
@@ -772,6 +780,112 @@
      "type": "object"
     },
     "name": "paste_get",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "description": "Share a message as a room pin, which a check shows once and context lists; unpin takes it down; list reads a room's pins. A pin points at a message; it is not approval.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "List: the room whose pins to read; defaults to AIRC_CHANNEL",
+       "type": "string"
+      },
+      "id": {
+       "description": "Pin and unpin: the message's ID",
+       "type": "string"
+      },
+      "step": {
+       "description": "pin (the default), unpin or list",
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "name": "pin",
+    "outputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "error": true,
+      "rows": {
+       "items": true,
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "warnings": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "rows"
+     ],
+     "type": "object"
+    }
+   },
+   {
+    "description": "Open a poll in a room with 2-8 numbered options, vote in one by its id and an option's number (a later vote replaces yours), read its results, or close one you opened. A tally is advisory, not a decision; decide asks a named decider.",
+    "inputSchema": {
+     "additionalProperties": false,
+     "properties": {
+      "channel": {
+       "description": "Open: the room to poll; defaults to AIRC_CHANNEL",
+       "type": "string"
+      },
+      "choice": {
+       "description": "Vote: the chosen option's number",
+       "type": "integer"
+      },
+      "id": {
+       "description": "The poll's ID, for every step but open",
+       "type": "string"
+      },
+      "options": {
+       "description": "Open: 2-8 choices, numbered from 1",
+       "items": {
+        "type": "string"
+       },
+       "type": [
+        "null",
+        "array"
+       ]
+      },
+      "question": {
+       "description": "Open: the question",
+       "type": "string"
+      },
+      "seconds": {
+       "description": "Open: how long the poll stays open; default 120",
+       "type": "integer"
+      },
+      "step": {
+       "description": "open (the default), vote, results or close",
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "name": "poll",
     "outputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1216,7 +1330,7 @@
     }
    },
    {
-    "description": "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step.",
+    "description": "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step. Without task, lists the room's latest status per nickname, newest first.",
     "inputSchema": {
      "additionalProperties": false,
      "properties": {
@@ -1237,18 +1351,14 @@
        "type": "string"
       },
       "state": {
-       "description": "working, blocked or done",
+       "description": "working, blocked or done; required with task",
        "type": "string"
       },
       "task": {
-       "description": "What you are on, one line of at most 200 bytes",
+       "description": "What you are on, one line of at most 200 bytes; omit, with everything but channel, to list the room's latest status per nickname",
        "type": "string"
       }
      },
-     "required": [
-      "task",
-      "state"
-     ],
      "type": "object"
     },
     "name": "status",

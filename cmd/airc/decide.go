@@ -2,50 +2,35 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
-
-// decisionSteps maps airc decide's step words to their CHAT actions.
-var decisionSteps = map[string]string{
-	"answer":   "decision-answer",
-	"withdraw": "decision-withdraw",
-}
 
 // runDecideSession asks a named decider, usually a human, to decide
 // something, or with a step word and an ID answers or withdraws a decision.
 func runDecideSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	step := ""
+	in := decisionInput{}
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		step, args = args[0], args[1:]
-		if decisionSteps[step] == "" {
-			return fmt.Errorf("unknown decision step %q: use answer or withdraw ID", step)
+		in.Step, args = args[0], args[1:]
+		if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+			in.ID, args = args[0], args[1:]
 		}
-	}
-	id := ""
-	if step != "" && len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		id, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("airc decide", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	opt.session = session
-	channel := fs.String("channel", "", "room to ask in (env AIRC_CHANNEL); needs --from")
-	from := fs.String("from", "", "nickname who decides, usually a human; required in a room")
-	to := fs.String("to", "", "nickname who decides, as a direct decision")
-	message := fs.String("message", "", "what to decide and why it matters, or a note on the step; - reads stdin")
-	var options pollChoices
-	fs.Var(&options, "option", "a choice to decide between, numbered from 1; repeat for 2-8 options")
-	choice := fs.Int("choice", 0, "answer: the chosen option's number")
+	fs.StringVar(&in.Channel, "channel", "", "room to ask in (env AIRC_CHANNEL); needs --from")
+	fs.StringVar(&in.From, "from", "", "nickname who decides, usually a human; required in a room")
+	fs.StringVar(&in.To, "to", "", "nickname who decides, as a direct decision")
+	fs.StringVar(&in.Message, "message", "", "what to decide and why it matters, or a note on the step; - reads stdin")
+	fs.Var((*pollChoices)(&in.Options), "option", "a choice to decide between, numbered from 1; repeat for 2-8 options")
+	fs.IntVar(&in.Choice, "choice", 0, "answer: the chosen option's number")
 	runFlag := addRunFlag(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -53,118 +38,19 @@ func runDecideSession(ctx context.Context, session *agentConnection, args []stri
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	run, err := runLabel(*runFlag)
-	if err != nil {
+	var err error
+	if in.Message, err = flagText(in.Message, stdin); err != nil {
 		return err
 	}
-	r := irc.ChatRequest{Action: "decision", Run: run}
-	if step == "" {
-		if *choice != 0 {
-			return errors.New("--choice applies to answer")
-		}
-		if *channel == "" && *to == "" {
-			*channel = os.Getenv("AIRC_CHANNEL")
-		}
-		if *to != "" && (*channel != "" || *from != "" && !strings.EqualFold(*from, *to)) {
-			return errors.New("--to names the decider of a direct decision; use --from in a room")
-		}
-		if *channel == "" && *to == "" || *channel != "" && *from == "" {
-			return errors.New("ask a room with --channel --from, or a nickname with --to")
-		}
-		body, err := sendBody("", "", *message, stdin)
-		if err != nil {
-			return err
-		}
-		r.Text, r.For, r.Options = body, *from, options
-		if r.Target = channelName(*channel); r.Target == "" {
-			r.Target, r.For = *to, *to
-		}
-	} else {
-		if !protocol.ValidMessageID(id) {
-			return fmt.Errorf("airc decide %s needs the decision's ID", step)
-		}
-		if *channel != "" || *from != "" || *to != "" || len(options) > 0 {
-			return errors.New("a decision step names only the decision's ID; it goes where the decision is")
-		}
-		if *choice != 0 && step != "answer" {
-			return errors.New("--choice applies to answer")
-		}
-		if *choice < 0 {
-			return errors.New("--choice numbers an option from 1")
-		}
-		if *message != "" {
-			body, err := sendBody("", "", *message, stdin)
-			if err != nil {
-				return err
-			}
-			r.Text = body
-		}
-		r.Action, r.ID, r.Choice = decisionSteps[step], id, *choice
+	in.Run = *runFlag
+	r, err := in.request()
+	if err != nil {
+		return err
 	}
 	if err := identity(opt); err != nil {
 		return err
 	}
-	return decisionRequest(ctx, *opt, r, stdout, stderr)
-}
-
-// runDecisionsSession lists the decisions that concern you, a room's, or one.
-func runDecisionsSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("airc decisions", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	opt := addOptions(fs)
-	opt.session = session
-	channel := fs.String("channel", "", "every decision asked in this room, answered ones from the last week included")
-	id := fs.String("id", "", "one decision")
-	limit := fs.Int("limit", 0, "newest decisions to list, at most 1000 (default 200)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
-	}
-	if *channel != "" && *id != "" {
-		return errors.New("choose --channel or --id")
-	}
-	if *id != "" && !protocol.ValidMessageID(*id) {
-		return errors.New("--id needs a decision ID")
-	}
-	r := irc.ChatRequest{Action: "decisions", Target: channelName(*channel), ID: *id, Limit: *limit}
-	if (r.Target != "" || r.ID != "") && opt.nick == "" && opt.identityFile == "" {
-		opt.nick = defaultQueryNick()
-	} else if err := identity(opt); err != nil {
-		return err
-	}
-	return decisionRequest(ctx, *opt, r, stdout, stderr)
-}
-
-// decisionRequest sends r and prints the decisions answered. Before asking,
-// it looks the decider up and warns on stderr when they are not marked as a
-// human: a decision is meant for a person, but an agent may decide too.
-func decisionRequest(ctx context.Context, opt options, r irc.ChatRequest, stdout, stderr io.Writer) error {
-	return chatRequestWithContext(ctx, opt, "DECISION", func(ctx context.Context, client *irc.Client) error {
-		if r.Action == "decision" {
-			warnDeciderKind(ctx, client, r.For, stderr)
-		}
-		entries, err := irc.RequestChat(ctx, client, r, nil)
-		if err != nil {
-			return err
-		}
-		if !opt.json && len(entries) == 0 && r.Action == "decisions" {
-			_, err := fmt.Fprintln(stdout, "No decisions.")
-			return err
-		}
-		for _, e := range entries {
-			if opt.json {
-				err = json.NewEncoder(stdout).Encode(newDecisionRow(e))
-			} else {
-				_, err = fmt.Fprintln(stdout, decisionText(e))
-			}
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return chatEntries(ctx, *opt, r, stdout, stderr)
 }
 
 // warnDeciderKind reads nick's directory card over client and warns when its

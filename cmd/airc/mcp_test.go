@@ -33,7 +33,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 29 {
+	if len(tools.Tools) != 31 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -87,6 +87,30 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		t.Fatal("reply signal missing", string(encoded))
 	}
 	call("cancel", map[string]any{"id": id})
+	call("pin", map[string]any{"id": id})
+	data, _ = json.Marshal(call("pin", map[string]any{"step": "list", "channel": "#room"}).StructuredContent)
+	if !strings.Contains(string(data), `"action":"pin"`) || !strings.Contains(string(data), id) {
+		t.Fatal("pins", string(data))
+	}
+	call("pin", map[string]any{"step": "unpin", "id": id})
+	data, _ = json.Marshal(call("poll", map[string]any{"channel": "#room", "question": "Which approach?", "options": []string{"simple", "fancy"}}).StructuredContent)
+	var poll struct {
+		Rows []struct {
+			ID string `json:"id"`
+		}
+	}
+	if err := json.Unmarshal(data, &poll); err != nil || len(poll.Rows) != 1 || poll.Rows[0].ID == "" {
+		t.Fatal(string(data), err)
+	}
+	call("poll", map[string]any{"step": "vote", "id": poll.Rows[0].ID, "choice": 2})
+	data, _ = json.Marshal(call("poll", map[string]any{"step": "results", "id": poll.Rows[0].ID}).StructuredContent)
+	if !strings.Contains(string(data), `"votes":[0,1]`) {
+		t.Fatal("poll results", string(data))
+	}
+	data, _ = json.Marshal(call("poll", map[string]any{"step": "close", "id": poll.Rows[0].ID}).StructuredContent)
+	if !strings.Contains(string(data), `"closed":true`) {
+		t.Fatal("poll close", string(data))
+	}
 	offered := call("handoff", map[string]any{"channel": "#room", "message": "triage the flaky test"})
 	data, _ = json.Marshal(offered.StructuredContent)
 	var handoff struct {

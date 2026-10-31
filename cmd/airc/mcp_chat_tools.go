@@ -41,50 +41,6 @@ type mcpPrepareInput struct {
 	Message string `json:"message,omitempty" jsonschema:"Optional short note shown with the signal"`
 }
 
-type mcpHandoffInput struct {
-	Step    string `json:"step,omitempty" jsonschema:"offer (the default), accept, blocked, decline, done or withdraw"`
-	ID      string `json:"id,omitempty" jsonschema:"The handoff's ID, for every step but offer"`
-	Channel string `json:"channel,omitempty" jsonschema:"Offer: the room to hand the work to, or to post it in; defaults to AIRC_CHANNEL"`
-	To      string `json:"to,omitempty" jsonschema:"Offer: the nickname the work is for; without channel, a direct handoff"`
-	Message string `json:"message,omitempty" jsonschema:"Offer: what to hand over, with branch, commits and what is left. A step: an optional note, such as what done delivered; blocked: why it is stuck, required"`
-	Link    string `json:"link,omitempty" jsonschema:"Done: where the result is, an absolute http(s) URL of a PR, a commit or a document, up to 400 bytes"`
-	Run     string `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
-}
-type mcpHandoffsInput struct {
-	Channel string `json:"channel,omitempty" jsonschema:"Every handoff in this room, finished ones from the last week included"`
-	ID      string `json:"id,omitempty" jsonschema:"One handoff"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Newest handoffs to list, 1-1000; default 200"`
-}
-
-type mcpDecideInput struct {
-	Step    string   `json:"step,omitempty" jsonschema:"ask (the default), answer or withdraw"`
-	ID      string   `json:"id,omitempty" jsonschema:"The decision's ID, for answer and withdraw"`
-	Channel string   `json:"channel,omitempty" jsonschema:"Ask: the room to ask in; defaults to AIRC_CHANNEL; needs from"`
-	From    string   `json:"from,omitempty" jsonschema:"Ask: the nickname who decides, usually a human; required in a room"`
-	To      string   `json:"to,omitempty" jsonschema:"Ask: the decider of a direct decision, without channel"`
-	Message string   `json:"message,omitempty" jsonschema:"Ask: what to decide and why it matters. Answer: a note; withdraw: an optional reason"`
-	Options []string `json:"options,omitempty" jsonschema:"Ask: 2-8 choices, each up to 80 bytes; omit for a free-text decision"`
-	Choice  int      `json:"choice,omitempty" jsonschema:"Answer: the chosen option, numbered from 1"`
-	Run     string   `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
-}
-type mcpStatusInput struct {
-	Task    string `json:"task" jsonschema:"What you are on, one line of at most 200 bytes"`
-	State   string `json:"state" jsonschema:"working, blocked or done"`
-	Channel string `json:"channel,omitempty" jsonschema:"The room the status is for; defaults to AIRC_CHANNEL"`
-	Link    string `json:"link,omitempty" jsonschema:"Where the work is: an absolute http(s) URL of a PR, a branch or a document, up to 400 bytes"`
-	Message string `json:"message,omitempty" jsonschema:"A note on the status, such as what is blocking you"`
-	Run     string `json:"run,omitempty" jsonschema:"Run label kept on the post; defaults to AIRC_RUN"`
-}
-type mcpResolveInput struct {
-	ID      string `json:"id" jsonschema:"ID of the question, or of any message in its thread"`
-	Message string `json:"message,omitempty" jsonschema:"How it was settled; default \"Resolved\""`
-}
-type mcpDecisionsInput struct {
-	Channel string `json:"channel,omitempty" jsonschema:"Every decision asked in this room, answered ones from the last week included"`
-	ID      string `json:"id,omitempty" jsonschema:"One decision"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"Newest decisions to list, 1-1000; default 200"`
-}
-
 type mcpUnreadInput struct {
 	Channels []string `json:"channels,omitempty" jsonschema:"Rooms to count besides the inbox; defaults to AIRC_CHANNEL"`
 	Mentions bool     `json:"mentions,omitempty" jsonschema:"Count only direct messages and tags"`
@@ -116,21 +72,51 @@ type mcpProfileInput struct {
 type mcpNoInput struct{}
 
 type mcpPasteInput struct {
-	Content  string `json:"content" jsonschema:"The text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
-	Name     string `json:"name" jsonschema:"A file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
-	Language string `json:"language,omitempty" jsonschema:"Its language, such as go, diff or text"`
-	Channel  string `json:"channel,omitempty" jsonschema:"Post a message sharing the paste in this room"`
-	To       string `json:"to,omitempty" jsonschema:"Post a message sharing the paste to this nickname"`
-	Message  string `json:"message,omitempty" jsonschema:"The caption of that message, such as what the reader should look at"`
+	Step     string `json:"step,omitempty" jsonschema:"put (the default) stores content; list reads your own pastes; info describes one by id"`
+	Content  string `json:"content,omitempty" jsonschema:"Put: the text to share, UTF-8 without NUL bytes, up to the daemon's limit (64 KiB by default)"`
+	Name     string `json:"name,omitempty" jsonschema:"Put: a file name for it, such as run.log or fix.diff; sets the language when language is omitted"`
+	Language string `json:"language,omitempty" jsonschema:"Put: its language, such as go, diff or text"`
+	Channel  string `json:"channel,omitempty" jsonschema:"Put: post a message sharing the paste in this room"`
+	To       string `json:"to,omitempty" jsonschema:"Put: post a message sharing the paste to this nickname"`
+	Message  string `json:"message,omitempty" jsonschema:"Put: the caption of that message, such as what the reader should look at"`
+	ID       string `json:"id,omitempty" jsonschema:"Info: the paste's ID"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"List: newest pastes to list, 1-1000; default 200"`
 }
 type mcpPasteGetInput struct {
 	ID string `json:"id" jsonschema:"The paste's ID, from a message row's paste field or a paste result"`
 }
 
 // addPasteTools registers paste, which stores text larger than a message and
-// may post a message sharing it, and paste_get, which reads one back.
+// may post a message sharing it, lists your pastes or describes one, and
+// paste_get, which reads one back.
 func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "paste", Description: "Store text larger than a message, such as a diff, a log or test output, as a paste the daemon keeps for a week after it was last shared or read, and with channel or to post a message that shares it: its body is the caption and a line naming the paste, its paste field the paste's id, name, language, size and lines. The same text stored twice is one paste. Readers call paste_get with the id. Step list reads your own pastes' rows, newest first; step info describes one by id without its content."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPasteInput) (*mcpserver.Result, mcpOutput, error) {
+		putOnly := in.Content != "" || in.Name != "" || in.Language != "" || in.Channel != "" || in.To != "" || in.Message != ""
+		switch in.Step {
+		case "list":
+			if putOnly || in.ID != "" {
+				return nil, mcpOutput{}, errors.New("list takes only limit")
+			}
+			args := []string{"paste", "list"}
+			if in.Limit != 0 {
+				args = append(args, "--limit", strconv.Itoa(in.Limit))
+			}
+			return a.call(ctx, args, "", 15*time.Second, false)
+		case "info":
+			if !protocol.ValidMessageID(in.ID) {
+				return nil, mcpOutput{}, errors.New("valid paste ID required")
+			}
+			if putOnly || in.Limit != 0 {
+				return nil, mcpOutput{}, errors.New("info takes only id")
+			}
+			return a.call(ctx, []string{"paste", "info", in.ID}, "", 15*time.Second, false)
+		case "", "put":
+		default:
+			return nil, mcpOutput{}, errors.New("step is put, list or info")
+		}
+		if in.ID != "" || in.Limit != 0 {
+			return nil, mcpOutput{}, errors.New("id goes with info and limit with list")
+		}
 		if in.Content == "" || len(in.Content) > maxPasteRead-1 || in.Name == "" {
 			return nil, mcpOutput{}, errors.New("content up to the daemon's paste limit and a name are required")
 		}
@@ -272,7 +258,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if !protocol.ValidMessageID(in.ID) || !protocol.ValidReaction(in.Reaction) {
 			return nil, mcpOutput{}, errors.New("valid message ID and reaction required")
 		}
-		return a.call(ctx, []string{"send", "--reply-to", in.ID, "--reaction", in.Reaction}, "", 15*time.Second, false)
+		return a.call(ctx, []string{"react", in.ID, in.Reaction}, "", 15*time.Second, false)
 	})
 	for _, action := range []string{"correct", "retract"} {
 		mcpserver.AddTool(s, &mcpserver.Tool{Name: action, Description: action + " your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCorrectionInput) (*mcpserver.Result, mcpOutput, error) {
@@ -304,125 +290,35 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 			return a.call(ctx, args, "", 15*time.Second, false)
 		})
 	}
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"handoff"}
-		if in.Link != "" && in.Step != "done" {
-			return nil, mcpOutput{}, errors.New("link applies to done")
-		}
-		switch in.Step {
-		case "", "offer":
-			if in.ID != "" {
-				return nil, mcpOutput{}, errors.New("an offer takes no id; it creates one")
-			}
-			for _, pair := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}} {
-				if pair[1] != "" {
-					args = append(args, pair[0]+"="+pair[1])
-				}
-			}
-		case "accept", "blocked", "decline", "done", "withdraw":
-			if !protocol.ValidMessageID(in.ID) || in.Channel != "" || in.To != "" {
-				return nil, mcpOutput{}, errors.New(in.Step + " takes the handoff's id and no channel or to")
-			}
-			if in.Step == "blocked" && in.Message == "" {
-				return nil, mcpOutput{}, errors.New("blocked takes a message saying why")
-			}
-			args = append(args, in.Step, in.ID)
-			if in.Link != "" {
-				args = append(args, "--link="+in.Link)
-			}
-		default:
-			return nil, mcpOutput{}, errors.New("step is offer, accept, blocked, decline, done or withdraw")
-		}
-		if in.Message != "" {
-			args = append(args, "--message="+in.Message)
-		}
-		if in.Run != "" {
-			args = append(args, "--run="+in.Run)
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoff", Description: "Hand work to a nickname, to anyone in a room, or to a nickname in a room, then take it through its steps: accept (in a room, the first to accept takes it), blocked (the holder says why it is stuck; accept again when it moves), decline (an accepted room handoff goes back to the room), done (tells everyone it is finished, with a link to the result) or withdraw (the author calls it off). Each step is posted in the room or direct conversation, replying to the offer."}, func(ctx context.Context, _ *mcpserver.Call, in handoffInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "handoffs", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHandoffsInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"handoffs"}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
-			if pair[1] != "" {
-				args = append(args, pair[0]+"="+pair[1])
+	for _, name := range []string{"handoffs", "decisions"} {
+		description := map[string]string{
+			"handoffs":  "List open, accepted and blocked handoffs that concern you, blocked ones first: for you, held by you, offered by you, or open to anyone in a room you checked, waited or posted in within ten minutes. Rows carry blocked_reason and blocked_at, and link once done. With channel, every handoff in that room, open ones anyone may take and finished ones from the last week included; with id, one.",
+			"decisions": "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one.",
+		}[name]
+		mcpserver.AddTool(s, &mcpserver.Tool{Name: name, Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: description}, func(ctx context.Context, _ *mcpserver.Call, in listingInput) (*mcpserver.Result, mcpOutput, error) {
+			if _, err := in.request(name); err != nil {
+				return nil, mcpOutput{}, err
 			}
-		}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+			return a.call(ctx, in.args(name), "", 15*time.Second, false)
+		})
+	}
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in decisionInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decide", Description: "Ask a named decider, usually a human, to decide something: in a room (channel and from) or directly (to), with optional numbered options. Then answer (choice and/or message) a decision asked of you, or withdraw one you asked. Each step is posted replying to the question; wait for an answer with check and its decision field."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecideInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"decide"}
-		switch in.Step {
-		case "", "ask":
-			if in.ID != "" || in.Choice != 0 {
-				return nil, mcpOutput{}, errors.New("ask takes no id or choice; it creates a decision")
-			}
-			for _, pair := range [][2]string{{"--channel", in.Channel}, {"--from", in.From}, {"--to", in.To}} {
-				if pair[1] != "" {
-					args = append(args, pair[0]+"="+pair[1])
-				}
-			}
-			for _, option := range in.Options {
-				args = append(args, "--option="+option)
-			}
-		case "answer", "withdraw":
-			if !protocol.ValidMessageID(in.ID) || in.Channel != "" || in.From != "" || in.To != "" || len(in.Options) > 0 {
-				return nil, mcpOutput{}, errors.New(in.Step + " takes the decision's id and no channel, from, to or options")
-			}
-			if in.Choice != 0 && in.Step != "answer" {
-				return nil, mcpOutput{}, errors.New("choice applies to answer")
-			}
-			args = append(args, in.Step, in.ID)
-			if in.Choice != 0 {
-				args = append(args, "--choice", strconv.Itoa(in.Choice))
-			}
-		default:
-			return nil, mcpOutput{}, errors.New("step is ask, answer or withdraw")
-		}
-		if in.Message != "" {
-			args = append(args, "--message="+in.Message)
-		}
-		if in.Run != "" {
-			args = append(args, "--run="+in.Run)
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step. Without task, lists the room's latest status per nickname, newest first."}, func(ctx context.Context, _ *mcpserver.Call, in statusInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "decisions", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "List open decisions that concern you: for you to make, asked by you, or asked in a room you checked, waited or posted in within ten minutes. With channel, every decision asked in that room, answered and withdrawn ones from the last week included; with id, one."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDecisionsInput) (*mcpserver.Result, mcpOutput, error) {
-		args := []string{"decisions"}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--id", in.ID}} {
-			if pair[1] != "" {
-				args = append(args, pair[0]+"="+pair[1])
-			}
-		}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "pin", Description: "Share a message as a room pin, which a check shows once and context lists; unpin takes it down; list reads a room's pins. A pin points at a message; it is not approval."}, func(ctx context.Context, _ *mcpserver.Call, in pinInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "status", Description: "Post where you are in a room: the task, whether you are working, blocked or done with it, and optionally where the work is. The room reads it as \"Status [state] task: note\"; the daemon keeps your latest for directory cards, agent listings and the digest's \"where everyone is\", so post one at a change, not every step."}, func(ctx context.Context, _ *mcpserver.Call, in mcpStatusInput) (*mcpserver.Result, mcpOutput, error) {
-		if strings.TrimSpace(in.Task) == "" || !protocol.ValidStatusState(in.State) {
-			return nil, mcpOutput{}, errors.New("task and a state of working, blocked or done required")
-		}
-		args := []string{"status", "--task=" + in.Task, "--state=" + in.State}
-		for _, pair := range [][2]string{{"--channel", in.Channel}, {"--link", in.Link}, {"--message", in.Message}, {"--run", in.Run}} {
-			if pair[1] != "" {
-				args = append(args, pair[0]+"="+pair[1])
-			}
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "poll", Description: "Open a poll in a room with 2-8 numbered options, vote in one by its id and an option's number (a later vote replaces yours), read its results, or close one you opened. A tally is advisory, not a decision; decide asks a named decider."}, func(ctx context.Context, _ *mcpserver.Call, in pollInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
-	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in mcpResolveInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
-			return nil, mcpOutput{}, errors.New("valid message ID required")
-		}
-		args := []string{"resolve", in.ID}
-		if in.Message != "" {
-			args = append(args, "--message="+in.Message)
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "resolve", Description: "Close a question that is settled, in a direct message, by a reaction or in person: posts a resolution replying to its thread's root, tagging nobody, so digests stop waiting on it. Allowed for the question's author, whoever it addresses, or an admin."}, func(ctx context.Context, _ *mcpserver.Call, in resolveInput) (*mcpserver.Result, mcpOutput, error) {
+		return a.shaped(ctx, in)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) || in.Seconds < 0 || in.Seconds > 900 {

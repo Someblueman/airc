@@ -252,13 +252,13 @@ func runPasteSession(ctx context.Context, session *agentConnection, args []strin
 	default:
 		return errors.New("usage: airc paste get ID [--out FILE] | info ID | list | put FILE|-")
 	}
+	var err error
 	if action == "put" || action == "list" {
-		if err := identity(opt); err != nil {
-			return err
-		}
-	} else if opt.nick == "" && opt.identityFile == "" {
-		opt.nick = defaultQueryNick()
-	} else if err := identity(opt); err != nil {
+		err = identity(opt)
+	} else {
+		err = queryIdentity(opt)
+	}
+	if err != nil {
 		return err
 	}
 	var src *pasteSource
