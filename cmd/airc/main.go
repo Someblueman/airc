@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -110,18 +111,58 @@ func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		printUsage(stdout)
 		return nil
 	}
-	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+	leading, rest := leadingOptions(args)
+	if len(rest) == 0 {
 		return runInteractive(args, stdin, stdout, stderr)
 	}
-	if args[0] == "help" {
+	if rest[0] == "help" {
 		printUsage(stdout)
 		return nil
 	}
-	c, ok := commandsByName[args[0]]
+	c, ok := commandsByName[rest[0]]
 	if !ok {
-		return fmt.Errorf("unknown command %q (see airc help)", args[0])
+		if len(leading) > 0 {
+			return runInteractive(args, stdin, stdout, stderr) // rejects the stray word
+		}
+		return fmt.Errorf("unknown command %q (see airc help)", rest[0])
 	}
-	return runCommand(c, args[1:], stdin, stdout, stderr)
+	return runCommand(c, withLeadingOptions(rest[1:], leading), stdin, stdout, stderr)
+}
+
+// leadingOptions splits the options every command accepts (addOptions: the
+// connection flags, --nick, --identity and --json) off the front of args, so
+// airc --addr HOST:PORT channels --json runs airc channels --addr HOST:PORT
+// --json; rest starts at the command word. The command parses the leading
+// flags again as its own. A leading flag only a command knows (airc --channel
+// x send) leaves both empty, and the interactive parser reports it.
+func leadingOptions(args []string) (leading, rest []string) {
+	fs := flag.NewFlagSet("airc", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	addOptions(fs)
+	if err := fs.Parse(args); err != nil {
+		return nil, nil
+	}
+	rest = fs.Args()
+	leading = args[:len(args)-len(rest)]
+	if slices.Contains(leading, "--") {
+		return nil, nil // a terminator ends the flags; what follows is not a command
+	}
+	return leading, rest
+}
+
+// withLeadingOptions moves the flags that preceded the command after its own
+// arguments, where every command accepts them: a target or an ID comes first
+// (airc history '#room' --json), so the flags go after the last argument, or
+// before a -- terminator when there is one.
+func withLeadingOptions(args, leading []string) []string {
+	if len(leading) == 0 {
+		return args
+	}
+	end := slices.Index(args, "--")
+	if end < 0 {
+		end = len(args)
+	}
+	return slices.Concat(args[:end], leading, args[end:])
 }
 
 func addOptions(fs *flag.FlagSet) *options {

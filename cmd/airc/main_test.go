@@ -430,9 +430,52 @@ func TestCommandHintsNameRealCommands(t *testing.T) {
 	}
 }
 
+func TestConnectionFlagsMayPrecedeTheCommand(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "send", "--nick", "writer", "--channel", "#first", "--message", "hello")
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"--addr", address, "--nick", "observer", "channels", "--json"}, strings.NewReader(""), &stdout, &stderr); err != nil {
+		t.Fatalf("airc --addr ... channels --json: %v (%s)", err, stderr.String())
+	}
+	var row struct{ Type, Name string }
+	if err := json.Unmarshal(stdout.Bytes(), &row); err != nil || row.Type != "channel" || row.Name != "#first" {
+		t.Fatalf("channels --json after leading flags = %q, %v", stdout.String(), err)
+	}
+	stdout.Reset()
+	if err := run([]string{"--json", "--addr", address, "history", "#first"}, strings.NewReader(""), &stdout, &stderr); err != nil || !strings.Contains(stdout.String(), `"hello"`) {
+		t.Fatalf("airc --json --addr ... history: %v, %q", err, stdout.String())
+	}
+
+	// A leading --json also makes a failure a JSON error object.
+	stderr.Reset()
+	err := run([]string{"--json", "--addr", "127.0.0.1:1", "channels"}, strings.NewReader(""), io.Discard, &stderr)
+	if err == nil {
+		t.Fatal("an unreachable server did not fail")
+	}
+	var failure struct{ Type, Code string }
+	if decodeErr := json.Unmarshal(stderr.Bytes(), &failure); decodeErr != nil || failure.Type != "error" || failure.Code == "" {
+		t.Fatalf("leading --json did not report a JSON error: %v, %q", decodeErr, stderr.String())
+	}
+
+	// Only the flags every command accepts may lead; one a command owns
+	// still gets the ordering hint, and a word that is no command is rejected.
+	for args, want := range map[string]string{
+		"--channel x send":                           "send is a command and must come first: airc send --channel x",
+		"--nick admin --channel x send --message hi": "airc send --nick admin --channel x --message hi",
+		"--nick admin hello":                         `unexpected argument "hello"`,
+		"hello":                                      `unknown command "hello"`,
+	} {
+		err := run(strings.Fields(args), strings.NewReader(""), io.Discard, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("airc %s: err = %v, want %q", args, err, want)
+		}
+	}
+}
+
 func TestInteractiveRejectsStrayArgumentsBeforeConnecting(t *testing.T) {
 	for args, want := range map[string]string{
-		"--nick admin watch":                       "watch is a command and must come first: airc watch --nick admin",
+		"--channel #ops watch":                     "watch is a command and must come first: airc watch --channel '#ops'",
 		"--nick admin --channel #ops watch --json": "airc watch --nick admin --channel '#ops' --json",
 		"--nick admin hello":                       `unexpected argument "hello"`,
 	} {

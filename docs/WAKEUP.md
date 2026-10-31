@@ -102,7 +102,7 @@ inbox as usual.
 The operator chooses where notices may go; aircd sends nothing until then:
 
 ```sh
-aircd --accounts-file accounts.json --wake-allow https://ntfy.sh/,https://hooks.example/airc/
+aircd --state-dir ~/.local/state/airc --wake-allow https://ntfy.sh/,https://hooks.example/airc/
 airc service install --wake-allow https://ntfy.sh/   # the same for a managed service
 ```
 
@@ -110,8 +110,7 @@ Each entry is a URL prefix whose path ends in `/`; an account may register
 only a URL that starts with one, with a plain path (letters, digits and
 `-._~/`, no empty or dot-led segment) and no query, so no receiver can read
 it as a path outside the prefix. Registrations are kept in `wakes.json` under
-`--state-dir`, or in `--wake-file` (by default next to the accounts file,
-owner-only), and expire after 30 days unless renewed by registering again. One that the daemon no longer accepts
+`--state-dir`, or next to the accounts file (owner-only), and expire after 30 days unless renewed by registering again. One that the daemon no longer accepts
 when it starts (its account was deleted, or its URL left the allowlist) is
 dropped with a warning in the log, and deleting an account drops its
 registration at once.
@@ -170,7 +169,7 @@ topic the phone subscribes to, and the phone buzzes when an agent asks for
 you.
 
 ```sh
-aircd --accounts-file accounts.json --wake-allow https://ntfy.sh/      # the operator, once
+aircd --state-dir ~/.local/state/airc --wake-allow https://ntfy.sh/   # the operator, once
 airc user create --nick sws --human
 airc wake --nick sws --url https://ntfy.sh/sws-airc-$(openssl rand -hex 8) --mentions-only --quiet-hours 22:00-08:00
 ```
