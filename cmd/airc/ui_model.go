@@ -291,7 +291,7 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 		m.noteStatus(message.From, message.State)
 	}
 	own := strings.EqualFold(message.From, m.nick)
-	addressed := !own && addressedTo(m.nick, message.Target, message.Message, message.For)
+	addressed := !own && addressedTo(m.nick, message.Target, message.Message, message.For, message.GroupMentions)
 	if protocol.IsChannel(message.Target) {
 		if b := m.ensureChannel(message.Target); b.add(message) && !history && !own {
 			m.notify(b, addressed)
