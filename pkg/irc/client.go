@@ -476,16 +476,30 @@ func (c *Client) addFeatures(params []string) {
 	}
 }
 
-// Supports reports whether the server advertised a feature, such as "MULTILINE"
-// or "MENTIONS". Features are known once Dial returns.
+// Supports reports whether the server has a feature, such as "MULTILINE" or
+// "MENTIONS": one its AIRC level grants (protocol.Features), or one it
+// advertised as a token of its own, which is how a daemon that predates
+// levels said everything and how every daemon says what depends on its
+// configuration (ADMIN, WAKE, IDEMPOTENCY, ...). Features are known once
+// Dial returns.
 func (c *Client) Supports(feature string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	value, ok := c.features[strings.ToUpper(feature)]
-	return ok && value != "0"
+	return protocol.Supports(c.features, feature)
 }
 
-// Features returns a snapshot of the server's advertised capabilities.
+// Level is the AIRC level the server advertised (AIRC=N), 0 for a daemon
+// that advertised one token per feature instead.
+func (c *Client) Level() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return protocol.LevelOf(c.features)
+}
+
+// Features returns a snapshot of the server's advertised tokens: the AIRC
+// level, the tokens with a value (HISTORY, PASTE_BYTES, MONITOR, CARRIERS,
+// ...) and those that depend on the daemon's configuration. Ask Supports
+// about a feature; read a token's value here.
 func (c *Client) Features() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
