@@ -22,6 +22,7 @@ import (
 	"github.com/Someblueman/airc/gateway/internal/core"
 	"github.com/Someblueman/airc/gateway/internal/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/internal/testwait"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
 )
@@ -243,6 +244,13 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 		c.Listeners[i].Limits = &config.ListenerLimits{RequestsPerMinute: 10000, AuthorRequestsPerMinute: 10000}
 	}
 	p := startGateway(t, gatewayBinary(t), c)
+	// A failed test shows what the gateway logged, so a slow or refused
+	// exchange explains itself.
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("gateway stderr:\n%s", p.stderr.String())
+		}
+	})
 	ready := reactionGatewayReady(t, p, len(c.Listeners))
 	transport := &http.Transport{TLSClientConfig: cert.Client.Clone()}
 	t.Cleanup(transport.CloseIdleConnections)
@@ -374,6 +382,65 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 		t.Fatal(err)
 	}
 	return response.StatusCode, result
+}
+
+// detachedAnswer is a detached result with the failure a refused request
+// carries instead.
+type detachedAnswer struct {
+	dispatch.DetachedResult
+	Error *core.Failure `json:"error,omitempty"`
+}
+
+// reactionHTTPTry is reactionHTTPCall returning the exchange's error, for
+// a caller that retries it.
+func reactionHTTPTry(f *reactionTransportFixture, token string) (int, detachedAnswer, error) {
+	request, err := http.NewRequest(http.MethodPost, f.httpURL+"/v1/request", strings.NewReader(token))
+	if err != nil {
+		return 0, detachedAnswer{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := f.http.Do(request)
+	if err != nil {
+		return 0, detachedAnswer{}, err
+	}
+	defer response.Body.Close()
+	var answer detachedAnswer
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&answer); err != nil {
+		return response.StatusCode, detachedAnswer{}, err
+	}
+	return response.StatusCode, answer, nil
+}
+
+// evictionReadWithin bounds a settled read after a test has posted a room
+// past the daemon's window: on a loaded host the gateway's read session may
+// need a fresh dial (bounded at ten seconds) once its pooled one has idled
+// out during the posts, and the exchange a second attempt.
+const evictionReadWithin = 20 * time.Second
+
+// settledHTTPRead reads r over HTTP until the gateway's answer is settled:
+// one that is neither a transient failure (503 or 429 marked transient) nor an
+// exchange cut short by the host's load, at the client's timeout or the
+// server's five-second write bound. Those are retried within the given time,
+// so a slow host cannot turn a test of what the read returns into one of
+// whether it was answered. The settled answer, a refusal included, is the
+// caller's to judge; the last transient one fails the test when none settles.
+func settledHTTPRead(t *testing.T, f *reactionTransportFixture, r core.Request, within time.Duration) (int, dispatch.DetachedResult) {
+	t.Helper()
+	token := f.cred.token(t, r, true)
+	var status int
+	var answer detachedAnswer
+	var err error
+	if !testwait.Poll(within, 100*time.Millisecond, func() bool {
+		status, answer, err = reactionHTTPTry(f, token)
+		if err != nil {
+			return false
+		}
+		transient := answer.Error == nil || answer.Error.Transient
+		return !(transient && (status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests))
+	}) {
+		t.Fatalf("timed out after %s waiting for a settled answer to %s: status=%d error=%+v exchange=%v", within, r.RequestID, status, answer.Error, err)
+	}
+	return status, answer.DetachedResult
 }
 
 func pollReactionReceipt(t *testing.T, f *reactionTransportFixture, r core.Request) core.Result {
