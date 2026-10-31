@@ -15,6 +15,7 @@ import (
 // Capabilities describe the listener, the same for every author: a guest and
 // a registered author see one document, without internal authority.
 func TestHTTPCapabilitiesDescribeTheListener(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	want := []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead}
 	for _, token := range []string{f.token, f.other, ""} {

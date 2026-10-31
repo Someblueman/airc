@@ -32,6 +32,7 @@ func admitHeaderCardResult(t *testing.T, f *reactionTransportFixture, request co
 }
 
 func TestCardEscapedNativeProfileAndClear(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	value := strings.Repeat("<", 200)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -70,6 +71,7 @@ func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 }
 
 func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	request := core.Request{Version: 1, RequestID: "expiry-card", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "running", Note: "  expiring  ", TTLSeconds: 1}}
 	accepted := admitHeaderCard(t, f, request)
@@ -92,6 +94,7 @@ func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 }
 
 func TestNativeOversizedCardAcknowledgementRemainsUncertain(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	value := strings.Repeat("<", 400)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)

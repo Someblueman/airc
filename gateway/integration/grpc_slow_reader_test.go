@@ -18,6 +18,7 @@ import (
 )
 
 func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
+	t.Parallel()
 	f := newGRPCGatewayFixture(t)
 	author := dial(t, f.config.Upstream.Address, "grpc-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })

@@ -15,6 +15,7 @@ import (
 )
 
 func TestDirectoryMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
+	t.Parallel()
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := prepareDirectoryMailboxFixture(t)

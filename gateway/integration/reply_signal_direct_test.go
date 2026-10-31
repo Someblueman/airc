@@ -10,6 +10,7 @@ import (
 )
 
 func TestReplySignalDirectIncomingOutgoingAndForeignParent(t *testing.T) {
+	t.Parallel()
 	peerTarget := core.Target{Kind: "direct", Name: "signal-peer"}
 	selfTarget := core.Target{Kind: "direct", Name: "fixture-author"}
 	f := newReactionFixture(t, false, []core.Target{peerTarget, selfTarget}, true)

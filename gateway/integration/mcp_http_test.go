@@ -21,6 +21,7 @@ import (
 func strptr(v string) *string { return &v }
 
 func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	progress := make(chan *mcp.ProgressNotificationClientRequest, 64)
 	f := newMCPHTTPFixture(t, &mcp.ClientOptions{ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
@@ -115,6 +116,7 @@ func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
 // TestMCPHTTPCheck reads a room and the registered author's inbox with the
 // check tool, waiting for the direct message that arrives during the call.
 func TestMCPHTTPCheck(t *testing.T) {
+	t.Parallel()
 	f := newMCPHTTPFixture(t, nil)
 	peer := dial(t, f.config.Upstream.Address, "mcp-check-peer", "", false, true)
 	request := core.Request{Version: 1, RequestID: "mcp-check", Operation: core.Check, Limit: 10, WaitSeconds: 10, Rooms: []core.CheckRoom{{Name: "#gateway-fixture"}}, Inbox: &core.CheckInbox{}}

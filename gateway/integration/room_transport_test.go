@@ -15,6 +15,7 @@ import (
 // TestRoomReadReturnsNativeSettings maps room.read to the room's native slow
 // mode and history limit.
 func TestRoomReadReturnsNativeSettings(t *testing.T) {
+	t.Parallel()
 	f := newReactionFixture(t, true, nil, true)
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()

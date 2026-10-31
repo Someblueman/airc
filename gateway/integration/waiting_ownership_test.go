@@ -11,6 +11,7 @@ import (
 )
 
 func TestWaitingReadForeignParentDeniedEvenWithEmptySignals(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	defer author.Close()

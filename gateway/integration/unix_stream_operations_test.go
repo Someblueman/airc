@@ -15,6 +15,7 @@ import (
 )
 
 func TestUnixStreamExecutesRoomContextPinsWaitingAndReaction(t *testing.T) {
+	t.Parallel()
 	conn, credentials, stop, _, upstream := unixStreamFixture(t)
 	defer conn.Close()
 	observer := dial(t, upstream, "unix-observer", "", false, false)

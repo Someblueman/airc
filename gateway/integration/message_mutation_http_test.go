@@ -15,6 +15,7 @@ import (
 // room observes, gateway history returns it unchanged, and history carries the
 // native correction and retraction annotations on the original.
 func TestMessageMutationHTTP(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := contractRoom()
 	observer := newReplySignalObserver(t, f.socket, *target)

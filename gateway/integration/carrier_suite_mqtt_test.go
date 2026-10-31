@@ -218,6 +218,7 @@ func mqttSuiteWireWith(t *testing.T, e *suiteEnv, connect func(*testing.T, suite
 // sent CONNECT, refuses the next one, and joins both open sockets at
 // shutdown.
 func TestMQTTGlobalAcceptedSocketCapacityAndJoinedPreauth(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}})
 	c.Limits.Workers, c.Limits.Connections, c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 2, 2, 1

@@ -8,6 +8,7 @@ import (
 )
 
 func TestNativeStatusReaderOwnsOneNonObservingConnection(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	reader := nativeStatusClient(t, socket)
 	probe := nativeStatusClient(t, socket)

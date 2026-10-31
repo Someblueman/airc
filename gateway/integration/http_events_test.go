@@ -46,6 +46,7 @@ func ssePage(t *testing.T, reader *bufio.Scanner) (backend.HistoryPage, string) 
 }
 
 func TestHTTPEventsSameLeaseLiveResume(t *testing.T) {
+	t.Parallel()
 	for _, h2 := range []bool{false, true} {
 		t.Run(fmt.Sprint("http2=", h2), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, h2, "watch")

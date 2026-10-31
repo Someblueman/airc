@@ -16,10 +16,12 @@ import (
 )
 
 func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
+	t.Parallel()
 	localStreamAcceptedReplayAfterFreshChild(t, "socketpair")
 }
 
 func TestInheritedUnixAcceptedReplayAfterFreshChild(t *testing.T) {
+	t.Parallel()
 	localStreamAcceptedReplayAfterFreshChild(t, "inherited")
 }
 

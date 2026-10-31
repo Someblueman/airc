@@ -18,6 +18,7 @@ import (
 )
 
 func TestHistoryDispatcherListenerPolicyAndCapabilitiesBeforeDial(t *testing.T) {
+	t.Parallel()
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, _ := acceptanceJournalFixture(t, filepath.Join(t.TempDir(), "unavailable.sock"), account)
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")

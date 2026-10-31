@@ -86,6 +86,7 @@ func assertReadRefused(t *testing.T, label string, status, want int, body []byte
 // wrong credentials are refused with a typed error and no data. Reads never
 // create a job or change native history.
 func TestReadRoutesMatchRequestsAndRefuseWithoutDisclosure(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	root := seedReactionParent(t, f)
 	seedTopic(t, f.socket, "read contract topic ☃")
@@ -142,6 +143,7 @@ func TestReadRoutesMatchRequestsAndRefuseWithoutDisclosure(t *testing.T) {
 // limits: out-of-range limits and byte budgets are refused, and a snapshot
 // that does not fit its limit is refused whole instead of truncated.
 func TestReadBoundsRefuseOutOfRangeWithoutPartialData(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	root := seedReactionParent(t, f)
 	member := dial(t, f.socket, "bounds-member", "", false, false)

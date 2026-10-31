@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -33,8 +32,8 @@ func currentGatewayBinary(t *testing.T) string {
 	if currentGatewayFixture.err != nil {
 		t.Fatal(currentGatewayFixture.err)
 	}
-	if ldflags := shortTimerFlags(t); ldflags != "" {
-		return shortTimerGatewayBinary(t, ldflags)
+	if shortTimersFor(t) {
+		return shortTimerGatewayBinary(t)
 	}
 	return currentGatewayFixture.binary
 }
@@ -71,9 +70,11 @@ func buildGateway(binary, ldflags string) error {
 }
 
 // gatewayTimer is a production lease or idle bound that a test may shorten,
-// so that it waits out the same expiry path in seconds. The short value is
-// linked into a separate gateway build (see core.LinkedDuration) and, where
-// the timer is exported, also set for gateway parts running in the test.
+// so that it waits out the same expiry path in seconds. The short values of
+// every timer are linked into one short-timer gateway build (see
+// core.LinkedDuration), so one link serves every test that waits out a
+// timer; where the timer is exported, a test can also set it for gateway
+// parts running in the test process (shortInProcessTimer).
 type gatewayTimer struct {
 	symbol         string
 	short, release time.Duration
@@ -81,77 +82,94 @@ type gatewayTimer struct {
 }
 
 var (
-	readLeaseTimer     = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/store.linkedReadLease", 6 * time.Second, 15 * time.Second, &store.ReadLeaseDuration}
+	// The short read lease outlives the HTTP server's five-second write
+	// bound, which a quiet SSE stream must reach the lease's end under.
+	readLeaseTimer     = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/store.linkedReadLease", 8 * time.Second, 15 * time.Second, &store.ReadLeaseDuration}
 	websocketPingTimer = gatewayTimer{"github.com/Someblueman/airc/gateway/internal/adapter.linkedWebSocketPing", 2 * time.Second, 10 * time.Second, nil}
+	shortGatewayTimers = []gatewayTimer{readLeaseTimer, websocketPingTimer}
 )
 
+// shortTimers names the tests whose gateways run the short-timer build, and
+// holds that build, linked once.
 var shortTimers struct {
 	sync.Mutex
-	flags  map[string][]string // test name -> -X flags
-	builds map[string]*shortTimerBuild
+	tests map[string]bool
+	build struct {
+		once   sync.Once
+		binary string
+		err    error
+	}
 }
 
-type shortTimerBuild struct {
-	once   sync.Once
-	binary string
-	err    error
-}
-
-// shortGatewayTimer makes every gateway that t (and its subtests) starts link
-// the short value of timer, and returns that value.
+// shortGatewayTimer makes every gateway process that t (and its subtests)
+// starts run the short-timer build, and returns timer's short value. Gateway
+// parts running in the test process keep the release value: a test that
+// runs them calls shortInProcessTimer.
 func shortGatewayTimer(t *testing.T, timer gatewayTimer) time.Duration {
 	t.Helper()
 	shortTimers.Lock()
 	defer shortTimers.Unlock()
-	if shortTimers.flags == nil {
-		shortTimers.flags = make(map[string][]string)
+	if shortTimers.tests == nil {
+		shortTimers.tests = make(map[string]bool)
 	}
-	name := t.Name()
-	if _, ok := shortTimers.flags[name]; !ok {
+	if name := t.Name(); !shortTimers.tests[name] {
+		shortTimers.tests[name] = true
 		t.Cleanup(func() {
 			shortTimers.Lock()
-			delete(shortTimers.flags, name)
+			delete(shortTimers.tests, name)
 			shortTimers.Unlock()
 		})
-	}
-	shortTimers.flags[name] = append(shortTimers.flags[name], fmt.Sprintf("-X=%s=%s", timer.symbol, timer.short))
-	if timer.inProcess != nil {
-		released := *timer.inProcess
-		*timer.inProcess = timer.short
-		t.Cleanup(func() { *timer.inProcess = released })
 	}
 	return timer.short
 }
 
-func shortTimerFlags(t *testing.T) string {
-	shortTimers.Lock()
-	defer shortTimers.Unlock()
-	var flags []string
-	for name := t.Name(); ; name = name[:strings.LastIndexByte(name, '/')] {
-		flags = append(flags, shortTimers.flags[name]...)
-		if !strings.Contains(name, "/") {
-			break
-		}
+// shortInProcessTimer is shortGatewayTimer for a test whose gateway parts
+// run in the test process: it also sets the package variable they read,
+// which every in-process gateway in the package shares, so the test must
+// not run in parallel.
+func shortInProcessTimer(t *testing.T, timer gatewayTimer) time.Duration {
+	t.Helper()
+	if timer.inProcess == nil {
+		t.Fatalf("%s is not set in process", timer.symbol)
 	}
-	slices.Sort(flags)
-	return strings.Join(slices.Compact(flags), " ")
+	released := *timer.inProcess
+	*timer.inProcess = timer.short
+	t.Cleanup(func() { *timer.inProcess = released })
+	return shortGatewayTimer(t, timer)
 }
 
-// Short-timer builds live inside the current gateway's root, which TestMain
-// removes, and reuse its build cache, so each costs only a link.
-func shortTimerGatewayBinary(t *testing.T, ldflags string) string {
-	t.Helper()
+// shortTimersFor reports whether t or a test enclosing it asked for the
+// short-timer build.
+func shortTimersFor(t *testing.T) bool {
 	shortTimers.Lock()
-	if shortTimers.builds == nil {
-		shortTimers.builds = make(map[string]*shortTimerBuild)
+	defer shortTimers.Unlock()
+	for name := t.Name(); ; name = name[:strings.LastIndexByte(name, '/')] {
+		if shortTimers.tests[name] {
+			return true
+		}
+		if !strings.Contains(name, "/") {
+			return false
+		}
 	}
-	build := shortTimers.builds[ldflags]
-	if build == nil {
-		build = &shortTimerBuild{binary: filepath.Join(currentGatewayFixture.root, fmt.Sprintf("airc-gateway-%d", len(shortTimers.builds)))}
-		shortTimers.builds[ldflags] = build
+}
+
+// shortTimerLDFlags links every timer's short value.
+func shortTimerLDFlags() string {
+	var flags []string
+	for _, timer := range shortGatewayTimers {
+		flags = append(flags, fmt.Sprintf("-X=%s=%s", timer.symbol, timer.short))
 	}
-	shortTimers.Unlock()
+	return strings.Join(flags, " ")
+}
+
+// The short-timer build lives inside the current gateway's root, which
+// TestMain removes, and reuses its build cache, so it costs only a link.
+func shortTimerGatewayBinary(t *testing.T) string {
+	t.Helper()
+	build := &shortTimers.build
 	build.once.Do(func() {
+		build.binary = filepath.Join(currentGatewayFixture.root, "airc-gateway-short")
+		ldflags := shortTimerLDFlags()
 		if build.err = buildGateway(build.binary, ldflags); build.err == nil {
 			build.err = linkedSymbolsExist(build.binary, ldflags)
 		}

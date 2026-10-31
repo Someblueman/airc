@@ -27,13 +27,15 @@ import (
 var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 
 // TestEveryCarrierGolden runs one gateway with every carrier this host can
-// serve (the cross-carrier suite's carriers whose setup does not skip) and
+// serve (the cross-carrier suite's carriers whose setup does not skip), and
+// each carrier that is its own gateway process as a child of its own, and
 // pins what clients discover: the carrier list aircd advertises in 005
 // CARRIERS and STATUS for an install of every bundled carrier, and
 // capabilities.get over each carrier (GET /v1/capabilities on HTTP). The
 // ready record must list the listeners in configuration order. Entries for
 // carriers this host cannot run are kept in the golden file and skipped.
 func TestEveryCarrierGolden(t *testing.T) {
+	t.Parallel()
 	root := fixtureRoot(t)
 	discovery := installDiscovery(t)
 	gatewayToken := filepath.Join(root, "gateway.token")
@@ -51,11 +53,15 @@ func TestEveryCarrierGolden(t *testing.T) {
 
 	// Every suite carrier whose setup this host supports, each once.
 	cert := testtls.NewP256(t)
-	var carriers []suiteCarrier
+	var carriers, processes []suiteCarrier
 	var listeners []config.Listener
 	for _, c := range suiteCarriers {
 		if c.configure != nil && !hostRuns(t, c) {
 			t.Logf("%s: not available on this host", c.name)
+			continue
+		}
+		if c.process != nil {
+			processes = append(processes, c)
 			continue
 		}
 		l := c.listener
@@ -91,21 +97,14 @@ func TestEveryCarrierGolden(t *testing.T) {
 	if !slices.Equal(have, want) {
 		t.Fatalf("ready listeners %v, want configuration order %v", have, want)
 	}
-	for _, c := range carriers {
-		d := suiteDial{address: addresses[c.name]}
-		if c.secure {
-			d.tls = cert.Client.Clone()
-		}
-		client, err := c.dial(t, d)
-		if err != nil {
-			t.Fatalf("%s: connect: %v", c.name, err)
-		}
+	// capabilities records what a carrier's client discovers over listener l.
+	capabilities := func(c suiteCarrier, client suiteClient, l config.Listener) {
+		t.Helper()
 		r := client.call(t, mustBody(t, plainRequest(map[string]any{"request_id": "caps-" + c.name, "operation": core.CapabilitiesGet}, "caps-"+c.name, "")))
 		client.close()
 		if r.result != nil && r.result.Capabilities != nil {
 			// The capabilities command reports what the carrier grants.
-			i := slices.IndexFunc(cfg.Listeners, func(l config.Listener) bool { return l.ID == c.name })
-			if want := dispatch.ListenerOperations(cfg.Listeners[i], true); !slices.Equal(r.result.Capabilities.Operations, want) {
+			if want := dispatch.ListenerOperations(l, true); !slices.Equal(r.result.Capabilities.Operations, want) {
 				t.Errorf("%s: capabilities.get operations %v, the capabilities command reports %v", c.name, r.result.Capabilities.Operations, want)
 			}
 			data, err := json.Marshal(r.result.Capabilities)
@@ -117,6 +116,25 @@ func TestEveryCarrierGolden(t *testing.T) {
 			// MQTT carries only mutations: the request has no answer.
 			got["capabilities "+c.name] = r.String()
 		}
+	}
+	for _, c := range carriers {
+		d := suiteDial{address: addresses[c.name]}
+		if c.secure {
+			d.tls = cert.Client.Clone()
+		}
+		client, err := c.dial(t, d)
+		if err != nil {
+			t.Fatalf("%s: connect: %v", c.name, err)
+		}
+		i := slices.IndexFunc(cfg.Listeners, func(l config.Listener) bool { return l.ID == c.name })
+		capabilities(c, client, cfg.Listeners[i])
+	}
+	// A process carrier is a gateway of its own, with its own journal.
+	for _, c := range processes {
+		e := &suiteEnv{carrier: c, socket: socket, config: processCarrierConfig(t, socket, gatewayToken, c, nil)}
+		e.config.Carriers = discovery
+		e.config.Limits.Sessions = 128
+		capabilities(c, e.dial(t), e.config.Listeners[0])
 	}
 	compareGolden(t, filepath.Join("testdata", "carriers.golden"), got)
 }

@@ -32,6 +32,7 @@ func noFileMailboxJob(t *testing.T, f *fileMailboxFixture, id string) {
 }
 
 func TestFileMailboxCLIModeAndSizeRefusal(t *testing.T) {
+	t.Parallel()
 	f := newFileMailboxFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, kind := range []string{"stream"} {

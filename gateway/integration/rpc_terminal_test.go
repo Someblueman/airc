@@ -15,6 +15,7 @@ import (
 )
 
 func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newRPCHTTPFixture(t, false)
 	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "rpc-terminal-parent")

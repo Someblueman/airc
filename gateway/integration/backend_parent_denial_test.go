@@ -13,6 +13,7 @@ import (
 )
 
 func TestBackendParentIDsCannotBypassDestinationPermissions(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", token, true, true)

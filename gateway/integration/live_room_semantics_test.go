@@ -14,6 +14,7 @@ import (
 )
 
 func TestEventsWatchNativeRoomChangesAndSignalsKeepMessageCheckpoint(t *testing.T) {
+	t.Parallel()
 	f := newReactionTransportFixtureWithAdmin(t, true)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, false)
 	if err := author.Join("#gateway-fixture"); err != nil {

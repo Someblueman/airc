@@ -15,6 +15,7 @@ import (
 )
 
 func TestWebSocketCLIUpgradeAndFrameBoundaries(t *testing.T) {
+	t.Parallel()
 	f := websocketGatewayFixture(t, true, "127.0.0.1:0", []string{"https://allowed.example"})
 	for _, headers := range []http.Header{
 		{"Origin": []string{"https://wrong.example"}},
@@ -50,6 +51,7 @@ func TestWebSocketCLIUpgradeAndFrameBoundaries(t *testing.T) {
 }
 
 func TestWebSocketCLIMalformedMessagesAndDuplicateHandle(t *testing.T) {
+	t.Parallel()
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", nil)
 	for _, message := range []struct {
 		kind websocket.MessageType

@@ -12,6 +12,7 @@ import (
 )
 
 func TestHTTPLongPollQuietDeadlineAndCancellationJoin(t *testing.T) {
+	t.Parallel()
 	for _, protocol := range []int{1, 2} {
 		for _, cancelled := range []bool{false, true} {
 			t.Run(fmt.Sprintf("http%d/cancel=%t", protocol, cancelled), func(t *testing.T) {

@@ -22,6 +22,7 @@ import (
 // what was posted while the gateway was down. The sessions files are
 // private, in the state directory.
 func TestMQTT5SessionsSurviveARestart(t *testing.T) {
+	t.Parallel()
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt"}, config.Listener{ID: "mqttws", Protocol: "mqtt_websocket"})
 	poster := dial(t, socket, "m8-poster", "", false, true)

@@ -13,6 +13,7 @@ import (
 )
 
 func TestBackendSendAndRetainedLookup(t *testing.T) {
+	t.Parallel()
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

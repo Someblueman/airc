@@ -20,10 +20,12 @@ import (
 )
 
 func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
+	t.Parallel()
 	parentFDFrameFailureAndFreshChildRecovery(t, "socketpair")
 }
 
 func TestInheritedUnixFrameFailureAndFreshChildRecovery(t *testing.T) {
+	t.Parallel()
 	parentFDFrameFailureAndFreshChildRecovery(t, "inherited")
 }
 

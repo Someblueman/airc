@@ -17,6 +17,7 @@ import (
 )
 
 func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
+	t.Parallel()
 	pressure := make(chan quicPressureEvent, 8)
 	// Stream zero carries CONNECT; the first application stream is four.
 	trace := &quicPressureTrace{events: pressure, streamID: 4}

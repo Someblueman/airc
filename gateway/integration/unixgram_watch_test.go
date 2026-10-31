@@ -16,6 +16,7 @@ import (
 )
 
 func TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
+	t.Parallel()
 	f := newUnixgramFixture(t)
 	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
@@ -91,6 +92,7 @@ func TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 }
 
 func TestUnixgramQuietWatchHeartbeatAndLeaseExpiry(t *testing.T) {
+	t.Parallel()
 	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newUnixgramFixture(t)
 	socket := f.config.Upstream.Address

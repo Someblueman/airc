@@ -11,6 +11,7 @@ import (
 )
 
 func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	before, foreignID := seedForeignPoll(t, f)

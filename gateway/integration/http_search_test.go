@@ -13,6 +13,7 @@ import (
 )
 
 func TestHTTPNativeRoomSearchPaginationQueryScopeAndExpiry(t *testing.T) {
+	t.Parallel()
 	withoutHistoryFile(t) // an evicted cursor must be a gap, not an archive read
 	f := gatewayHTTPFixture(t, false)
 	post := func(id, body, parent string) *irc.MessageEvent {

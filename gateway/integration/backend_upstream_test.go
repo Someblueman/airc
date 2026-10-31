@@ -13,6 +13,7 @@ import (
 )
 
 func TestBackendRejectsForeignGrantConfiguration(t *testing.T) {
+	t.Parallel()
 	for _, mismatch := range []string{"realm", "upstream"} {
 		t.Run(mismatch, func(t *testing.T) {
 			const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

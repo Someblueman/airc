@@ -11,6 +11,7 @@ import (
 )
 
 func TestReplySignalForeignRoomAndRetainedNoOpCancel(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	foreignTarget := core.Target{Kind: "room", Name: "#signal-foreign"}

@@ -17,6 +17,7 @@ import (
 // their profile, presence and connection facts, and publishes its scope and
 // limits in capabilities.
 func TestHTTPDirectoryPublicCards(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, false)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, f.socket, "fixture-author", account, false, true)

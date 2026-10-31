@@ -17,6 +17,7 @@ import (
 )
 
 func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
+	t.Parallel()
 	for _, profile := range []string{"author"} {
 		t.Run(profile, func(t *testing.T) { gatewayCLIStreamShutdown(t, profile) })
 	}

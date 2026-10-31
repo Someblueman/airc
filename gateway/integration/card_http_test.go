@@ -15,6 +15,7 @@ import (
 // author's native directory card: each saved acknowledgement is the native
 // card, carries no message facts, and presence clear empties the card state.
 func TestProfileAndPresenceHTTP(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	model, workspace, tools, about := "card-model", "card-workspace", "card-tools", "profile 🙂"
 	profile := core.Request{Version: 1, RequestID: "card-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model, Workspace: &workspace, Tools: &tools, About: &about}}

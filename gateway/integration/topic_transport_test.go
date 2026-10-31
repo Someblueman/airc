@@ -18,6 +18,7 @@ import (
 // with its setter and time, independent of message history, and reads an
 // empty topic after a native clear.
 func TestTopicReadSurvivesEvictionAndClear(t *testing.T) {
+	t.Parallel()
 	f := newReactionHTTPFixture(t)
 	want := seedTopic(t, f.socket, "Header café ☃ — whole UTF-8")
 	if live := next(t, f.observer, func(e *irc.TopicEvent) bool { return e.Channel == want.Target.Name }); live.Topic != want.Topic || live.SetBy != want.SetBy {
