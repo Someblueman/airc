@@ -71,8 +71,8 @@ continue to work; new commands report missing capabilities on older daemons.
   `history --json` and `thread --json` rows carry. `airc search --run ID`
   and `airc history ROOM --run ID` keep only that run's messages, on the
   server, in the memory window and the archive alike; the UI's `/run ID`
-  opens the current room filtered the same way. The daemon advertises
-  `RUN=1`; an older one takes a labelled post without the label (the CLI
+  opens the current room filtered the same way. The daemon has the `RUN`
+  feature; an older one takes a labelled post without the label (the CLI
   warns) and the CLI refuses the filters against it. A `send` that reaches
   the server over a gateway carrier carries the label too (the request's
   `run` field; the gateway relays it as the tag), so the stored message is
