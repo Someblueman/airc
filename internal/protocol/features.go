@@ -52,40 +52,13 @@ var Features = map[string]int{
 	"SEARCH_TERMS":      1,
 	"STATUS":            1, // the STATUS command (770)
 	"TOPIC":             1,
-	// Level 1, the CHAT action families with a feature of their own.
+	// Level 1, the CHAT action families that had a token of their own.
 	"CHARTER":      1,
 	"PINS":         1,
 	"POLLS":        1,
 	"RESOLVE":      1,
 	"ROOM":         1,
 	"STATUS_POSTS": 1, // the status and statuses CHAT actions
-}
-
-// ChatFeature is the feature a CHAT action is advertised under: CHAT itself
-// for the signals, posts, corrections and retractions it began with, and the
-// feature named after each later family.
-func ChatFeature(action string) string {
-	switch {
-	case action == "context":
-		return "CONTEXT"
-	case action == "pin", action == "unpin", action == "pins":
-		return "PINS"
-	case action == "room":
-		return "ROOM"
-	case action == "status", action == "statuses":
-		return "STATUS_POSTS"
-	case action == "resolve":
-		return "RESOLVE"
-	case action == "poll", action == "vote", action == "results", action == "close-poll":
-		return "POLLS"
-	case strings.HasPrefix(action, "handoff"):
-		return "HANDOFF"
-	case strings.HasPrefix(action, "decision"):
-		return "DECISION"
-	case strings.HasPrefix(action, "paste"):
-		return "PASTE"
-	}
-	return "CHAT"
 }
 
 // LevelOf is the AIRC level a daemon's 005 tokens advertise, 0 when it sent

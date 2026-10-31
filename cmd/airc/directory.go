@@ -14,22 +14,20 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func chatRequest(opt options, capability string, request func(context.Context, *irc.Client) error) error {
+// chatRequest runs request over a one-shot connection.
+func chatRequest(opt options, request func(context.Context, *irc.Client) error) error {
 	ctx, cancel := commandContext()
 	defer cancel()
-	return chatRequestWithContext(ctx, opt, capability, request)
+	return chatRequestWithContext(ctx, opt, request)
 }
 
-func chatRequestWithContext(ctx context.Context, opt options, capability string, request func(context.Context, *irc.Client) error) error {
+func chatRequestWithContext(ctx context.Context, opt options, request func(context.Context, *irc.Client) error) error {
 	client, err := dialOneShot(ctx, opt)
 	if err != nil {
 		return err
 	}
 	defer closeOneShot(opt, client)
 	defer closeOnCancel(ctx, client)()
-	if !client.Supports(capability) {
-		return errors.New(lacksCapability(capability))
-	}
 	return request(ctx, client)
 }
 
@@ -104,7 +102,7 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 	if !changing {
 		// Reading cards gives the same answer over any carrier; updates
 		// stay native (a gateway retry of one could apply it twice).
-		return readRacing(ctx, *opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
+		return readRacing(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 			if err := client.Directory(*who); err != nil {
 				return err
 			}
@@ -127,7 +125,7 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 			return answered, err
 		})
 	}
-	return chatRequestWithContext(ctx, *opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, func(ctx context.Context, client *irc.Client) error {
 		var err error
 		if kind == "profile" {
 			if *clear {

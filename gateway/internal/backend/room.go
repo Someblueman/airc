@@ -14,9 +14,6 @@ import (
 // Room reads the current native room settings without mutating them.
 func (b *Backend) Room(ctx context.Context, grant *store.ReadGrant) (core.RoomResult, error) {
 	return readSnapshot(ctx, b, grant, roomRead(core.RoomRead), core.MaxRoomBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.RoomResult, error) {
-		if !client.Supports("ROOM") {
-			return core.RoomResult{}, ErrReadUnsupported
-		}
 		settings, err := boundedRoomRequest(ctx, client, r.Target.Name, core.MaxRoomBytes)
 		return core.RoomResult{Target: *r.Target, SlowSeconds: settings.SlowSeconds, HistoryLimit: settings.HistoryLimit}, err
 	})

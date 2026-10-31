@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -202,10 +204,28 @@ func TestUIBackendReconnectsAndCatchesUp(t *testing.T) {
 	h.until("live traffic after reconnecting", func() bool { return strings.Contains(h.texts("#alpha"), "after the outage") })
 }
 
-func TestUIBackendReportsAServerWithoutChannelListing(t *testing.T) {
-	// A server that does not advertise CHANNELS cannot drive the UI; it must say so.
-	_, err := (&uiBackend{}).session(context.Background(), &irc.Client{}, true)
-	if err == nil || !strings.Contains(err.Error(), "current aircd") {
-		t.Fatalf("session error = %v", err)
+// A daemon below this client's level is refused at the first dial: the UI
+// ends with the refusal rather than retrying it.
+func TestUIBackendStopsAtADaemonBelowTheClientsLevel(t *testing.T) {
+	agentEnv(t)
+	address, _ := olderDaemon(t)
+	out := make(chan any, 16)
+	backend := &uiBackend{opt: options{addr: address, nick: "me"}, nick: "me", backlog: 100, out: out, cmds: make(chan uiCmd)}
+	done := make(chan struct{})
+	go func() { backend.run(context.Background()); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the UI backend kept retrying an older daemon")
 	}
+	refusal := (&irc.DaemonTooOldError{Need: protocol.Level}).Error()
+	for len(out) > 0 {
+		if fatal, ok := (<-out).(fatalIn); ok {
+			if !errors.Is(fatal.err, irc.ErrDaemonTooOld) || !strings.Contains(fatal.err.Error(), refusal) {
+				t.Fatalf("the UI ended with %v", fatal.err)
+			}
+			return
+		}
+	}
+	t.Fatal("the UI did not report the refusal")
 }

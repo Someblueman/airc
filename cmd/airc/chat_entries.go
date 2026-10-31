@@ -8,48 +8,44 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// entryShape is how one CHAT action's entries print: the feature the daemon
-// must have (protocol.ChatFeature, so lacksCapability names what an older
-// daemon is missing), each entry's JSON row and text line, and what text
-// mode says to an empty listing ("" says nothing).
+// entryShape is how one CHAT action's entries print: each entry's JSON row
+// and text line, and what text mode says to an empty listing ("" says
+// nothing).
 type entryShape struct {
-	capability string
-	row        func(irc.ChatEntry) any
-	text       func(irc.ChatEntry) string
-	empty      string
+	row   func(irc.ChatEntry) any
+	text  func(irc.ChatEntry) string
+	empty string
 }
 
 // shapeOf is the shape of r's entries: handoffs, decisions, statuses and
 // resolutions have rows of their own; every other action prints the entry.
 func shapeOf(r irc.ChatRequest) entryShape {
-	capability := protocol.ChatFeature(r.Action)
 	switch {
 	case strings.HasPrefix(r.Action, "handoff"):
-		shape := entryShape{capability, func(e irc.ChatEntry) any { return newHandoffRow(e) }, handoffText, ""}
+		shape := entryShape{func(e irc.ChatEntry) any { return newHandoffRow(e) }, handoffText, ""}
 		if r.Action == "handoffs" {
 			shape.empty = "No handoffs."
 		}
 		return shape
 	case strings.HasPrefix(r.Action, "decision"):
-		shape := entryShape{capability, func(e irc.ChatEntry) any { return newDecisionRow(e) }, decisionText, ""}
+		shape := entryShape{func(e irc.ChatEntry) any { return newDecisionRow(e) }, decisionText, ""}
 		if r.Action == "decisions" {
 			shape.empty = "No decisions."
 		}
 		return shape
 	case r.Action == "status", r.Action == "statuses":
-		shape := entryShape{capability, func(e irc.ChatEntry) any { return newStatusRow(e) }, statusText, ""}
+		shape := entryShape{func(e irc.ChatEntry) any { return newStatusRow(e) }, statusText, ""}
 		if r.Action == "statuses" {
 			shape.empty = "No statuses in " + r.Target + "."
 		}
 		return shape
 	case r.Action == "resolve":
-		return entryShape{capability, func(e irc.ChatEntry) any { return newResolveRow(e) }, resolveText, ""}
+		return entryShape{func(e irc.ChatEntry) any { return newResolveRow(e) }, resolveText, ""}
 	}
-	return entryShape{capability, func(e irc.ChatEntry) any { return e }, chatEntryText, ""}
+	return entryShape{func(e irc.ChatEntry) any { return e }, chatEntryText, ""}
 }
 
 // chatEntries sends r over a connection and prints the entries it returns
@@ -58,7 +54,7 @@ func shapeOf(r irc.ChatRequest) entryShape {
 // meant for a person, but an agent may decide too.
 func chatEntries(ctx context.Context, opt options, r irc.ChatRequest, stdout, stderr io.Writer) error {
 	shape := shapeOf(r)
-	return chatRequestWithContext(ctx, opt, shape.capability, func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
 		if r.Action == "decision" {
 			warnDeciderKind(ctx, client, r.For, stderr)
 		}

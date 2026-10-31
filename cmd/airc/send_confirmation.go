@@ -30,16 +30,12 @@ func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, repl
 			if other != nil {
 				other(event)
 			}
+			// An ephemeral session's send is confirmed by its receipt (762),
+			// never by an echo of the message.
 			var msg *irc.MessageEvent
 			var info *protocol.ReceiptInfo
 			queued := false
-			switch e := event.(type) {
-			case *irc.MessageEvent:
-				if client.Supports("RECEIPTS") && client.Ephemeral() {
-					continue
-				}
-				msg = e
-			case *irc.SendReceiptEvent:
+			if e, ok := event.(*irc.SendReceiptEvent); ok {
 				msg, queued, info = e.MessageEvent(), e.Queued, e.Receipt
 			}
 			if msg == nil || !strings.EqualFold(msg.From, nick) || msg.Message != body || msg.Reaction != reaction || requestID != "" && msg.RequestID != requestID {

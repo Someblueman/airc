@@ -171,16 +171,10 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return failure(err, "login")
 	}
-	warnRunUnsupported(client, run, stderr)
 	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
 	checkClient := client
 	defer closeOnCancel(ctx, initialClient)()
-	if *channel != "" && !client.Ephemeral() {
-		if err := client.Join(*channel); err != nil {
-			return err
-		}
-	}
 	pasteID := ""
 	if pasteSrc != nil {
 		// Uploaded before the message, which shares it by ID; the same text

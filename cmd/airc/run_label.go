@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // A run label names the harness run a post belongs to, so a later search or
@@ -26,13 +25,6 @@ func runLabel(value string) (string, error) {
 		return "", fmt.Errorf("--run must be 1-64 letters, digits, '.', '_' or '-', not %q", value)
 	}
 	return value, nil
-}
-
-// warnRunUnsupported says when a daemon ignores the run label a post carries.
-func warnRunUnsupported(client *irc.Client, run string, stderr io.Writer) {
-	if run != "" && client != nil && !client.Supports("RUN") {
-		fmt.Fprintln(stderr, "airc: warning: this aircd predates run labels, so the post carries none; upgrade when safe")
-	}
 }
 
 // warnRunDropped says when a post over another carrier went without its run

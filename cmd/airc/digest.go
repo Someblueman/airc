@@ -404,7 +404,7 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 	}
 	checked := min(len(waiting), digestReplyChecks)
 	answered := map[string]bool{}
-	err := chatRequestWithContext(ctx, opt, "REPLIES", func(ctx context.Context, client *irc.Client) error {
+	err := chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
 		for _, item := range waiting[:checked] {
 			page, err := fetchHistory(ctx, client, "replies:"+item.ID, "", 100, nil)
 			if err != nil {
@@ -427,15 +427,11 @@ func resolveAnswered(ctx context.Context, opt options, waiting []digestItem, war
 // openHandoffs lists the live handoffs that concern opt.nick, the blocked
 // ones first as the daemon orders them, then those open to anyone in the
 // first digestRooms of rooms: a one-shot command joins no room, so the
-// daemon cannot know them. A daemon without handoffs has none; other
-// failures warn.
+// daemon cannot know them. A failure warns.
 func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestHandoff {
 	var out []digestHandoff
 	seen := map[string]bool{}
-	err := chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
-		if !client.Supports("HANDOFF") {
-			return nil
-		}
+	err := chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
 		requests := []irc.ChatRequest{{Action: "handoffs"}}
 		for _, room := range rooms[:min(len(rooms), digestRooms)] {
 			if room = channelName(room); protocol.IsChannel(room) {
@@ -471,15 +467,11 @@ func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]
 // openDecisions lists the open decisions that concern opt.nick: for it to
 // make or asked by it, and those asked in the first digestRooms of rooms,
 // since a one-shot command joins no room. Each carries whether its asker is
-// a human, from the card the daemon attaches. A daemon without decisions
-// has none; other failures warn.
+// a human, from the card the daemon attaches. A failure warns.
 func openDecisions(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestDecision {
 	var out []digestDecision
 	seen := map[string]bool{}
-	err := chatRequestWithContext(ctx, opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
-		if !client.Supports("DECISION") {
-			return nil
-		}
+	err := chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
 		requests := []irc.ChatRequest{{Action: "decisions"}}
 		for _, room := range rooms[:min(len(rooms), digestRooms)] {
 			if room = channelName(room); protocol.IsChannel(room) {

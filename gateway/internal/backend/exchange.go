@@ -125,13 +125,6 @@ func parentExchange(ctx context.Context, client *irc.Client, a store.Attempt) Ou
 	return exchange(ctx, client, a, root)
 }
 
-func reactionExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
-	if !builtinReaction(a.Job.Request.Reaction) && !client.Supports("CUSTOM_REACTIONS") {
-		return failed(a, core.UnsupportedOperation, false, false)
-	}
-	return parentExchange(ctx, client, a)
-}
-
 func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoot string) Outcome {
 	if ctx.Err() != nil {
 		return failed(a, core.UpstreamUnavailable, true, false)
@@ -191,10 +184,6 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 			}
 		}
 	}
-}
-
-func builtinReaction(kind string) bool {
-	return kind == "seen" || kind == "checking" || kind == "agree" || kind == "disagree"
 }
 
 // One fresh session has exactly one command owner, so these post-registration

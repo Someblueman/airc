@@ -41,14 +41,10 @@ func runContextSession(ctx context.Context, session *agentConnection, args []str
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "CONTEXT", func(ctx context.Context, c *irc.Client) error {
-		options := irc.ContextOptions{Limit: *limit}
-		if c.Supports("CONTEXT_BYTES") {
-			options.MaxBytes = *budget
-		} else {
-			fmt.Fprintln(stderr, "daemon lacks CONTEXT_BYTES; max-bytes limits local output only")
-		}
-		snapshot, err := irc.RequestContextWithOptions(ctx, c, args[0], options, nil)
+	return chatRequestWithContext(ctx, *opt, func(ctx context.Context, c *irc.Client) error {
+		// The budget bounds the daemon's response on the wire; the final
+		// JSON is checked against it again below, newline included.
+		snapshot, err := irc.RequestContextWithOptions(ctx, c, args[0], irc.ContextOptions{Limit: *limit, MaxBytes: *budget}, nil)
 		if err != nil {
 			return err
 		}

@@ -105,23 +105,19 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		if report.Level > protocol.Level {
 			report.Warnings = append(report.Warnings, fmt.Sprintf("Daemon speaks AIRC level %d, this airc level %d; replace airc to use the daemon's newer features", report.Level, protocol.Level))
 		}
-		if client.Supports("STATUS") {
-			report.Server, err = fetchStatus(ctx, client)
-			if err != nil {
-				report.Error, cause = err.Error(), err
-			} else {
-				if report.Server.Version != report.ClientVersion && report.Server.Version != "devel" && report.ClientVersion != "devel" {
-					report.Warnings = append(report.Warnings, "Client and daemon builds differ; replacing a binary does not update the running daemon")
-				}
-				if report.Server.HistoryLimit == 0 {
-					report.Warnings = append(report.Warnings, "History is disabled; offline agents cannot retrieve channel messages")
-				}
-				if report.Server.PersistenceError != "" {
-					report.Warnings = append(report.Warnings, "Saving state failed; the daemon serves it from memory: "+report.Server.PersistenceError)
-				}
-			}
+		report.Server, err = fetchStatus(ctx, client)
+		if err != nil {
+			report.Error, cause = err.Error(), err
 		} else {
-			report.Warnings = append(report.Warnings, "Daemon version and retention are unknown; this daemon predates STATUS")
+			if report.Server.Version != report.ClientVersion && report.Server.Version != "devel" && report.ClientVersion != "devel" {
+				report.Warnings = append(report.Warnings, "Client and daemon builds differ; replacing a binary does not update the running daemon")
+			}
+			if report.Server.HistoryLimit == 0 {
+				report.Warnings = append(report.Warnings, "History is disabled; offline agents cannot retrieve channel messages")
+			}
+			if report.Server.PersistenceError != "" {
+				report.Warnings = append(report.Warnings, "Saving state failed; the daemon serves it from memory: "+report.Server.PersistenceError)
+			}
 		}
 	}
 	if endpoints, err := fallbackEndpoints(query); err != nil {

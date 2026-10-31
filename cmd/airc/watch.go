@@ -149,9 +149,6 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 	w.ctx, w.live = ctx, false
 	names := make([]string, len(w.targets))
 	for i, target := range w.targets {
-		if target.history == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
-			return false, errors.New("all-DM oversight needs a daemon with DM_AUDIT; upgrade/restart when active work is finished")
-		}
 		names[i] = target.observe
 	}
 	// Subscribe before reading history so nothing can fall in the gap between them.
@@ -162,11 +159,9 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		return false, err
 	}
 	var pending []irc.Event
-	var caught []*irc.HistoryEvent
-	if client.Ephemeral() {
-		if caught, err = w.catchUp(ctx, client, first, func(event irc.Event) { pending = append(pending, event) }); err != nil {
-			return false, err
-		}
+	caught, err := w.catchUp(ctx, client, first, func(event irc.Event) { pending = append(pending, event) })
+	if err != nil {
+		return false, err
 	}
 	if first {
 		if err := w.write(w.banner()); err != nil {
@@ -185,11 +180,6 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		w.down = false
 		if err := w.show("reconnected", true); err != nil {
 			return true, err
-		}
-		if !client.Ephemeral() {
-			if err := w.show("this server cannot replay history; messages sent while disconnected are not shown", false); err != nil {
-				return true, err
-			}
 		}
 	}
 	for _, message := range caught {
@@ -236,7 +226,7 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 	for _, target := range w.targets {
 		key := targetKey(target.history)
 		after := w.last[key]
-		if !first && after == "" && target.history == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+		if !first && after == "" && target.history == irc.AllDirectMessages {
 			after = "*"
 		}
 		limit := 1000
@@ -256,7 +246,7 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 				if err := w.show("some messages from while this watcher was disconnected are no longer available", false); err != nil {
 					return nil, err
 				}
-				if target.history == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+				if target.history == irc.AllDirectMessages {
 					page, err = fetchHistory(ctx, client, target.history, "*", limit, other)
 					if err != nil {
 						return nil, err
@@ -367,9 +357,6 @@ func (w *watcher) banner() string {
 
 // showTopics prints each watched channel's header once, at startup.
 func (w *watcher) showTopics(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
-	if !client.Supports("TOPIC") {
-		return nil
-	}
 	for _, target := range w.targets {
 		if !protocol.IsChannel(target.observe) {
 			continue

@@ -75,7 +75,6 @@ type (
 	charterIn struct { // a room's charter, as the backend read it
 		channel, charter string
 		open             bool // read for /charter: show the view
-		unsupported      bool // the daemon predates charters
 	}
 	namesIn struct {
 		channel string
@@ -88,8 +87,8 @@ type (
 		entries []irc.ChatEntry
 		refresh bool // a live step changed the room; redraw an open board without switching to it
 	}
-	directoryIn    struct{ cards []irc.AgentCard } // every card, for who is a human
-	auditIn        struct{ available bool }
+	directoryIn    struct{ cards []irc.AgentCard }      // every card, for who is a human
+	auditIn        struct{}                             // the all-DM audit view is being fed
 	capabilitiesIn struct{ features map[string]string } // the daemon's 005 tokens
 	statusIn       struct {
 		text      string
@@ -375,12 +374,6 @@ func (m *uiModel) noteKind(nick, kind string) {
 	}
 }
 
-// has reports a daemon capability the daemon has actually advertised, unlike
-// supports, which assumes everything before the first connection.
-func (m *uiModel) has(feature string) bool {
-	return m.features != nil && m.supports(feature)
-}
-
 func (m *uiModel) setStatus(text string, isError bool) {
 	m.status, m.statusError, m.statusUntil = text, isError, m.now().Add(statusHold)
 }
@@ -544,9 +537,6 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 	case auditIn:
 		b := m.find(irc.AllDirectMessages)
 		b.topic = "all direct messages · human oversight · read-only"
-		if !v.available {
-			b.topic = "unavailable: daemon needs DM_AUDIT; upgrade/restart when safe"
-		}
 		b.version++
 	case statusIn:
 		if v.connected != nil {
@@ -571,12 +561,7 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			if b := m.cur(); b != nil && b.kind == bufChannel {
 				cmds = append(cmds, uiCmd{kind: "names", target: b.name})
 			}
-			if m.has("DECISION") {
-				cmds = append(cmds, uiCmd{kind: "decisions"})
-			}
-			if m.has("DIRECTORY") {
-				cmds = append(cmds, uiCmd{kind: "directory"})
-			}
+			cmds = append(cmds, uiCmd{kind: "decisions"}, uiCmd{kind: "directory"})
 		}
 	case keyIn:
 		cmds, quit = m.handleKey(key(v))

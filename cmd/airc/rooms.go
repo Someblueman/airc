@@ -33,7 +33,7 @@ func runRoomControl(action string, args []string, stdout, stderr io.Writer) erro
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequest(*opt, "CHANNEL_OPERATORS", func(ctx context.Context, c *irc.Client) error {
+	return chatRequest(*opt, func(ctx context.Context, c *irc.Client) error {
 		if *tokenFile != "" {
 			token, err := admin.ReadToken(*tokenFile)
 			if err != nil {
@@ -112,9 +112,6 @@ func runMonitor(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	defer c.Close()
-	if !c.Supports("MONITOR") {
-		return errors.New("monitor requires an updated daemon")
-	}
 	if err := c.Monitor(strings.Split(*nicks, ",")...); err != nil {
 		return err
 	}

@@ -56,9 +56,6 @@ func runDecideSession(ctx context.Context, session *agentConnection, args []stri
 // warnDeciderKind reads nick's directory card over client and warns when its
 // kind is not human. It never refuses: a lookup that fails is one line too.
 func warnDeciderKind(ctx context.Context, client *irc.Client, nick string, stderr io.Writer) {
-	if !client.Supports("DIRECTORY") {
-		return
-	}
 	kind, err := lookupKind(ctx, client, nick)
 	switch {
 	case err != nil:

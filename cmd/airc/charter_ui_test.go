@@ -130,7 +130,7 @@ func TestUICharterChangeSignalNotesAndRereads(t *testing.T) {
 
 // The model reads the open room's charter when the connection comes up and
 // again after a reconnect, notes a change made while it was away, redraws an
-// open view in place, and says when the daemon predates charters.
+// open view in place.
 func TestUIModelReadsTheCharterOnConnectAndReconnect(t *testing.T) {
 	m := newTestModel("#a")
 	online, offline := true, false
@@ -181,17 +181,5 @@ func TestUIModelReadsTheCharterOnConnectAndReconnect(t *testing.T) {
 	m.update(charterIn{channel: "#a", open: true})
 	if s, _ := m.activeStatus(); s != "#a has no charter" || m.current != "#a" || helpText(view.help) != "Charter of #a\n#a has no charter" {
 		t.Fatalf("a cleared charter: status %q current %q view\n%s", s, m.current, helpText(view.help))
-	}
-
-	// A daemon from before charters: the view says so, and a read made in
-	// the background notes nothing.
-	m.update(charterIn{channel: "#a", open: true, unsupported: true})
-	if m.current != "charter:#a" || helpText(view.help) != "Charter of #a\n"+errNoCharters.Error() {
-		t.Fatalf("current %q view\n%s", m.current, helpText(view.help))
-	}
-	m.status = ""
-	m.update(charterIn{channel: "#a", unsupported: true})
-	if s, _ := m.activeStatus(); s != "" {
-		t.Fatalf("status %q", s)
 	}
 }

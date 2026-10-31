@@ -25,7 +25,7 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	opt.session = session
 	limit := fs.Int("limit", 50, "maximum messages to return")
 	after := fs.String("after", "", "exclusive message ID cursor")
-	run := fs.String("run", "", "only messages posted under this run label (needs a daemon with RUN)")
+	run := fs.String("run", "", "only messages posted under this run label")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -60,46 +60,15 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	}
 	defer closeOneShot(*opt, client)
 	defer closeOnCancel(ctx, client)()
-	if _, _, conversation := protocol.ConversationTarget(target); conversation {
-		if !client.Supports("REPLIES") {
-			return errors.New("conversation history needs a daemon with REPLIES; upgrade/restart when active work is finished")
-		}
-		if *after == "" {
-			*after = "*"
-		}
-	}
-	if !client.Ephemeral() {
-		// Older servers only serve channels, and only to members.
-		if !protocol.IsChannel(target) {
-			return errors.New("this aircd cannot read direct-message history; restart it from a current build")
-		}
-		if err := client.Join(target); err != nil {
-			return err
-		}
-	}
-	if target == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
-		return errors.New("all-DM history needs a daemon with DM_AUDIT; upgrade/restart when active work is finished")
+	if _, _, conversation := protocol.ConversationTarget(target); conversation && *after == "" {
+		*after = "*"
 	}
 	page, err := fetchHistoryWith(ctx, client, target, *after, *limit, irc.HistoryOptions{Run: *run}, nil)
 	if err != nil {
 		return err
 	}
 	messages, status := page.messages, page.status
-	switch {
-	case status == "" && *after != "":
-		// Older servers ignore the cursor and return the latest messages.
-		cursor := -1
-		for index, message := range messages {
-			if message.ID == *after {
-				cursor = index
-				break
-			}
-		}
-		if cursor < 0 {
-			return fmt.Errorf("history cursor %q is not in the latest %d messages; it may have expired", *after, *limit)
-		}
-		messages = messages[cursor+1:]
-	case status == "expired":
+	if status == "expired" {
 		if session != nil {
 			_ = writePageStatus(stdout, page)
 		}

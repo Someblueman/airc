@@ -46,8 +46,7 @@ func (c *Client) Search(target, query, from, after string, limit int) error {
 	return c.SearchWith(target, query, from, after, limit, SearchOptions{})
 }
 
-// SearchOptions refine a search on a daemon with SEARCH_TERMS. The zero value
-// is a plain SEARCH: one case-insensitive substring, oldest first.
+// SearchOptions refine a search. The zero value is a plain SEARCH: one case-insensitive substring, oldest first.
 type SearchOptions struct {
 	// Terms reads the query as terms that must all occur: words, "quoted
 	// phrases", and -word or -"phrase" for what must not.

@@ -17,9 +17,6 @@ import (
 func (b *Backend) Waiting(ctx context.Context, grant *store.ReadGrant) (core.WaitingResult, error) {
 	valid := func(r core.Request) bool { return roomRead(core.WaitingRead)(r) && validHistoryID(r.ParentID) }
 	return readSnapshot(ctx, b, grant, valid, core.MaxWaitingBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.WaitingResult, error) {
-		if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
-			return core.WaitingResult{}, ErrReadUnsupported
-		}
 		request := core.Request{Operation: core.ContextRead, Target: r.Target, ParentID: r.ParentID}
 		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)
 		if err != nil {

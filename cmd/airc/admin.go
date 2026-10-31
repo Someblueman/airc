@@ -98,7 +98,10 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 		scope = channelName(*channel)
 	}
 	request := irc.AdminRequest{Action: action, Nick: nick, Scope: scope, Seconds: int64((*duration + time.Second - 1) / time.Second), Reason: *reason}
-	return chatRequest(*opt, "ADMIN", func(ctx context.Context, client *irc.Client) error {
+	return chatRequest(*opt, func(ctx context.Context, client *irc.Client) error {
+		if !client.Supports("ADMIN") {
+			return errors.New(lacksCapability("ADMIN"))
+		}
 		if err := client.AuthenticateAdmin(token); err != nil {
 			return err
 		}

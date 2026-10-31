@@ -298,10 +298,6 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		// Read for /charter (text "open"), on first showing a room, or
 		// after a reconnect; the live signal only notes a change.
 		entries, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "room", Target: cmd.target, Seconds: -1, Limit: -1}, translate)
-		if charterUnsupported(err) {
-			b.emit(ctx, charterIn{channel: cmd.target, open: cmd.text == "open", unsupported: true})
-			return true, nil
-		}
 		if err != nil {
 			return true, err
 		}
@@ -314,9 +310,6 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 	case "react":
 		return true, c.React(cmd.target, cmd.text)
 	case "chat":
-		if (cmd.request.Action == "typing" || cmd.request.Action == "thinking") && !c.Supports("CHAT") {
-			return true, nil
-		}
 		entries, err := irc.RequestChat(ctx, c, *cmd.request, translate)
 		if err == nil && (cmd.request.Action == "handoffs" || cmd.request.Action == "decisions" || cmd.request.Action == "statuses") {
 			// One status line holds the whole list.
@@ -436,14 +429,11 @@ func (b *uiBackend) refreshBoard(ctx context.Context, c *irc.Client, room string
 func (m *uiModel) showCharter(c charterIn) {
 	room := m.ensureChannel(c.channel)
 	known, previous := room.charterKnown, room.charter
-	if !c.unsupported {
-		room.charter, room.charterKnown = c.charter, true
-	}
+	room.charter, room.charterKnown = c.charter, true
 	name := "charter:" + c.channel
 	view := m.find(name)
 	if !c.open {
 		switch {
-		case c.unsupported:
 		case !known && c.charter != "":
 			m.setStatus(c.channel+" has a charter; /charter shows it", false)
 		case known && c.charter != previous:
@@ -454,7 +444,7 @@ func (m *uiModel) showCharter(c charterIn) {
 		}
 		return
 	}
-	if c.charter == "" && !c.unsupported {
+	if c.charter == "" {
 		m.setStatus(c.channel+" has no charter", false)
 		if view != nil {
 			renderCharter(view, c) // an open view no longer shows a cleared charter
@@ -471,18 +461,15 @@ func (m *uiModel) showCharter(c charterIn) {
 }
 
 // renderCharter draws a charter view: the heading, then the charter line by
-// line, that the room has none, or that the daemon predates charters.
+// line, or that the room has none.
 func renderCharter(view *uiBuffer, c charterIn) {
 	view.help = []helpLine{{head: "Charter of " + c.channel}}
-	switch {
-	case c.unsupported:
-		view.help = append(view.help, helpLine{body: errNoCharters.Error()})
-	case c.charter == "":
+	if c.charter == "" {
 		view.help = append(view.help, helpLine{body: c.channel + " has no charter"})
-	default:
-		for line := range strings.SplitSeq(c.charter, "\n") {
-			view.help = append(view.help, helpLine{body: line})
-		}
+		return
+	}
+	for line := range strings.SplitSeq(c.charter, "\n") {
+		view.help = append(view.help, helpLine{body: line})
 	}
 	view.topic = "Charter of " + c.channel + " · /close returns to " + view.returnTo
 	view.version++

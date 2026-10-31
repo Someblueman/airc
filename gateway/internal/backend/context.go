@@ -40,9 +40,6 @@ func (b *Backend) Context(ctx context.Context, grant *store.ReadGrant) (core.Con
 	}
 	var result core.ContextResult
 	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
-		if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
-			return ErrReadUnsupported
-		}
 		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room", nil)
 		if err != nil {
 			return err

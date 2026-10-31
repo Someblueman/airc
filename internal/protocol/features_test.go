@@ -11,11 +11,6 @@ func TestFeaturesTableIsConsistent(t *testing.T) {
 			t.Errorf("%s is at level %d; this build speaks levels 1-%d", name, level, Level)
 		}
 	}
-	for _, action := range []string{"context", "pin", "unpin", "pins", "room", "status", "statuses", "resolve", "poll", "vote", "results", "close-poll", "handoff", "handoff-accept", "handoffs", "decision", "decision-answer", "decisions", "paste-begin", "paste-get", "pastes", "action", "correct", "retract", "prepare", "cancel", "waiting", "typing", "thinking"} {
-		if _, ok := Features[ChatFeature(action)]; !ok {
-			t.Errorf("CHAT action %s is advertised under %s, which is not in the table", action, ChatFeature(action))
-		}
-	}
 }
 
 func TestSupportsByLevelAndByToken(t *testing.T) {

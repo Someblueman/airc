@@ -11,14 +11,14 @@ import (
 )
 
 // uiCommand is one slash command of the full-screen client: how to type it,
-// what it does, and the daemon capability it needs. The table drives Tab
+// what it does, and the daemon configuration it needs. The table drives Tab
 // completion and the /help view, so a command is documented wherever it is
 // added.
 type uiCommand struct {
 	name  string
 	usage string // arguments after the name; "ID" first means a message ID
 	help  string
-	needs string // a feature (protocol.Features or a configuration token), or "" for commands every daemon serves
+	needs string // a token the daemon sends only when configured for it (ADMIN), or "" for commands every daemon serves
 	group string
 }
 
@@ -26,52 +26,52 @@ var uiCommands = []uiCommand{
 	{"/help", "", "this list, with what the connected daemon supports", "", "General"},
 	{"/join", "#channel", "open a channel and follow it live", "", "General"},
 	{"/msg", "nick text", "send a direct message", "", "General"},
-	{"/topic", "[text|-]", "show, set or clear the channel header", "TOPIC", "General"},
-	{"/charter", "", "open this room's charter, its longer rules, in a view; /close returns", "CHARTER", "General"},
-	{"/run", "ID", "a read-only view of this room's messages posted under run ID, oldest first", "RUN", "General"},
-	{"/search", "words", "search this room: every word must occur, \"phrases\" stay together, -word excludes", "SEARCH", "General"},
+	{"/topic", "[text|-]", "show, set or clear the channel header", "", "General"},
+	{"/charter", "", "open this room's charter, its longer rules, in a view; /close returns", "", "General"},
+	{"/run", "ID", "a read-only view of this room's messages posted under run ID, oldest first", "", "General"},
+	{"/search", "words", "search this room: every word must occur, \"phrases\" stay together, -word excludes", "", "General"},
 	{"/close", "", "close this room, thread, search or help view", "", "General"},
 	{"/quit", "", "leave the UI (also Ctrl-C)", "", "General"},
-	{"/context", "ID", "retained context, pins and corrections, with live replies", "CONTEXT", "Conversations"},
-	{"/thread", "ID", "open a conversation with live replies; typing replies to its latest message", "REPLIES", "Conversations"},
-	{"/reply", "ID text", "reply to a particular message", "REPLIES", "Conversations"},
-	{"/react", "ID symbol", "react to a message (never approval)", "REACTIONS", "Conversations"},
-	{"/follow", "ID", "add a thread to this user's CLI checks", "REPLIES", "Conversations"},
-	{"/unfollow", "ROOT_ID", "remove a followed thread", "REPLIES", "Conversations"},
-	{"/next", "", "continue an open thread or search", "REPLIES", "Conversations"},
-	{"/first", "", "restart a thread or search from the oldest retained results", "REPLIES", "Conversations"},
-	{"/paste", "ID", "open a shared paste read-only, 200 lines a page; /next continues", "PASTE", "Conversations"},
-	{"/pin", "ID", "share a message as a room pin", "PINS", "Room"},
-	{"/unpin", "ID", "remove a room pin", "PINS", "Room"},
-	{"/pins", "", "list this room's pins", "PINS", "Room"},
-	{"/correct", "ID text", "publish a correction to your message", "CHAT", "Room"},
-	{"/retract", "ID reason", "retract your message", "CHAT", "Room"},
-	{"/prepare", "ID note", "promise a reply within two minutes", "CHAT", "Room"},
-	{"/waiting", "ID", "who has promised a reply", "CHAT", "Room"},
-	{"/cancel", "ID", "cancel your own promise", "CHAT", "Room"},
-	{"/me", "text", "an action in this room", "CHAT", "Room"},
-	{"/poll", "question | a | b", "a one-hour poll in this room", "POLLS", "Room"},
-	{"/vote", "ID number", "vote in a poll", "POLLS", "Room"},
-	{"/results", "ID", "poll results", "POLLS", "Room"},
-	{"/close-poll", "ID", "close your poll", "POLLS", "Room"},
-	{"/status", "[task | working|blocked|done | note]", "post where you are in this room; alone, list the room's latest statuses", "STATUS_POSTS", "Room"},
-	{"/resolve", "ID [note]", "close a question settled elsewhere: its author, who it addresses, or an admin", "RESOLVE", "Conversations"},
-	{"/handoff", "[@nick] text", "hand work to this room (first to accept takes it), to nick, or in a DM to them", "HANDOFF", "Handoffs"},
-	{"/accept", "ID [note]", "take a handoff", "HANDOFF", "Handoffs"},
-	{"/done", "ID [note]", "tell everyone a handoff you hold is finished", "HANDOFF", "Handoffs"},
-	{"/decline", "ID [note]", "turn a handoff down, or give one you hold back to the room", "HANDOFF", "Handoffs"},
-	{"/blocked", "ID reason", "say a handoff you hold is stuck; /accept takes it up again", "HANDOFF", "Handoffs"},
-	{"/withdraw", "ID [note]", "call off your handoff", "HANDOFF", "Handoffs"},
-	{"/handoffs", "", "handoffs for you, held by you or handed over by you", "HANDOFF", "Handoffs"},
-	{"/board", "[#room]", "a room's handoffs by state: open, in progress, blocked and done this week; live steps redraw it", "HANDOFF", "Handoffs"},
-	{"/decide", "@nick text | option | option", "ask nick (in a DM, the other person) to decide; options after | are numbered", "DECISION", "Decisions"},
-	{"/answer", "ID [N] [note]", "answer a decision asked of you: the option number, a note, or both", "DECISION", "Decisions"},
-	{"/withdraw-decision", "ID [note]", "call off your decision", "DECISION", "Decisions"},
-	{"/decisions", "", "decisions waiting on you and those you asked", "DECISION", "Decisions"},
+	{"/context", "ID", "retained context, pins and corrections, with live replies", "", "Conversations"},
+	{"/thread", "ID", "open a conversation with live replies; typing replies to its latest message", "", "Conversations"},
+	{"/reply", "ID text", "reply to a particular message", "", "Conversations"},
+	{"/react", "ID symbol", "react to a message (never approval)", "", "Conversations"},
+	{"/follow", "ID", "add a thread to this user's CLI checks", "", "Conversations"},
+	{"/unfollow", "ROOT_ID", "remove a followed thread", "", "Conversations"},
+	{"/next", "", "continue an open thread or search", "", "Conversations"},
+	{"/first", "", "restart a thread or search from the oldest retained results", "", "Conversations"},
+	{"/paste", "ID", "open a shared paste read-only, 200 lines a page; /next continues", "", "Conversations"},
+	{"/pin", "ID", "share a message as a room pin", "", "Room"},
+	{"/unpin", "ID", "remove a room pin", "", "Room"},
+	{"/pins", "", "list this room's pins", "", "Room"},
+	{"/correct", "ID text", "publish a correction to your message", "", "Room"},
+	{"/retract", "ID reason", "retract your message", "", "Room"},
+	{"/prepare", "ID note", "promise a reply within two minutes", "", "Room"},
+	{"/waiting", "ID", "who has promised a reply", "", "Room"},
+	{"/cancel", "ID", "cancel your own promise", "", "Room"},
+	{"/me", "text", "an action in this room", "", "Room"},
+	{"/poll", "question | a | b", "a one-hour poll in this room", "", "Room"},
+	{"/vote", "ID number", "vote in a poll", "", "Room"},
+	{"/results", "ID", "poll results", "", "Room"},
+	{"/close-poll", "ID", "close your poll", "", "Room"},
+	{"/status", "[task | working|blocked|done | note]", "post where you are in this room; alone, list the room's latest statuses", "", "Room"},
+	{"/resolve", "ID [note]", "close a question settled elsewhere: its author, who it addresses, or an admin", "", "Conversations"},
+	{"/handoff", "[@nick] text", "hand work to this room (first to accept takes it), to nick, or in a DM to them", "", "Handoffs"},
+	{"/accept", "ID [note]", "take a handoff", "", "Handoffs"},
+	{"/done", "ID [note]", "tell everyone a handoff you hold is finished", "", "Handoffs"},
+	{"/decline", "ID [note]", "turn a handoff down, or give one you hold back to the room", "", "Handoffs"},
+	{"/blocked", "ID reason", "say a handoff you hold is stuck; /accept takes it up again", "", "Handoffs"},
+	{"/withdraw", "ID [note]", "call off your handoff", "", "Handoffs"},
+	{"/handoffs", "", "handoffs for you, held by you or handed over by you", "", "Handoffs"},
+	{"/board", "[#room]", "a room's handoffs by state: open, in progress, blocked and done this week; live steps redraw it", "", "Handoffs"},
+	{"/decide", "@nick text | option | option", "ask nick (in a DM, the other person) to decide; options after | are numbered", "", "Decisions"},
+	{"/answer", "ID [N] [note]", "answer a decision asked of you: the option number, a note, or both", "", "Decisions"},
+	{"/withdraw-decision", "ID [note]", "call off your decision", "", "Decisions"},
+	{"/decisions", "", "decisions waiting on you and those you asked", "", "Decisions"},
 	{"/away", "[reason]", "publish one-hour away presence, or clear it", "", "Presence and operators"},
-	{"/op", "nick", "grant channel operator with your account", "CHANNEL_OPERATORS", "Presence and operators"},
-	{"/deop", "nick", "revoke channel operator", "CHANNEL_OPERATORS", "Presence and operators"},
-	{"/kick", "nick [reason]", "remove someone from this channel", "CHANNEL_OPERATORS", "Presence and operators"},
+	{"/op", "nick", "grant channel operator with your account", "", "Presence and operators"},
+	{"/deop", "nick", "revoke channel operator", "", "Presence and operators"},
+	{"/kick", "nick [reason]", "remove someone from this channel", "", "Presence and operators"},
 	{"/mute", "nick [reason]", "mute everywhere, with the default admin credential", "ADMIN", "Moderation"},
 	{"/unmute", "nick", "lift a mute", "ADMIN", "Moderation"},
 	{"/ban", "nick [reason]", "ban everywhere", "ADMIN", "Moderation"},
@@ -105,7 +105,8 @@ var uiKeys = []helpLine{
 
 // supports reports a daemon feature as irc.Client.Supports does, true until
 // the daemon has said otherwise so nothing is refused before the first
-// connection.
+// connection. Every feature of this client's level comes with the daemon
+// (the dial refuses one below it); what is asked here is configuration.
 func (m *uiModel) supports(feature string) bool {
 	if feature == "" || m.features == nil {
 		return true

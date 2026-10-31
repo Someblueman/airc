@@ -22,9 +22,6 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 		return core.Request{}, store.ErrInvalid
 	}
 	if r.ThreadMode == threadModeThread {
-		if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
-			return core.Request{}, ErrReadUnsupported
-		}
 		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)
 		if err != nil {
 			return core.Request{}, err
@@ -36,24 +33,19 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 		r.ParentID = root
 		return r, nil
 	}
-	if client.Supports("CHECK") {
-		proofRequest := r
-		proofRequest.Limit = 1
-		proofRequest.Cursor = "*"
-		entries, err := boundedHistoryCheck(ctx, client, proofRequest, nil)
-		if err != nil {
-			return core.Request{}, err
-		}
-		page, err := historyPage(entries, proofRequest)
-		if err != nil {
-			return core.Request{}, err
-		}
-		if len(page.Messages) != 0 {
-			return r, nil
-		}
+	proofRequest := r
+	proofRequest.Limit = 1
+	proofRequest.Cursor = "*"
+	entries, err := boundedHistoryCheck(ctx, client, proofRequest, nil)
+	if err != nil {
+		return core.Request{}, err
 	}
-	if !client.Supports("CHAT") || !client.Supports("CONTEXT") || !client.Supports("CONTEXT_BYTES") {
-		return core.Request{}, ErrReadUnsupported
+	page, err := historyPage(entries, proofRequest)
+	if err != nil {
+		return core.Request{}, err
+	}
+	if len(page.Messages) != 0 {
+		return r, nil
 	}
 	proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)
 	if err != nil {

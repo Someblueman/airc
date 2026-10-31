@@ -48,9 +48,6 @@ func (b *Backend) Follow(ctx context.Context, grant *store.ReadGrant, scope Chec
 	scope.DirectMessages = scope.DirectMessages && a.Author.Registered
 	deadline := time.Now().Add(b.followLease)
 	return b.withReadOptions(ctx, a, readOptions{follow: true, deadline: deadline}, func(overall context.Context, client *irc.Client) error {
-		if !client.Supports("CHECK") {
-			return ErrReadUnsupported
-		}
 		p := checkPlan{request: r, scope: scope, nick: client.Nick()}
 		if !strings.EqualFold(p.nick, a.Author.Nick) {
 			return auth.ErrForbidden
