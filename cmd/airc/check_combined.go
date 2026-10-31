@@ -79,7 +79,7 @@ func (c *checker) fetchCombined(ctx context.Context, store *cursorStore, rooms [
 				headers = append(headers, checkTopic{Type: "topic", Target: e.Target, Topic: e.Topic})
 			}
 		case "charter":
-			if header, changed := charterHeader(e.Target, e.Charter, store); changed {
+			if header, changed := charterHeader(e.Target, roomCharter{e.Charter, e.Orchestrator, e.Goal}, store); changed {
 				headers = append(headers, header)
 			}
 		case "pin":

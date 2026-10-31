@@ -117,21 +117,24 @@ type checkMessage struct {
 }
 
 // checkTopic is a header row: a room's topic, its charter or a pin preview.
-// A topic or pin row carries Topic; a charter row carries Charter.
+// A topic or pin row carries Topic; a charter row carries Charter and, in an
+// orchestrated room, Orchestrator and Goal.
 type checkTopic struct {
-	Type        string `json:"type"`
-	Target      string `json:"target"`
-	Topic       string `json:"topic,omitempty"`
-	Charter     string `json:"charter,omitempty"`
-	ID          string `json:"id,omitempty"`
-	From        string `json:"from,omitempty"`
-	PinKey      string `json:"-"`
-	Fingerprint string `json:"-"`
+	Type         string `json:"type"`
+	Target       string `json:"target"`
+	Topic        string `json:"topic,omitempty"`
+	Charter      string `json:"charter,omitempty"`
+	Orchestrator string `json:"orchestrator,omitempty"`
+	Goal         string `json:"goal,omitempty"`
+	ID           string `json:"id,omitempty"`
+	From         string `json:"from,omitempty"`
+	PinKey       string `json:"-"`
+	Fingerprint  string `json:"-"`
 }
 
 // empty reports a header with nothing to show: a cleared topic or charter,
 // which is only remembered as gone.
-func (h checkTopic) empty() bool { return h.Topic == "" && h.Charter == "" }
+func (h checkTopic) empty() bool { return h.Topic == "" && h.Charter == "" && h.Orchestrator == "" }
 
 type checkStatus struct {
 	Type      string   `json:"type"`

@@ -9,25 +9,45 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// charterFingerprint is what the cursor store keeps of a shown charter: a
-// hash, never the text. An empty charter has none.
-func charterFingerprint(text string) string {
-	if text == "" {
+// roomCharter is what a charter header shows of a room: its charter and,
+// while the room is orchestrated, its orchestrator and goal.
+type roomCharter struct {
+	Charter, Orchestrator, Goal string
+}
+
+// charterFingerprint is what the cursor store keeps of a shown charter and
+// orchestrator mode: a hash, never the text, so either changing shows the
+// header again. A room with neither has none; one that is not orchestrated
+// hashes its charter alone.
+func charterFingerprint(c roomCharter) string {
+	if c == (roomCharter{}) {
 		return ""
+	}
+	text := c.Charter
+	if c.Orchestrator != "" {
+		text += "\x00orchestrator\x00" + c.Orchestrator + "\x00" + c.Goal
 	}
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:16])
 }
 
-// charterHeader is the header row for room's charter when it differs from
-// the one last shown: the text to print, or an empty row that only forgets a
-// cleared charter.
-func charterHeader(room, text string, store *cursorStore) (checkTopic, bool) {
-	fingerprint := charterFingerprint(text)
+// charterHeader is the header row for room's charter when it, or the room's
+// orchestrator mode, differs from the one last shown: what to print, or an
+// empty row that only forgets a cleared one.
+func charterHeader(room string, c roomCharter, store *cursorStore) (checkTopic, bool) {
+	fingerprint := charterFingerprint(c)
 	if fingerprint == store.Charters[room] {
 		return checkTopic{}, false
 	}
-	return checkTopic{Type: "charter", Target: room, Charter: text, Fingerprint: fingerprint}, true
+	return checkTopic{Type: "charter", Target: room, Charter: c.Charter, Orchestrator: c.Orchestrator, Goal: c.Goal, Fingerprint: fingerprint}, true
+}
+
+// orchestratedLine says who orchestrates room and toward what goal.
+func orchestratedLine(room, orchestrator, goal string) string {
+	if goal == "" {
+		return room + " orchestrated by " + orchestrator
+	}
+	return room + " orchestrated by " + orchestrator + ": " + goal
 }
 
 // checkCharters reads each followed room's charter when a check is too large
@@ -43,7 +63,7 @@ func checkCharters(ctx context.Context, c *irc.Client, rooms []checkTarget, stor
 			return nil, err
 		}
 		for _, e := range entries {
-			if header, changed := charterHeader(room.name, e.Charter, store); changed {
+			if header, changed := charterHeader(room.name, roomCharter{e.Charter, e.Orchestrator, e.Goal}, store); changed {
 				headers = append(headers, header)
 			}
 		}

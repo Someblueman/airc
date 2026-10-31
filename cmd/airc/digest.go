@@ -118,6 +118,20 @@ type digestPending struct {
 	Preview   string    `json:"preview"`
 }
 
+// digestGoal is an orchestrated room among the digest's rooms: who
+// orchestrates it and toward what goal. For the room's orchestrator it
+// counts the room's handoffs by state, done ones from the last week.
+type digestGoal struct {
+	Target        string `json:"target"`
+	Orchestrator  string `json:"orchestrator"`
+	Goal          string `json:"goal,omitempty"`
+	Orchestrating bool   `json:"orchestrating,omitempty"`
+	Open          int    `json:"open,omitempty"`
+	InProgress    int    `json:"in_progress,omitempty"`
+	Blocked       int    `json:"blocked,omitempty"`
+	Done          int    `json:"done,omitempty"`
+}
+
 type digestHeader struct {
 	Type    string `json:"type"` // topic, charter or pin
 	Target  string `json:"target"`
@@ -137,6 +151,7 @@ type digestSummary struct {
 	More          bool             `json:"more"`
 	MarkedRead    bool             `json:"marked_read"`
 	Rooms         []digestRoom     `json:"rooms"`
+	Goals         []digestGoal     `json:"goals,omitempty"`
 	Waiting       []digestItem     `json:"waiting_on_you"`
 	WaitingMore   int              `json:"waiting_omitted,omitempty"`
 	Corrections   []digestItem     `json:"corrections,omitempty"`
@@ -204,6 +219,7 @@ func runDigestSession(ctx context.Context, session *agentConnection, args []stri
 		summary.DecisionsMore = len(summary.Decisions) - digestWaiting
 		summary.Decisions = summary.Decisions[:digestWaiting]
 	}
+	summary.Goals = orchestratedRooms(ctx, *opt, settings.channels, &summary.Warnings)
 	summary.PendingSends = pendingSends(*opt, &summary.Warnings)
 	if len(summary.PendingSends) > digestWaiting {
 		summary.PendingMore = len(summary.PendingSends) - digestWaiting
@@ -336,7 +352,7 @@ func summarize(nick string, rows checkRows, now time.Time) digestSummary {
 			// need no reply; a status is narration, a resolution closes a
 			// thread, and a settled thread waits on nobody.
 			settled := resolved[m.ID] || m.ThreadID != "" && resolved[m.ThreadID]
-			if !repliedTo[m.ID] && !settled && !strings.HasPrefix(m.Kind, "handoff") && !strings.HasPrefix(m.Kind, "decision") && m.Kind != "status" && m.Kind != "resolved" {
+			if !repliedTo[m.ID] && !settled && !strings.HasPrefix(m.Kind, "handoff") && !strings.HasPrefix(m.Kind, "decision") && m.Kind != "status" && m.Kind != "resolved" && m.Kind != "orchestrate" {
 				d.Waiting = append(d.Waiting, item) // resolveAnswered asks the server about the rest
 			}
 		}
@@ -464,6 +480,54 @@ func openHandoffs(ctx context.Context, opt options, rooms []string, warnings *[]
 	return out
 }
 
+// orchestratedRooms reads the orchestrator mode of the first digestRooms of
+// rooms, and for each room opt.nick orchestrates, the room's handoffs by
+// state. A failure warns.
+func orchestratedRooms(ctx context.Context, opt options, rooms []string, warnings *[]string) []digestGoal {
+	var out []digestGoal
+	err := chatRequestWithContext(ctx, opt, func(ctx context.Context, client *irc.Client) error {
+		for _, room := range rooms[:min(len(rooms), digestRooms)] {
+			if room = channelName(room); !protocol.IsChannel(room) {
+				continue
+			}
+			entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}, nil)
+			if err != nil {
+				return err
+			}
+			for _, e := range entries {
+				if e.Orchestrator == "" {
+					continue
+				}
+				g := digestGoal{Target: room, Orchestrator: e.Orchestrator, Goal: e.Goal, Orchestrating: strings.EqualFold(e.Orchestrator, opt.nick)}
+				if g.Orchestrating {
+					handoffs, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "handoffs", Target: room}, nil)
+					if err != nil {
+						return err
+					}
+					for _, h := range handoffs {
+						switch h.State {
+						case "open":
+							g.Open++
+						case "accepted":
+							g.InProgress++
+						case "blocked":
+							g.Blocked++
+						case "done":
+							g.Done++
+						}
+					}
+				}
+				out = append(out, g)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		*warnings = append(*warnings, "could not read the rooms' orchestrators: "+err.Error())
+	}
+	return out
+}
+
 // openDecisions lists the open decisions that concern opt.nick: for it to
 // make or asked by it, and those asked in the first digestRooms of rooms,
 // since a one-shot command joins no room. Each carries whether its asker is
@@ -537,6 +601,9 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	// the receipt, never by posting again.
 	if n := len(d.PendingSends) + d.PendingMore; n > 0 {
 		fmt.Fprintf(&b, "%d uncertain %s; airc send --pending lists %s; --retry REQUEST_ID recovers a receipt\n", n, plural(n, "send", "sends"), plural(n, "it", "them"))
+	}
+	for _, g := range d.Goals {
+		b.WriteString(goalLine(g) + "\n")
 	}
 	for _, r := range d.Rooms {
 		var people []string
@@ -621,6 +688,19 @@ func writeDigest(out io.Writer, d digestSummary, now time.Time) error {
 	}
 	_, err := io.WriteString(out, b.String())
 	return err
+}
+
+// goalLine is an orchestrated room's line in the digest: its goal, and for
+// its orchestrator, its handoffs by state.
+//
+//	Orchestrating #work: ship the parser fix; 2 open · 1 in progress · 0 blocked · 3 done this week
+//	Goal of #work (lead orchestrates): ship the parser fix
+func goalLine(g digestGoal) string {
+	goal := cmp.Or(g.Goal, "no goal set")
+	if g.Orchestrating {
+		return fmt.Sprintf("Orchestrating %s: %s; %d open · %d in progress · %d blocked · %d done this week", g.Target, goal, g.Open, g.InProgress, g.Blocked, g.Done)
+	}
+	return fmt.Sprintf("Goal of %s (%s orchestrates): %s", g.Target, g.Orchestrator, goal)
 }
 
 // writeDecisions lists the decisions waiting on nick, humans' first, then

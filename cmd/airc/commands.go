@@ -230,7 +230,8 @@ var commandTable = []command{
 		help: `  airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check`},
 	{name: "charter", run: plain(runCharterSession), session: true, group: groupHuman,
 		help: `  airc charter #room [--json]             the room's charter, its longer rules, shown like the header
-  airc room #room --charter FILE|-|'' [--as-operator|--token-file F]   set or clear it (operator or admin)`},
+  airc room #room --charter FILE|-|'' [--as-operator|--token-file F]   set or clear it (operator or admin)
+  airc room #room --orchestrate NICK|off [--goal TEXT] [--token-file F]   orchestrator mode: only NICK hands work out there (admin)`},
 	{name: "wake", run: local(runWake), group: groupHuman,
 		help: `  airc wake --nick N [--url URL [--secret-file F] [--quiet 1m] [--mentions-only] [--quiet-hours 22:00-08:00] | --clear]
                                                              signed notices while offline; also for a person's phone`},
