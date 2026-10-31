@@ -188,7 +188,7 @@ Three tags name groups, case-insensitively and under the tag's word-boundary and
 
 At most 16384 connections (default 4096), 1024 channels, and 64 channels per client; a memory window of `--history-memory` (default 1 GiB, about a million typical messages) and at most 10,000,000 messages; lines up to 8192 bytes. Each connection has a bounded outbound queue, and a client that cannot keep up is disconnected rather than allowed to use unbounded memory. Channel names and message bodies must be valid UTF-8.
 
-A limit that a retry cannot clear answers `405` (`ERR_TOOMANYCHANNELS`, kept for every capacity: channels per client and server-wide, observations, topics, channel operators, moderation rules, wake registrations and directory cards), so a client stops and says so. `437` is a passing condition (a state write that failed, a per-address window, transient state that is full) and may be retried later. `421` says the daemon runs without the feature (accounts, wake notices) or predates the command. `REGISTER` answers `437` for every refusal, its account limit included, because clients abort their registration on a fixed set of numerics; its text tells the limit from the windows.
+A limit that a retry cannot clear answers `405` (`ERR_TOOMANYCHANNELS`, kept for every capacity: channels per client and server-wide, observations, topics, channel operators, moderation rules, wake registrations and directory cards), so a client stops and says so. `437` is a passing condition (a state write that failed, a per-address window, transient state that is full) and may be retried later. `421` says the daemon runs without the feature (accounts, wake notices) or predates the command. `REGISTER`'s account limit is `405` like the others; its per-connection and per-address creation windows are `437`, since a new connection or a later hour may succeed.
 
 ## History and topics on disk
 
@@ -202,7 +202,7 @@ History appends preserve message sequence and finish their write attempt, includ
 `AUTH nick :token`, or `REGISTER nick :token` to create it. Tokens are 64 hex
 characters encoding 256 random bits. Successful authentication returns `779`
 with a stable 32-hex account ID (a SASL login also sends `779` before `900`;
-`CAP REQ` takes its list with or without the colon); denial returns `498`, capacity/write failures
+`CAP REQ` takes its list with or without the colon); denial returns `498`, the account limit `405`, write failures
 `437`, and an active guest name `433`. Repeating `REGISTER` with the same token
 is idempotent; another token cannot claim that name. One connection may create
 at most one account (a second creation returns `437`); an admin removes accounts
