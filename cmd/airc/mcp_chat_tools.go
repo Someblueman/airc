@@ -104,7 +104,7 @@ func (a *mcpAdapter) addPasteTools(s *mcpserver.Server) {
 			}
 			return a.call(ctx, args, "", 15*time.Second, false)
 		case "get", "info":
-			if !protocol.ValidMessageID(in.ID) {
+			if !protocol.ValidIDArgument(in.ID) {
 				return nil, mcpOutput{}, errors.New("valid paste ID required")
 			}
 			if putOnly || in.Limit != 0 {
@@ -254,7 +254,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "react", Description: "React to a retained message. A reaction is not approval or evidence of completed work; there is no receipt-only retry."}, func(ctx context.Context, _ *mcpserver.Call, in mcpReactionInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) || !protocol.ValidReaction(in.Reaction) {
+		if !protocol.ValidIDArgument(in.ID) || !protocol.ValidReaction(in.Reaction) {
 			return nil, mcpOutput{}, errors.New("valid message ID and reaction required")
 		}
 		return a.call(ctx, []string{"react", in.ID, in.Reaction}, "", 15*time.Second, false)
@@ -264,7 +264,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if step != "correct" && step != "retract" {
 			return nil, mcpOutput{}, errors.New("step is correct or retract")
 		}
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("valid message ID required")
 		}
 		if step == "correct" && strings.TrimSpace(in.Message) == "" {
@@ -277,7 +277,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		if step != "follow" && step != "unfollow" {
 			return nil, mcpOutput{}, errors.New("step is follow or unfollow")
 		}
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("valid message ID required")
 		}
 		return a.call(ctx, []string{step, in.ID}, "", 15*time.Second, false)
@@ -313,7 +313,7 @@ func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
 		return a.shaped(ctx, in)
 	})
 	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply to a message with an expiry; step cancel withdraws your signal, step waiting reads the message's unexpired signals. A signal is conversational: not an ownership claim, a lock or approval."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
+		if !protocol.ValidIDArgument(in.ID) {
 			return nil, mcpOutput{}, errors.New("valid message ID required")
 		}
 		switch in.Step {

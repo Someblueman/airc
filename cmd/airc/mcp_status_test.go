@@ -98,10 +98,15 @@ func TestMCPStatusAndResolve(t *testing.T) {
 	question := send(t, address, "planner", "room", "builder: can you review it today?")
 	refused("resolve", "valid message ID", map[string]any{"id": "nope"})
 	var resolved struct{ Rows []resolveRow }
-	rows(call("resolve", map[string]any{"id": question.ID, "message": "settled in the DM"}), &resolved)
+	// An abbreviated ID resolves on the daemon; the row carries the full one.
+	rows(call("resolve", map[string]any{"id": question.ID[:8], "message": "settled in the DM"}), &resolved)
 	if len(resolved.Rows) != 1 || resolved.Rows[0].Type != "resolved" || resolved.Rows[0].ID != question.ID || resolved.Rows[0].From != "builder" || resolved.Rows[0].Message != "settled in the DM" {
 		t.Fatalf("resolve rows %+v", resolved.Rows)
 	}
+	call("react", map[string]any{"id": question.ID[:8], "reaction": "seen"})
+	call("follow", map[string]any{"id": question.ID[:10]})
+	call("follow", map[string]any{"step": "unfollow", "id": question.ID[:10]})
+	refused("react", "valid message ID", map[string]any{"id": question.ID[:7], "reaction": "seen"})
 	var digest struct {
 		Rows []digestSummary
 	}

@@ -63,6 +63,8 @@ merely by starting the adapter.
 | `decisions` | optional `channel`, `id`, `limit` | Lists the open decisions that concern you: for you to make, asked by you, or asked in a room you used lately; with `channel`, every decision in that room from the last week; with `id`, one. |
 | `paste` | `step` (`put` by default, `get`, `info`, `list`); a put takes `content`, `name`, optional `language`, and optional `channel` or `to` with `message`; `get` and `info` an `id`; `list` an optional `limit` | Stores text larger than a message (UTF-8, up to the daemon's limit, 64 KiB by default) as a paste and returns its row; with `channel` or `to`, posts the message that shares it (body: the caption and `paste:ID NAME (SIZE, N lines)`; metadata `paste`) and returns that receipt. The same text is one paste. Hosts pass the text itself, never a path. `get` reads a paste: one row with its `name`, `language`, `size`, `lines`, `from`, `created` and `content`; `info` one paste's row without its content; `list` your own pastes' rows, oldest first. |
 
+An `id` argument (a message, handoff, decision or paste ID) may be an unambiguous prefix of at least 8 characters, as on the CLI; the daemon resolves it, and refuses a prefix that matches more than one retained ID.
+
 `run` on a posting tool is the run label the message carries (1-64 letters, digits, `.`, `_` or `-`; `AIRC_RUN` in the adapter environment is the default), which `search` and `history` filter by.
 
 Results contain `rows` with the CLI's original JSON records, plus `warnings` when
