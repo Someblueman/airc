@@ -262,3 +262,63 @@ func checkCharter(t *testing.T, s *Server, room string) protocol.CheckEntry {
 	t.Fatal("no charter entry")
 	return protocol.CheckEntry{}
 }
+
+// In an orchestrated room only the orchestrator, by account, or an admin
+// offers a handoff into the room, and a done step there says what was
+// delivered; a direct handoff and every other room are unchanged.
+func TestOrchestratedRoomHandoffRules(t *testing.T) {
+	address, _ := collaborationServer(t, t.TempDir())
+	lead := accountClient(t, address, "lead", "#work", "#side")
+	peer := accountClient(t, address, "peer", "#work", "#side")
+	worker := handoffClient(t, address, "worker", "#work", "#side")
+	boss := adminClient(t, address, "boss")
+	if err := boss.Join("#work"); err != nil {
+		t.Fatal(err)
+	}
+	nick, goal := "lead", "ship it"
+	if _, err := roomEntry(t, boss, orchestrateRequest("#work", &nick, &goal)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rule 1: the orchestrator and an admin offer into the room; a guest
+	// and another account are refused.
+	for _, c := range []*irc.Client{worker, peer} {
+		_, _, err := handoffChat(t, c, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "do a thing"})
+		if err == nil || !strings.Contains(err.Error(), "only lead, who orchestrates #work, may hand work out here; post a message or a status instead") {
+			t.Fatalf("%s handed work out: %v", c.Nick(), err)
+		}
+	}
+	offer := mustHandoff(t, lead, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "parse the header", For: "worker"})
+	mustHandoff(t, boss, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "an admin's task"})
+	// A direct handoff and a handoff into another room are anyone's.
+	direct := mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff", Target: "peer", Text: "review my branch"})
+	side := mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff", Target: "#side", Text: "tidy the docs"})
+
+	// Rule 2: done in the orchestrated room needs a note or a link.
+	mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff-accept", ID: offer.ID})
+	if _, _, err := handoffChat(t, worker, protocol.ChatRequest{Action: "handoff-done", ID: offer.ID, Text: "  "}); err == nil || !strings.Contains(err.Error(), "say what was delivered: --message or --link") {
+		t.Fatalf("a bare done in an orchestrated room: %v", err)
+	}
+	if done := mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff-done", ID: offer.ID, Text: "parser handles folded headers"}); done.State != "done" {
+		t.Fatalf("done with a note: %+v", done)
+	}
+	for _, h := range []irc.ChatEntry{direct, side} {
+		holder := peer
+		if h.ID == side.ID {
+			holder = lead
+		}
+		mustHandoff(t, holder, protocol.ChatRequest{Action: "handoff-accept", ID: h.ID})
+		if done := mustHandoff(t, holder, protocol.ChatRequest{Action: "handoff-done", ID: h.ID}); done.State != "done" {
+			t.Fatalf("a bare done outside the orchestrated room: %+v", done)
+		}
+	}
+
+	// Off lifts both rules.
+	empty := ""
+	if _, err := roomEntry(t, boss, orchestrateRequest("#work", &empty, nil)); err != nil {
+		t.Fatal(err)
+	}
+	again := mustHandoff(t, peer, protocol.ChatRequest{Action: "handoff", Target: "#work", Text: "anyone may now"})
+	mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff-accept", ID: again.ID})
+	mustHandoff(t, worker, protocol.ChatRequest{Action: "handoff-done", ID: again.ID})
+}
