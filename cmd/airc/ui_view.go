@@ -104,8 +104,16 @@ func (m *uiModel) header(b *uiBuffer, width int) string {
 		title += "  mentions and direct messages"
 	} else if b.kind == bufDirectMessages {
 		title = " All DMs  │  " + b.topic
-	} else if b.topic != "" {
-		title += "  │  " + b.topic
+	} else {
+		if b.kind == bufChannel && b.orchestrator != "" {
+			title += "  │  ⟐ " + b.orchestrator
+			if b.goal != "" {
+				title += ": " + b.goal
+			}
+		}
+		if b.topic != "" {
+			title += "  │  " + b.topic
+		}
 	}
 	title = fitPlain(title, max(width-utf8.RuneCountInString(state), 1))
 	return m.sty("7;1", padVisible(title+state, width))

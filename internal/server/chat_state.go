@@ -16,6 +16,11 @@ type roomSettings struct {
 	// Charter is the room's longer rules, beside the 400-byte header: up to
 	// protocol.MaxCharterBytes, set by an operator or an admin.
 	Charter string `json:"charter,omitempty"`
+	// Orchestrator is the registered nickname that alone hands work out in
+	// an orchestrated room, and Goal the room's one-line goal; an admin sets
+	// both, and both are empty when the room is not orchestrated.
+	Orchestrator string `json:"orchestrator,omitempty"`
+	Goal         string `json:"goal,omitempty"`
 }
 
 type chatState struct {
@@ -50,6 +55,14 @@ func (s *Server) RestoreChat(path string) error {
 	}
 	if err := s.chatStore.load(path); err != nil {
 		return err
+	}
+	// An orchestrator must have an account, which only the server knows
+	// (RestoreAccounts comes first).
+	for channel, room := range s.chat.Rooms {
+		if room.Orchestrator != "" && !s.registeredLocked(room.Orchestrator) {
+			s.chat, s.chatAt = newChatState(), ""
+			return fmt.Errorf("%s: %w", channel, errOrchestratorUnregistered(room.Orchestrator))
+		}
 	}
 	s.history.quotas = s.chat.Rooms
 	return nil
@@ -101,6 +114,9 @@ func (st *chatStore) load(path string) error {
 	for channel, r := range loaded.Rooms {
 		if !validChannel(channel) || r.SlowSeconds < 0 || r.SlowSeconds > 3600 || r.HistoryLimit < 0 || r.HistoryLimit > st.historyLimit || !protocol.ValidCharter(r.Charter) {
 			return errors.New("invalid room settings")
+		}
+		if r.Orchestrator != "" && !protocol.ValidNick(r.Orchestrator) || !protocol.ValidGoal(r.Goal) || r.Goal != "" && r.Orchestrator == "" {
+			return errors.New("invalid room orchestrator")
 		}
 	}
 	for id, p := range loaded.Polls {

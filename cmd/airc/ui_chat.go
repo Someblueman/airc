@@ -161,6 +161,26 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			return nil, true
 		}
 		return build(handoffInput{Step: name[1:], ID: fields[0], Message: tail})
+	case "/orchestrate":
+		if b == nil || b.kind != bufChannel || !need(1) {
+			m.setStatus("Use /orchestrate @nick goal, /orchestrate goal or /orchestrate off in a channel", true)
+			return nil, true
+		}
+		in := orchestrateInput{Channel: b.name}
+		switch nick, ok := strings.CutPrefix(fields[0], "@"); {
+		case ok:
+			in.Orchestrator, in.Goal = nick, tail
+		case len(fields) == 1 && strings.EqualFold(fields[0], "off"):
+			in.Off = true
+		default:
+			in.Goal = rest
+		}
+		r, err := in.request()
+		if err != nil {
+			m.setStatus(err.Error(), true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "orchestrate", target: b.name, request: &r}}, true
 	case "/handoffs":
 		request.Action = "handoffs"
 	case "/board":
@@ -301,11 +321,32 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		if err != nil {
 			return true, err
 		}
-		charter := ""
+		read := charterIn{channel: cmd.target, open: cmd.text == "open"}
 		for _, e := range entries {
-			charter = e.Charter
+			read.charter, read.orchestrator, read.goal = e.Charter, e.Orchestrator, e.Goal
 		}
-		b.emit(ctx, charterIn{channel: cmd.target, charter: charter, open: cmd.text == "open"})
+		b.emit(ctx, read)
+		return true, nil
+	case "orchestrate":
+		// Only an admin sets it: authenticate as /mute does, then set it.
+		path, err := defaultAdminTokenFile()
+		if err != nil {
+			return true, err
+		}
+		token, err := admin.ReadToken(path)
+		if err != nil {
+			return true, err
+		}
+		if err := c.AuthenticateAdmin(token); err != nil {
+			return true, err
+		}
+		entries, err := irc.RequestChat(ctx, c, *cmd.request, translate)
+		if err != nil {
+			return true, err
+		}
+		for _, e := range entries {
+			b.emit(ctx, orchestrateIn{channel: cmd.target, orchestrator: e.Orchestrator, goal: e.Goal})
+		}
 		return true, nil
 	case "react":
 		return true, c.React(cmd.target, cmd.text)
@@ -413,11 +454,23 @@ func (b *uiBackend) refreshBoard(ctx context.Context, c *irc.Client, room string
 	if err != nil {
 		return err
 	}
+	settings, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}, translate)
+	if err != nil {
+		return err
+	}
+	statuses, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "statuses", Target: room}, translate)
+	if err != nil {
+		return err
+	}
+	board := boardIn{room: room, entries: entries, refresh: refresh, statuses: statuses}
+	for _, e := range settings {
+		board.orchestrator, board.goal = e.Orchestrator, e.Goal
+	}
 	if b.queries == nil {
 		b.queries = map[string]uiQuery{}
 	}
 	b.queries[boardName(room)] = uiQuery{Kind: "board", Target: room}
-	b.emit(ctx, boardIn{room: room, entries: entries, refresh: refresh})
+	b.emit(ctx, board)
 	return nil
 }
 
@@ -430,6 +483,10 @@ func (m *uiModel) showCharter(c charterIn) {
 	room := m.ensureChannel(c.channel)
 	known, previous := room.charterKnown, room.charter
 	room.charter, room.charterKnown = c.charter, true
+	if c.orchestrator != room.orchestrator || c.goal != room.goal {
+		room.orchestrator, room.goal = c.orchestrator, c.goal
+		room.version++
+	}
 	name := "charter:" + c.channel
 	view := m.find(name)
 	if !c.open {
@@ -458,6 +515,26 @@ func (m *uiModel) showCharter(c charterIn) {
 	}
 	renderCharter(view, c)
 	m.switchTo(name)
+}
+
+// showOrchestrate keeps a room's orchestrator mode for its top bar, says in
+// the status line what it is now, and redraws an open board.
+func (m *uiModel) showOrchestrate(v orchestrateIn) []uiCmd {
+	room := m.ensureChannel(v.channel)
+	room.orchestrator, room.goal = v.orchestrator, v.goal
+	room.version++
+	text := v.channel + " is no longer orchestrated"
+	if v.orchestrator != "" {
+		text = orchestratedLine(v.channel, v.orchestrator, v.goal)
+	}
+	if v.by != "" {
+		text = v.by + ": " + text
+	}
+	m.setStatus(text, false)
+	if m.find(boardName(v.channel)) != nil {
+		return []uiCmd{{kind: "board", target: v.channel, text: "refresh"}}
+	}
+	return nil
 }
 
 // renderCharter draws a charter view: the heading, then the charter line by

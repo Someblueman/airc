@@ -52,6 +52,9 @@ type uiBuffer struct {
 	charter      string
 	charterAsked bool
 	charterKnown bool
+	// A channel's orchestrator and goal, from the same read and the live
+	// orchestrate signal; empty while the room is not orchestrated.
+	orchestrator, goal string
 
 	cacheWidth, cacheVersion int
 	cacheLines               []string
@@ -72,9 +75,13 @@ type (
 		history bool
 	}
 	topicIn   struct{ channel, topic, by string }
-	charterIn struct { // a room's charter, as the backend read it
-		channel, charter string
-		open             bool // read for /charter: show the view
+	charterIn struct { // a room's charter and orchestrator mode, as the backend read them
+		channel, charter   string
+		orchestrator, goal string
+		open               bool // read for /charter: show the view
+	}
+	orchestrateIn struct { // a room's orchestrator mode changed: by this UI's /orchestrate, or a live signal
+		channel, orchestrator, goal, by string
 	}
 	namesIn struct {
 		channel string
@@ -86,6 +93,10 @@ type (
 		room    string
 		entries []irc.ChatEntry
 		refresh bool // a live step changed the room; redraw an open board without switching to it
+		// The room's orchestrator and goal, and its latest status per
+		// nickname, newest first.
+		orchestrator, goal string
+		statuses           []irc.ChatEntry
 	}
 	directoryIn    struct{ cards []irc.AgentCard }      // every card, for who is a human
 	auditIn        struct{}                             // the all-DM audit view is being fed
@@ -432,9 +443,15 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		m.showQuery(v)
 	case charterIn:
 		m.showCharter(v)
+	case orchestrateIn:
+		cmds = append(cmds, m.showOrchestrate(v)...)
 	case signalIn:
 		if v.entry.Action == "results" {
 			m.setStatus(chatEntryText(v.entry), false)
+			break
+		}
+		if v.entry.Action == "orchestrate" {
+			cmds = append(cmds, m.showOrchestrate(orchestrateIn{channel: v.entry.Target, orchestrator: v.entry.Orchestrator, goal: v.entry.Goal, by: v.entry.From})...)
 			break
 		}
 		if v.entry.Action == "charter" {
@@ -459,8 +476,8 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		switch e := v.event.(type) {
 		case *irc.MessageEvent:
 			m.route(e, v.history)
-			// A live handoff step in a room redraws its open board.
-			if !v.history && strings.HasPrefix(e.Kind, "handoff") && m.find(boardName(e.Target)) != nil {
+			// A live handoff step or status post in a room redraws its open board.
+			if !v.history && (strings.HasPrefix(e.Kind, "handoff") || e.Kind == "status") && m.find(boardName(e.Target)) != nil {
 				cmds = append(cmds, uiCmd{kind: "board", target: e.Target, text: "refresh"})
 			}
 		case *irc.JoinEvent:

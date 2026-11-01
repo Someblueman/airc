@@ -239,6 +239,63 @@ func (in statusInput) args() []string {
 	return appendFlags([]string{"status"}, [][2]string{{"channel", in.Channel}, {"task", in.Task}, {"state", in.State}, {"link", in.Link}, {"message", in.Message}, {"run", in.Run}})
 }
 
+// orchestrateInput turns a room's orchestrator mode on, changes its
+// orchestrator or goal, or turns it off. Only an admin may: the CLI and the
+// UI authenticate with the default admin credential first, or the CLI with
+// its --token-file. No MCP tool exposes it: the adapter has no admin tool.
+type orchestrateInput struct {
+	Channel      string `json:"channel" jsonschema:"The room to orchestrate"`
+	Orchestrator string `json:"orchestrator,omitempty" jsonschema:"The registered nickname that alone hands work out in the room; omit to change only the goal"`
+	Goal         string `json:"goal,omitempty" jsonschema:"The room's goal, one line up to 400 bytes (the charter holds anything longer); - clears it"`
+	Off          bool   `json:"off,omitempty" jsonschema:"End the mode, clearing the orchestrator and the goal"`
+}
+
+func (in orchestrateInput) request() (irc.ChatRequest, error) {
+	room := channelName(in.Channel)
+	if !protocol.IsChannel(room) {
+		return irc.ChatRequest{}, errors.New("orchestrate a room: airc room '#room' --orchestrate NICK --goal TEXT")
+	}
+	nick := strings.TrimPrefix(strings.TrimSpace(in.Orchestrator), "@")
+	off := in.Off || strings.EqualFold(nick, "off")
+	r := irc.ChatRequest{Action: "room", Target: room, Seconds: -1, Limit: -1}
+	if off {
+		if in.Off && nick != "" || in.Goal != "" {
+			return irc.ChatRequest{}, errors.New("off takes no orchestrator or goal; it clears both")
+		}
+		empty := ""
+		r.Orchestrator = &empty
+		return r, nil
+	}
+	if nick == "" && in.Goal == "" {
+		return irc.ChatRequest{}, errors.New("name the orchestrator (--orchestrate NICK), a new goal (--goal TEXT), or turn it off (--orchestrate off)")
+	}
+	if nick != "" {
+		if !protocol.ValidNick(nick) {
+			return irc.ChatRequest{}, fmt.Errorf("invalid orchestrator nickname %q", nick)
+		}
+		r.Orchestrator = &nick
+	}
+	if in.Goal != "" {
+		goal := strings.TrimSpace(in.Goal)
+		if goal == "-" {
+			goal = ""
+		}
+		if !protocol.ValidGoal(goal) {
+			return irc.ChatRequest{}, fmt.Errorf("a goal is one line of at most %d bytes; the charter holds anything longer", protocol.MaxGoalBytes)
+		}
+		r.Goal = &goal
+	}
+	return r, nil
+}
+
+func (in orchestrateInput) args() []string {
+	orchestrator := in.Orchestrator
+	if in.Off {
+		orchestrator = "off"
+	}
+	return appendFlags([]string{"room", in.Channel}, [][2]string{{"orchestrate", orchestrator}, {"goal", in.Goal}})
+}
+
 // resolveInput closes a settled question.
 type resolveInput struct {
 	ID      string `json:"id" jsonschema:"ID of the question, or of any message in its thread"`

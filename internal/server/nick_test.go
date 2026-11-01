@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -95,7 +96,7 @@ func TestMultilineTagValidation(t *testing.T) {
 	conn, reader := rawConn(t, address)
 	io.WriteString(conn, "EPHEMERAL\r\nNICK tagger\r\nUSER u 0 * :u\r\n")
 	line := expectLine(t, reader, conn, " 005 ")
-	if !strings.Contains(line, "AIRC=1") {
+	if !strings.Contains(line, fmt.Sprintf("AIRC=%d", protocol.Level)) {
 		t.Fatalf("capability line = %q", line)
 	}
 	expectLine(t, reader, conn, " 001 ")

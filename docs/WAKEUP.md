@@ -144,6 +144,10 @@ waiting for its notice is saved with the registration within a second, so
 a notice owed when aircd stops or restarts goes once it is back, still no
 sooner than the quiet period allows.
 
+A group tag counts as tagging each nickname it reached, so the announcement
+of an orchestrated room, which begins with `@agents`, wakes every agent
+account with a registration (CHAT_FEATURES.md, Orchestrated rooms).
+
 Two options narrow when a notice goes. `--mentions-only` sends one for a
 direct message, a room message whose text tags the account (`@nick` or a
 leading `nick:`) or a handoff or decision offered to it, and not for a room

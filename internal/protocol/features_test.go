@@ -15,7 +15,7 @@ func TestFeaturesTableIsConsistent(t *testing.T) {
 
 func TestSupportsByLevelAndByToken(t *testing.T) {
 	current := map[string]string{"AIRC": fmt.Sprint(Level), "HISTORY": "1000", "PASTE_BYTES": "65536", "MONITOR": "128", "IDEMPOTENCY": "1"}
-	for _, name := range []string{"CHAT", "chat", "PINS", "STATUS_POSTS", "RESOLVE", "CHARTER", "HISTORY_START", "IDEMPOTENCY", "HISTORY", "MONITOR"} {
+	for _, name := range []string{"CHAT", "chat", "PINS", "STATUS_POSTS", "RESOLVE", "CHARTER", "ORCHESTRATE", "HISTORY_START", "IDEMPOTENCY", "HISTORY", "MONITOR"} {
 		if !Supports(current, name) {
 			t.Errorf("a level-%d daemon lacks %s", Level, name)
 		}
@@ -39,6 +39,11 @@ func TestSupportsByLevelAndByToken(t *testing.T) {
 	older := map[string]string{"CHAT": "1", "MULTILINE": "1"}
 	if !Supports(older, "CHAT") || !Supports(older, "MULTILINE") || Supports(older, "PINS") || Supports(older, "CONTEXT") || LevelOf(older) != 0 {
 		t.Errorf("a daemon without a level: CHAT %v, MULTILINE %v, PINS %v, CONTEXT %v, level %d", Supports(older, "CHAT"), Supports(older, "MULTILINE"), Supports(older, "PINS"), Supports(older, "CONTEXT"), LevelOf(older))
+	}
+
+	levelOne := map[string]string{"AIRC": "1"}
+	if !Supports(levelOne, "CHARTER") || Supports(levelOne, "ORCHESTRATE") {
+		t.Errorf("a level-1 daemon: CHARTER %v, ORCHESTRATE %v", Supports(levelOne, "CHARTER"), Supports(levelOne, "ORCHESTRATE"))
 	}
 
 	newer := map[string]string{"AIRC": "7"}

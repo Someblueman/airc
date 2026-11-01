@@ -20,7 +20,7 @@ const LevelToken = "AIRC"
 // feature up to Level is guaranteed once connected) and knows every feature
 // up to it. A new feature bumps it and adds its row to Features; a feature
 // is never removed from a level.
-const Level = 1
+const Level = 2
 
 // Features is every version-only feature by name, with the AIRC level that
 // introduced it. A client checks Supports for a feature above its own level
@@ -59,6 +59,8 @@ var Features = map[string]int{
 	"RESOLVE":      1,
 	"ROOM":         1,
 	"STATUS_POSTS": 1, // the status and statuses CHAT actions
+	// Level 2.
+	"ORCHESTRATE": 2, // a room's orchestrator and goal on the room action
 }
 
 // LevelOf is the AIRC level a daemon's 005 tokens advertise, 0 when it sent

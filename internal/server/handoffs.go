@@ -214,6 +214,11 @@ func (s *Server) openHandoffLocked(client *session, r handoffRequest) error {
 	}
 	if !protocol.IsChannel(target) {
 		forNick = target
+	} else if orchestrator := s.chat.Rooms[target].Orchestrator; orchestrator != "" && !client.admin && !s.orchestratesLocked(client, target) {
+		// One source of delegation is what an orchestrated room is; a
+		// direct handoff stays anyone's.
+		s.numericLocked(client, "481", nil, "only "+orchestrator+", who orchestrates "+target+", may hand work out here; post a message or a status instead")
+		return errChatDenied
 	}
 	if !s.slowAllowedLocked(client, target) {
 		return errChatDenied
@@ -293,6 +298,10 @@ func (s *Server) stepHandoffLocked(client *session, r handoffRequest) error {
 		}
 		if !holdsHandoff(client, h) && !client.admin {
 			return errors.New("only " + h.Holder + ", who accepted it, may mark it done")
+		}
+		if room && s.chat.Rooms[h.Offer.Target].Orchestrator != "" && strings.TrimSpace(r.Text) == "" && r.Link == "" {
+			// The board is the orchestrator's record of what was delivered.
+			return errors.New("say what was delivered: --message or --link")
 		}
 		h.State, h.Link, h.BlockedReason, h.BlockedAt = handoffDone, r.Link, "", time.Time{}
 		detail = r.Link

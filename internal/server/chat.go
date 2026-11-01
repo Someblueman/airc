@@ -151,13 +151,16 @@ func typed[T any](decode func(cfg Config, r protocol.ChatRequest) (T, error), ha
 	}
 }
 
-// roomRequest reads or sets a room's slow mode, retention and charter: -1
-// leaves a setting as it is, and a nil Charter leaves the charter.
+// roomRequest reads or sets a room's slow mode, retention, charter and
+// orchestrator mode: -1 leaves a setting as it is, and a nil Charter,
+// Orchestrator or Goal leaves that one.
 type roomRequest struct {
-	Target  string
-	Seconds int64
-	Limit   int
-	Charter *string
+	Target       string
+	Seconds      int64
+	Limit        int
+	Charter      *string
+	Orchestrator *string
+	Goal         *string
 }
 
 func decodeRoomRequest(cfg Config, r protocol.ChatRequest) (roomRequest, error) {
@@ -172,12 +175,31 @@ func decodeRoomRequest(cfg Config, r protocol.ChatRequest) (roomRequest, error) 
 		}
 		request.Charter = &charter
 	}
+	if r.Orchestrator != nil {
+		orchestrator := strings.TrimSpace(*r.Orchestrator)
+		if orchestrator != "" && !protocol.ValidNick(orchestrator) {
+			return roomRequest{}, errors.New("an orchestrator is a valid nickname")
+		}
+		request.Orchestrator = &orchestrator
+	}
+	if r.Goal != nil {
+		goal := strings.TrimSpace(*r.Goal)
+		if !protocol.ValidGoal(goal) {
+			return roomRequest{}, fmt.Errorf("a goal is one line of at most %d bytes", protocol.MaxGoalBytes)
+		}
+		request.Goal = &goal
+	}
 	return request, nil
 }
 
 func (s *Server) roomLocked(client *session, r roomRequest) error {
-	changing := r.Seconds >= 0 || r.Limit >= 0 || r.Charter != nil
-	if changing && !client.admin && !s.channelOperator(client, r.Target) {
+	orchestrating := r.Orchestrator != nil || r.Goal != nil
+	changing := r.Seconds >= 0 || r.Limit >= 0 || r.Charter != nil || orchestrating
+	switch {
+	case orchestrating && !client.admin:
+		s.numericLocked(client, "481", nil, "only an admin may set the orchestrator")
+		return errChatDenied
+	case changing && !client.admin && !s.channelOperator(client, r.Target):
 		if r.Charter != nil {
 			s.numericLocked(client, "481", nil, "only a room operator or an admin may set the charter")
 		} else {
@@ -190,7 +212,8 @@ func (s *Server) roomLocked(client *session, r roomRequest) error {
 		if _, exists := next.Rooms[r.Target]; !exists && len(next.Rooms) >= 128 {
 			return errors.New("room settings limit reached")
 		}
-		room := next.Rooms[r.Target]
+		before := next.Rooms[r.Target]
+		room := before
 		if r.Seconds >= 0 {
 			room.SlowSeconds = r.Seconds
 		}
@@ -200,6 +223,19 @@ func (s *Server) roomLocked(client *session, r roomRequest) error {
 		charterChanged := r.Charter != nil && *r.Charter != room.Charter
 		if r.Charter != nil {
 			room.Charter = *r.Charter
+		}
+		if err := s.orchestrateLocked(&room, r.Orchestrator, r.Goal); err != nil {
+			return err
+		}
+		// The announcement is checked as every post is before anything is
+		// saved, so a refused one changes nothing.
+		orchestrateChanged := room.Orchestrator != before.Orchestrator || room.Goal != before.Goal
+		var announcement string
+		if orchestrateChanged {
+			var err error
+			if announcement, err = s.chatBody(orchestrateText(r.Target, room), ""); err != nil {
+				return err
+			}
 		}
 		if room == (roomSettings{}) {
 			delete(next.Rooms, r.Target)
@@ -215,9 +251,12 @@ func (s *Server) roomLocked(client *session, r roomRequest) error {
 			// one-shot check compares the charter itself.
 			s.broadcastSignalLocked(client, protocol.ChatEntry{Action: "charter", Target: r.Target, From: client.client.Nick, ExpiresAt: s.now().UTC().Add(time.Minute)}, Message{})
 		}
-		s.logger.Info("room_configured", "nick", client.client.Nick, "channel", r.Target, "charter_changed", charterChanged)
+		if orchestrateChanged {
+			s.announceOrchestrateLocked(client, r.Target, announcement)
+		}
+		s.logger.Info("room_configured", "nick", client.client.Nick, "channel", r.Target, "charter_changed", charterChanged, "orchestrator", room.Orchestrator, "orchestrate_changed", orchestrateChanged)
 	}
 	room := s.chat.Rooms[r.Target]
-	s.chatEntryLocked(client, protocol.ChatEntry{Action: "room", Target: r.Target, SlowSeconds: room.SlowSeconds, HistoryLimit: room.HistoryLimit, Charter: room.Charter})
+	s.chatEntryLocked(client, protocol.ChatEntry{Action: "room", Target: r.Target, SlowSeconds: room.SlowSeconds, HistoryLimit: room.HistoryLimit, Charter: room.Charter, Orchestrator: room.Orchestrator, Goal: room.Goal})
 	return nil
 }

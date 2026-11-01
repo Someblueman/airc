@@ -37,8 +37,13 @@ func checkLine(value any, machine bool) ([]byte, error) {
 			return []byte(fmt.Sprintf("%s pinned %s by %s (preview): %s\n", v.Target, v.ID, v.From, v.Topic)), nil
 		case "charter":
 			var lines strings.Builder
-			for line := range strings.SplitSeq(v.Charter, "\n") {
-				fmt.Fprintf(&lines, "%s charter: %s\n", v.Target, line)
+			if v.Orchestrator != "" {
+				lines.WriteString(orchestratedLine(v.Target, v.Orchestrator, v.Goal) + "\n")
+			}
+			if v.Charter != "" {
+				for line := range strings.SplitSeq(v.Charter, "\n") {
+					fmt.Fprintf(&lines, "%s charter: %s\n", v.Target, line)
+				}
 			}
 			return []byte(lines.String()), nil
 		}
@@ -203,7 +208,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 			continue
 		}
 		if header.Type == "charter" {
-			if header.Charter == "" {
+			if header.empty() {
 				delete(store.Charters, header.Target)
 			} else {
 				store.Charters[header.Target] = header.Fingerprint

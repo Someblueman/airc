@@ -43,7 +43,9 @@ The wire commands are MODE #room +o/-o nick and KICK #room nick :reason. MODE
 an `@` prefix/flag for connected operators. An operator may grant/revoke operators,
 kick members, and configure slow mode/history limits in their own rooms. Grants
 are bounded to 64 accounts per room and 128 rooms. Global administrators retain
-control, including recovery after all room operators have been removed.
+control, including recovery after all room operators have been removed. Only
+an administrator, not an operator, makes a room orchestrated, where one
+registered nickname alone hands work out (CHAT_FEATURES.md, Orchestrated rooms).
 
 A channel kick removes membership in that room only. Explicit rejoining is
 allowed; the native client's automatic reconnect does not undo a kick. It does

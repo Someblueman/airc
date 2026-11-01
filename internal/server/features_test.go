@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -31,9 +32,10 @@ func register005(t *testing.T, address string) []string {
 // a value, the standard IRC ones and those that depend on configuration are
 // sent, and every feature in protocol.Features up to protocol.Level is had.
 func Test005AdvertisesTheLevelAndTheTokensWithAValue(t *testing.T) {
+	level := fmt.Sprintf("AIRC=%d", protocol.Level)
 	address, _ := startServer(t, Config{HistoryLimit: 8, PingInterval: time.Hour, ReadTimeout: time.Hour}, nil)
 	got := strings.Join(register005(t, address), " ")
-	want := "AIRC=1 MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=8 PASTE_BYTES=65536 IDEMPOTENCY=1 SAFE_RETRY=1"
+	want := level + " MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=8 PASTE_BYTES=65536 IDEMPOTENCY=1 SAFE_RETRY=1"
 	if got != want {
 		t.Fatalf("005 = %q\n   want %q", got, want)
 	}
@@ -55,13 +57,13 @@ func Test005AdvertisesTheLevelAndTheTokensWithAValue(t *testing.T) {
 
 	// Without history there is nothing to retry against.
 	address, _ = startServer(t, Config{HistoryLimit: 0, PingInterval: time.Hour, ReadTimeout: time.Hour}, nil)
-	if got := strings.Join(register005(t, address), " "); got != "AIRC=1 MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=0 PASTE_BYTES=65536" {
+	if got := strings.Join(register005(t, address), " "); got != level+" MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=0 PASTE_BYTES=65536" {
 		t.Fatalf("005 without history = %q", got)
 	}
 
 	// Configuration adds its tokens between the fixed ones and PASTE_BYTES.
 	address, _ = adminWireServer(t)
-	if got := strings.Join(register005(t, address), " "); got != "AIRC=1 MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=32 ADMIN=1 PASTE_BYTES=65536 IDEMPOTENCY=1 SAFE_RETRY=1" {
+	if got := strings.Join(register005(t, address), " "); got != level+" MONITOR=128 AWAYLEN=240 PREFIX=(o)@ CHANMODES=,,, HISTORY=32 ADMIN=1 PASTE_BYTES=65536 IDEMPOTENCY=1 SAFE_RETRY=1" {
 		t.Fatalf("005 with an admin credential = %q", got)
 	}
 }

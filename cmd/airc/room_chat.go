@@ -36,6 +36,8 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	slow := fs.Duration("slow", -time.Second, "admin: room posting delay, 0 disables")
 	retention := fs.Int("retention", -1, "admin: room history quota, 0 disables")
 	charter := fs.String("charter", "", fmt.Sprintf("room: set the charter, the room's longer rules, from FILE or - for stdin (up to %d bytes); '' clears it", protocol.MaxCharterBytes))
+	orchestrate := fs.String("orchestrate", "", "room: the registered nickname that alone hands work out in the room, or off (admin)")
+	goal := fs.String("goal", "", fmt.Sprintf("room: the orchestrated room's goal, one line of at most %d bytes; '' clears it (admin)", protocol.MaxGoalBytes))
 	asOperator := fs.Bool("as-operator", false, "room: use your account operator grant instead of the admin credential")
 	tokenFile := fs.String("token-file", "", "admin credential for room configuration")
 	var choices pollChoices
@@ -52,17 +54,27 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 	if kind == "room" && (*slow < 0 && *slow != -time.Second || *slow%time.Second != 0) {
 		return errors.New("--slow must be whole seconds (0-3600s), or -1s to read")
 	}
-	durationSet, charterSet := false, false
+	durationSet, charterSet, orchestrateSet, goalSet := false, false, false, false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "for":
 			durationSet = true
 		case "charter":
 			charterSet = true
+		case "orchestrate":
+			orchestrateSet = true
+		case "goal":
+			goalSet = true
 		}
 	})
 	if charterSet && kind != "room" {
 		return errors.New("--charter is for room configuration")
+	}
+	if (orchestrateSet || goalSet) && kind != "room" {
+		return errors.New("--orchestrate and --goal are for room configuration")
+	}
+	if (orchestrateSet || goalSet) && *asOperator {
+		return errors.New("only an admin may set the orchestrator; drop --as-operator")
 	}
 	positional = append(positional, fs.Args()...)
 	r := irc.ChatRequest{Action: kind, Text: *text, Target: channelName(*channel), Seconds: int64((*duration + time.Second - 1) / time.Second)}
@@ -129,8 +141,19 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 			r.Seconds = 10
 		}
 	}
-	changingRoom := kind == "room" && (*slow >= 0 || *retention >= 0 || charterSet)
+	changingRoom := kind == "room" && (*slow >= 0 || *retention >= 0 || charterSet || orchestrateSet || goalSet)
 	if kind == "room" {
+		if orchestrateSet || goalSet {
+			in := orchestrateInput{Channel: r.Target, Orchestrator: *orchestrate, Goal: *goal}
+			if goalSet && *goal == "" {
+				in.Goal = "-"
+			}
+			shaped, err := in.request()
+			if err != nil {
+				return err
+			}
+			r.Orchestrator, r.Goal = shaped.Orchestrator, shaped.Goal
+		}
 		r.Seconds, r.Limit = int64(*slow/time.Second), *retention
 		if charterSet {
 			text, err := charterText(*charter, stdin)
@@ -173,12 +196,23 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 				return err
 			}
 		}
+		if r.Orchestrator != nil && *r.Orchestrator != "" {
+			warnNoCard(ctx, client, *r.Orchestrator, stderr)
+		}
 		entries, err := irc.RequestChat(ctx, client, r, nil)
 		if err != nil {
 			return err
 		}
 		return emitEntries(stdout, entries, opt.json, shapeOf(r))
 	})
+}
+
+// warnNoCard warns when an orchestrator-to-be has never set a profile, so
+// no agent listing shows them yet. It never refuses.
+func warnNoCard(ctx context.Context, client *irc.Client, nick string, stderr io.Writer) {
+	if kind, err := lookupKind(ctx, client, nick); err == nil && kind == "" {
+		fmt.Fprintf(stderr, "airc: warning: %s has no directory card yet; orchestrating anyway\n", nick)
+	}
 }
 
 // charterText reads the charter --charter names: a file, - for stdin, or ""
@@ -268,6 +302,9 @@ func chatEntryText(e irc.ChatEntry) string {
 	}
 	if e.Action == "room" {
 		fmt.Fprintf(&text, "; slow=%ds retention=%d", e.SlowSeconds, e.HistoryLimit)
+		if e.Orchestrator != "" {
+			text.WriteString("\n" + orchestratedLine(e.Target, e.Orchestrator, e.Goal))
+		}
 		if e.Charter != "" {
 			text.WriteString("\ncharter:\n  " + indentContinuation(e.Charter))
 		}
